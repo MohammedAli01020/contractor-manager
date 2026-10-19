@@ -3,6 +3,7 @@ package com.contractor.app.shift.domain;
 import com.contractor.app.common.domain.BaseTenantEntity;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import javax.persistence.Column;
 import javax.persistence.Entity;
 import javax.persistence.EnumType;
@@ -22,7 +23,7 @@ public class Shift extends BaseTenantEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
-    private ShiftStatus status = ShiftStatus.COMPLETED;
+    private ShiftStatus status = ShiftStatus.IN_PROGRESS;
 
     @Column(name = "site_id", nullable = false)
     private Long siteId;
@@ -33,14 +34,14 @@ public class Shift extends BaseTenantEntity {
     @Column(name = "equipment_id", nullable = false)
     private Long equipmentId;
 
-    @Column(precision = 5, scale = 2)
-    private BigDecimal hours;
+    @Column(name = "started_at")
+    private LocalDateTime startedAt;
 
-    @Column(precision = 12, scale = 2)
-    private BigDecimal quantity;
+    @Column(name = "ended_at")
+    private LocalDateTime endedAt;
 
-    @Column(name = "quantity_unit", length = 30)
-    private String quantityUnit;
+    @Column(name = "cancelled_at")
+    private LocalDateTime cancelledAt;
 
     @Column(nullable = false, precision = 15, scale = 2)
     private BigDecimal price;
@@ -118,28 +119,28 @@ public class Shift extends BaseTenantEntity {
         this.equipmentId = equipmentId;
     }
 
-    public BigDecimal getHours() {
-        return hours;
+    public LocalDateTime getStartedAt() {
+        return startedAt;
     }
 
-    public void setHours(BigDecimal hours) {
-        this.hours = hours;
+    public void setStartedAt(LocalDateTime startedAt) {
+        this.startedAt = startedAt;
     }
 
-    public BigDecimal getQuantity() {
-        return quantity;
+    public LocalDateTime getEndedAt() {
+        return endedAt;
     }
 
-    public void setQuantity(BigDecimal quantity) {
-        this.quantity = quantity;
+    public void setEndedAt(LocalDateTime endedAt) {
+        this.endedAt = endedAt;
     }
 
-    public String getQuantityUnit() {
-        return quantityUnit;
+    public LocalDateTime getCancelledAt() {
+        return cancelledAt;
     }
 
-    public void setQuantityUnit(String quantityUnit) {
-        this.quantityUnit = quantityUnit;
+    public void setCancelledAt(LocalDateTime cancelledAt) {
+        this.cancelledAt = cancelledAt;
     }
 
     public BigDecimal getPrice() {

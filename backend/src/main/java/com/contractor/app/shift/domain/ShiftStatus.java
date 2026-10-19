@@ -1,7 +1,8 @@
 package com.contractor.app.shift.domain;
 
-/** الوردية تُسجَّل بعد حدوثها، فهي إما مكتملة أو ملغاة. الملغاة لا تدخل في أي حساب. */
+/** دورة حياة الوردية: تبدأ جارية ثم تُنهى أو تُلغى. */
 public enum ShiftStatus {
+    IN_PROGRESS,
     COMPLETED,
     CANCELLED
 }

@@ -4,6 +4,7 @@ import com.contractor.app.shift.domain.Shift;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 
 public class ShiftResponse {
 
@@ -18,9 +19,10 @@ public class ShiftResponse {
     private final Long equipmentId;
     private final String equipmentCode;
     private final String equipmentName;
-    private final BigDecimal hours;
-    private final BigDecimal quantity;
-    private final String quantityUnit;
+    private final LocalDateTime startedAt;
+    private final LocalDateTime endedAt;
+    private final LocalDateTime cancelledAt;
+    private final Long durationMinutes;
     private final BigDecimal price;
     private final BigDecimal driverWage;
     private final BigDecimal equipmentOperatingCost;
@@ -43,9 +45,12 @@ public class ShiftResponse {
         this.equipmentId = s.getEquipmentId();
         this.equipmentCode = equipmentCode;
         this.equipmentName = equipmentName;
-        this.hours = s.getHours();
-        this.quantity = s.getQuantity();
-        this.quantityUnit = s.getQuantityUnit();
+        this.startedAt = s.getStartedAt();
+        this.endedAt = s.getEndedAt();
+        this.cancelledAt = s.getCancelledAt();
+        this.durationMinutes = startedAt != null && endedAt != null
+                ? ChronoUnit.MINUTES.between(startedAt, endedAt)
+                : null;
         this.price = s.getPrice();
         this.driverWage = s.getDriverWage();
         this.equipmentOperatingCost = s.getEquipmentOperatingCost();
@@ -102,16 +107,20 @@ public class ShiftResponse {
         return equipmentName;
     }
 
-    public BigDecimal getHours() {
-        return hours;
+    public LocalDateTime getStartedAt() {
+        return startedAt;
     }
 
-    public BigDecimal getQuantity() {
-        return quantity;
+    public LocalDateTime getEndedAt() {
+        return endedAt;
     }
 
-    public String getQuantityUnit() {
-        return quantityUnit;
+    public LocalDateTime getCancelledAt() {
+        return cancelledAt;
+    }
+
+    public Long getDurationMinutes() {
+        return durationMinutes;
     }
 
     public BigDecimal getPrice() {

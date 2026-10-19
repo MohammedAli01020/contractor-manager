@@ -4,10 +4,12 @@ import com.contractor.app.common.api.PageResponse;
 import com.contractor.app.common.security.AuthenticatedUser;
 import com.contractor.app.common.security.CurrentUser;
 import com.contractor.app.shift.api.dto.ShiftCancelRequest;
+import com.contractor.app.shift.api.dto.EndShiftRequest;
 import com.contractor.app.shift.api.dto.ShiftDefaultsResponse;
 import com.contractor.app.shift.api.dto.ShiftHistoryResponse;
-import com.contractor.app.shift.api.dto.ShiftRequest;
 import com.contractor.app.shift.api.dto.ShiftResponse;
+import com.contractor.app.shift.api.dto.ShiftStartOptionsResponse;
+import com.contractor.app.shift.api.dto.StartShiftRequest;
 import com.contractor.app.shift.api.dto.ShiftVersionRequest;
 import com.contractor.app.shift.domain.ShiftService;
 import com.contractor.app.shift.domain.ShiftStatus;
@@ -22,7 +24,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -62,6 +63,12 @@ public class ShiftController {
         return service.defaults(CurrentUser.tenantId(), driverId, equipmentId, shiftType);
     }
 
+    @GetMapping("/start-options")
+    @Operation(summary = "السائقون والمعدات المتاحون لبدء وردية الآن")
+    public ShiftStartOptionsResponse startOptions() {
+        return service.startOptions(CurrentUser.tenantId());
+    }
+
     @GetMapping("/{id}")
     public ShiftResponse get(@PathVariable Long id) {
         return service.get(CurrentUser.tenantId(), id);
@@ -73,17 +80,17 @@ public class ShiftController {
         return service.history(CurrentUser.tenantId(), id);
     }
 
-    @PostMapping
+    @PostMapping("/start")
     @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "تسجيل وردية (السعر والأجر اختياريان وتُؤخذان من الافتراضيات)")
-    public ShiftResponse create(@Valid @RequestBody ShiftRequest request) {
-        return service.create(CurrentUser.get(), request);
+    @Operation(summary = "بدء وردية جديدة (حالتها IN_PROGRESS)")
+    public ShiftResponse start(@Valid @RequestBody StartShiftRequest request) {
+        return service.start(CurrentUser.get(), request);
     }
 
-    @PutMapping("/{id}")
-    @Operation(summary = "تعديل وردية (يتطلب version، ويُسجَّل كل تغيير في السجل)")
-    public ShiftResponse update(@PathVariable Long id, @Valid @RequestBody ShiftRequest request) {
-        return service.update(CurrentUser.get(), id, request);
+    @PostMapping("/{id}/end")
+    @Operation(summary = "إنهاء وردية قيد التنفيذ (يتطلب version)")
+    public ShiftResponse end(@PathVariable Long id, @Valid @RequestBody EndShiftRequest request) {
+        return service.end(CurrentUser.get(), id, request);
     }
 
     @PostMapping("/{id}/cancel")

@@ -57,7 +57,6 @@ abstract class AbstractShiftIntegrationTest extends AbstractIntegrationTest {
     protected Map<String, Object> shiftBody(long siteId, long driverId, long equipmentId, LocalDate date,
                                             String type) {
         Map<String, Object> body = new HashMap<>();
-        body.put("shiftDate", date);
         body.put("shiftType", type);
         body.put("siteId", siteId);
         body.put("driverId", driverId);
@@ -66,6 +65,6 @@ abstract class AbstractShiftIntegrationTest extends AbstractIntegrationTest {
     }
 
     protected JsonNode createShift(String token, Map<String, Object> body) throws Exception {
-        return body(postJson("/api/v1/shifts", body, token).andExpect(status().isCreated()));
+        return body(postJson("/api/v1/shifts/start", body, token).andExpect(status().isCreated()));
     }
 }

@@ -9,12 +9,15 @@ import com.contractor.app.common.util.Texts;
 import com.contractor.app.driver.domain.Driver;
 import com.contractor.app.driver.infra.DriverRepository;
 import com.contractor.app.equipment.domain.Equipment;
+import com.contractor.app.equipment.domain.EquipmentStatus;
 import com.contractor.app.equipment.infra.EquipmentRepository;
+import com.contractor.app.shift.api.dto.EndShiftRequest;
 import com.contractor.app.shift.api.dto.ShiftCancelRequest;
 import com.contractor.app.shift.api.dto.ShiftDefaultsResponse;
 import com.contractor.app.shift.api.dto.ShiftHistoryResponse;
-import com.contractor.app.shift.api.dto.ShiftRequest;
 import com.contractor.app.shift.api.dto.ShiftResponse;
+import com.contractor.app.shift.api.dto.ShiftStartOptionsResponse;
+import com.contractor.app.shift.api.dto.StartShiftRequest;
 import com.contractor.app.shift.infra.ShiftAuditLogRepository;
 import com.contractor.app.shift.infra.ShiftRepository;
 import com.contractor.app.site.domain.Site;
@@ -23,18 +26,21 @@ import com.contractor.app.user.domain.User;
 import com.contractor.app.user.infra.UserRepository;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import javax.persistence.criteria.Predicate;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
@@ -66,8 +72,6 @@ public class ShiftService {
         this.businessZone = ZoneId.of(businessTimezone);
     }
 
-    // ------------------------------------------------------------------ queries
-
     @Transactional(readOnly = true)
     public PageResponse<ShiftResponse> list(Long tenantId, LocalDate from, LocalDate to, Long siteId, Long driverId,
                                             Long equipmentId, ShiftType type, ShiftStatus status,
@@ -76,7 +80,8 @@ public class ShiftService {
             throw ApiException.badRequest("تاريخ البداية يجب ألا يكون بعد تاريخ النهاية.");
         }
         Page<Shift> result = shifts.findAll(filter(tenantId, from, to, siteId, driverId, equipmentId, type, status),
-                PageParams.of(page, size, Sort.by(Sort.Direction.DESC, "shiftDate")));
+                PageParams.of(page, size, Sort.by(Sort.Order.desc("shiftDate"), Sort.Order.desc("startedAt"),
+                        Sort.Order.desc("id"))));
         List<ShiftResponse> items = toResponses(tenantId, result.getContent());
         return new PageResponse<>(items, result.getNumber(), result.getSize(), result.getTotalElements(),
                 result.getTotalPages());
@@ -87,7 +92,6 @@ public class ShiftService {
         return toResponses(tenantId, Collections.singletonList(find(tenantId, id))).get(0);
     }
 
-    /** القيم التي سيقترحها النموذج قبل الحفظ. */
     @Transactional(readOnly = true)
     public ShiftDefaultsResponse defaults(Long tenantId, Long driverId, Long equipmentId, ShiftType type) {
         Driver driver = drivers.findByIdAndTenantId(driverId, tenantId)
@@ -96,6 +100,22 @@ public class ShiftService {
                 .orElseThrow(() -> ApiException.notFound("المعدة غير موجودة."));
         return new ShiftDefaultsResponse(Money.scale(rateFor(driver, type)),
                 Money.scale(item.getDefaultShiftPrice()), Money.scale(item.getOperatingCostPerShift()));
+    }
+
+    @Transactional(readOnly = true)
+    public ShiftStartOptionsResponse startOptions(Long tenantId) {
+        List<ShiftStartOptionsResponse.DriverOption> driversList = drivers.findAvailableForShift(tenantId).stream()
+                .sorted(Comparator.comparing(Driver::getName, String.CASE_INSENSITIVE_ORDER))
+                .map(d -> new ShiftStartOptionsResponse.DriverOption(d.getId(), d.getName()))
+                .collect(Collectors.toList());
+
+        List<ShiftStartOptionsResponse.EquipmentOption> equipmentList = equipment
+                .findAvailableForShift(tenantId, EquipmentStatus.AVAILABLE).stream()
+                .sorted(Comparator.comparing(Equipment::getCode, String.CASE_INSENSITIVE_ORDER))
+                .map(e -> new ShiftStartOptionsResponse.EquipmentOption(e.getId(), e.getCode(), e.getName()))
+                .collect(Collectors.toList());
+
+        return new ShiftStartOptionsResponse(driversList, equipmentList);
     }
 
     @Transactional(readOnly = true)
@@ -108,25 +128,25 @@ public class ShiftService {
                 .collect(Collectors.toList());
     }
 
-    // ------------------------------------------------------------------ commands
-
     @Transactional
-    public ShiftResponse create(AuthenticatedUser me, ShiftRequest request) {
+    public ShiftResponse start(AuthenticatedUser me, StartShiftRequest request) {
         Long tenantId = me.getTenantId();
-        assertNotFuture(request.getShiftDate());
-        requireSite(tenantId, request.getSiteId(), null);
-        Driver driver = requireDriver(tenantId, request.getDriverId(), null);
-        Equipment item = requireEquipment(tenantId, request.getEquipmentId(), null);
-        assertSlotFree(tenantId, request.getEquipmentId(), request.getDriverId(), request.getShiftDate(),
-                request.getShiftType(), null);
+        LocalDateTime startedAt = LocalDateTime.now(ZoneOffset.UTC);
+        LocalDate shiftDate = startedAt.atZone(ZoneOffset.UTC).withZoneSameInstant(businessZone).toLocalDate();
 
-        Shift shift = new Shift(tenantId, request.getShiftDate(), request.getShiftType(), request.getSiteId(),
+        requireSite(tenantId, request.getSiteId());
+        Driver driver = requireDriverForStart(tenantId, request.getDriverId());
+        Equipment item = requireEquipmentForStart(tenantId, request.getEquipmentId());
+        assertResourcesAvailable(tenantId, request.getDriverId(), request.getEquipmentId());
+
+        Shift shift = new Shift(tenantId, shiftDate, request.getShiftType(), request.getSiteId(),
                 request.getDriverId(), request.getEquipmentId());
-        shift.setHours(scaleOrNull(request.getHours()));
-        shift.setQuantity(scaleOrNull(request.getQuantity()));
-        shift.setQuantityUnit(Texts.blankToNull(request.getQuantityUnit()));
+        shift.setStatus(ShiftStatus.IN_PROGRESS);
+        shift.setStartedAt(startedAt);
+        shift.setEndedAt(null);
+        shift.setCancelledAt(null);
+        shift.setCancelReason(null);
         shift.setNotes(Texts.blankToNull(request.getNotes()));
-        // نسخ ثابتة وقت التسجيل: تغيير الأسعار لاحقًا لا يمس هذه الوردية
         shift.setDriverWage(request.getDriverWage() != null
                 ? Money.scale(request.getDriverWage())
                 : Money.scale(rateFor(driver, request.getShiftType())));
@@ -134,77 +154,28 @@ public class ShiftService {
                 ? Money.scale(request.getPrice())
                 : Money.scale(item.getDefaultShiftPrice()));
         shift.setEquipmentOperatingCost(Money.scale(item.getOperatingCostPerShift()));
-        shifts.saveAndFlush(shift);
 
-        log(me, shift.getId(), ShiftAuditAction.CREATED, null, null,
-                "date=" + shift.getShiftDate() + ", type=" + shift.getShiftType()
-                        + ", price=" + shift.getPrice().toPlainString()
-                        + ", wage=" + shift.getDriverWage().toPlainString());
+        try {
+            shifts.saveAndFlush(shift);
+        } catch (DataIntegrityViolationException ex) {
+            throw ApiException.conflict("السائق أو المعدة لم يعد متاحًا، تم بدء وردية أخرى بنفس الوقت.");
+        }
+
+        log(me, shift.getId(), ShiftAuditAction.STARTED, "status", null, ShiftStatus.IN_PROGRESS.name());
         return get(tenantId, shift.getId());
     }
 
     @Transactional
-    public ShiftResponse update(AuthenticatedUser me, Long id, ShiftRequest request) {
+    public ShiftResponse end(AuthenticatedUser me, Long id, EndShiftRequest request) {
         Long tenantId = me.getTenantId();
         Shift shift = find(tenantId, id);
-        if (shift.getStatus() == ShiftStatus.CANCELLED) {
-            throw ApiException.conflict("لا يمكن تعديل وردية ملغاة. أعد تفعيلها أولًا.");
-        }
+        ensureInProgress(shift, "لا يمكن إنهاء وردية ليست قيد التنفيذ.");
         shift.requireVersion(request.getVersion());
-        assertNotFuture(request.getShiftDate());
-        requireSite(tenantId, request.getSiteId(), shift.getSiteId());
-        Driver driver = requireDriver(tenantId, request.getDriverId(), shift.getDriverId());
-        Equipment item = requireEquipment(tenantId, request.getEquipmentId(), shift.getEquipmentId());
-        assertSlotFree(tenantId, request.getEquipmentId(), request.getDriverId(), request.getShiftDate(),
-                request.getShiftType(), shift.getId());
-
-        boolean driverChanged = !request.getDriverId().equals(shift.getDriverId());
-        boolean typeChanged = request.getShiftType() != shift.getShiftType();
-        boolean equipmentChanged = !request.getEquipmentId().equals(shift.getEquipmentId());
-
-        // الأجر: قيمة صريحة، أو إعادة احتساب إن تغيّر السائق/نوع الوردية، وإلا تبقى النسخة القديمة
-        BigDecimal wage = request.getDriverWage() != null
-                ? Money.scale(request.getDriverWage())
-                : (driverChanged || typeChanged ? Money.scale(rateFor(driver, request.getShiftType()))
-                        : shift.getDriverWage());
-        BigDecimal price = request.getPrice() != null
-                ? Money.scale(request.getPrice())
-                : (equipmentChanged ? Money.scale(item.getDefaultShiftPrice()) : shift.getPrice());
-        BigDecimal operatingCost = equipmentChanged
-                ? Money.scale(item.getOperatingCostPerShift())
-                : shift.getEquipmentOperatingCost();
-
-        List<Change> changes = new ArrayList<>();
-        track(changes, "shiftDate", shift.getShiftDate(), request.getShiftDate());
-        track(changes, "shiftType", shift.getShiftType(), request.getShiftType());
-        track(changes, "siteId", shift.getSiteId(), request.getSiteId());
-        track(changes, "driverId", shift.getDriverId(), request.getDriverId());
-        track(changes, "equipmentId", shift.getEquipmentId(), request.getEquipmentId());
-        track(changes, "hours", shift.getHours(), scaleOrNull(request.getHours()));
-        track(changes, "quantity", shift.getQuantity(), scaleOrNull(request.getQuantity()));
-        track(changes, "quantityUnit", shift.getQuantityUnit(), Texts.blankToNull(request.getQuantityUnit()));
-        track(changes, "price", shift.getPrice(), price);
-        track(changes, "driverWage", shift.getDriverWage(), wage);
-        track(changes, "equipmentOperatingCost", shift.getEquipmentOperatingCost(), operatingCost);
-        track(changes, "notes", shift.getNotes(), Texts.blankToNull(request.getNotes()));
-
-        shift.setShiftDate(request.getShiftDate());
-        shift.setShiftType(request.getShiftType());
-        shift.setSiteId(request.getSiteId());
-        shift.setDriverId(request.getDriverId());
-        shift.setEquipmentId(request.getEquipmentId());
-        shift.setHours(scaleOrNull(request.getHours()));
-        shift.setQuantity(scaleOrNull(request.getQuantity()));
-        shift.setQuantityUnit(Texts.blankToNull(request.getQuantityUnit()));
-        shift.setPrice(price);
-        shift.setDriverWage(wage);
-        shift.setEquipmentOperatingCost(operatingCost);
-        shift.setNotes(Texts.blankToNull(request.getNotes()));
+        shift.setStatus(ShiftStatus.COMPLETED);
+        shift.setEndedAt(LocalDateTime.now(ZoneOffset.UTC));
         shifts.saveAndFlush(shift);
-
-        for (Change change : changes) {
-            log(me, shift.getId(), ShiftAuditAction.UPDATED, change.field, change.oldValue, change.newValue);
-        }
+        log(me, shift.getId(), ShiftAuditAction.COMPLETED, "status", ShiftStatus.IN_PROGRESS.name(),
+                ShiftStatus.COMPLETED.name());
         return get(tenantId, shift.getId());
     }
 
@@ -212,15 +183,14 @@ public class ShiftService {
     public ShiftResponse cancel(AuthenticatedUser me, Long id, ShiftCancelRequest request) {
         Long tenantId = me.getTenantId();
         Shift shift = find(tenantId, id);
-        if (shift.getStatus() == ShiftStatus.CANCELLED) {
-            throw ApiException.conflict("الوردية ملغاة بالفعل.");
-        }
+        ensureInProgress(shift, "لا يمكن إلغاء وردية ليست قيد التنفيذ.");
         shift.requireVersion(request.getVersion());
         shift.setStatus(ShiftStatus.CANCELLED);
         shift.setCancelReason(request.getReason().trim());
+        shift.setCancelledAt(LocalDateTime.now(ZoneOffset.UTC));
         shifts.saveAndFlush(shift);
-        log(me, shift.getId(), ShiftAuditAction.CANCELLED, "status", ShiftStatus.COMPLETED.name(),
-                shift.getCancelReason());
+        log(me, shift.getId(), ShiftAuditAction.CANCELLED, "status", ShiftStatus.IN_PROGRESS.name(),
+                ShiftStatus.CANCELLED.name());
         return get(tenantId, shift.getId());
     }
 
@@ -232,63 +202,63 @@ public class ShiftService {
             throw ApiException.conflict("الوردية ليست ملغاة.");
         }
         shift.requireVersion(version);
-        // قد تكون المعدة أو السائق سُجّلا في نفس الوردية بعد الإلغاء
-        assertSlotFree(tenantId, shift.getEquipmentId(), shift.getDriverId(), shift.getShiftDate(),
-                shift.getShiftType(), shift.getId());
         shift.setStatus(ShiftStatus.COMPLETED);
         shift.setCancelReason(null);
+        shift.setCancelledAt(null);
+        if (shift.getEndedAt() == null) {
+            shift.setEndedAt(LocalDateTime.now(ZoneOffset.UTC));
+        }
         shifts.saveAndFlush(shift);
         log(me, shift.getId(), ShiftAuditAction.REINSTATED, "status", ShiftStatus.CANCELLED.name(),
                 ShiftStatus.COMPLETED.name());
         return get(tenantId, shift.getId());
     }
 
-    // ------------------------------------------------------------------ helpers
+    private void assertResourcesAvailable(Long tenantId, Long driverId, Long equipmentId) {
+        if (shifts.hasInProgressForDriver(tenantId, driverId)) {
+            throw ApiException.conflict("هذا السائق أو العامل لديه وردية قيد التنفيذ.");
+        }
+        if (shifts.hasInProgressForEquipment(tenantId, equipmentId)) {
+            throw ApiException.conflict("هذه المعدة لديها وردية قيد التنفيذ.");
+        }
+    }
 
     private Shift find(Long tenantId, Long id) {
         return shifts.findByIdAndTenantId(id, tenantId).orElseThrow(() -> ApiException.notFound(NOT_FOUND));
     }
 
-    private void assertNotFuture(LocalDate date) {
-        if (date.isAfter(LocalDate.now(businessZone))) {
-            throw ApiException.badRequest("لا يمكن تسجيل وردية بتاريخ مستقبلي. تُسجَّل الوردية بعد حدوثها.");
+    private void ensureInProgress(Shift shift, String message) {
+        if (shift.getStatus() != ShiftStatus.IN_PROGRESS) {
+            throw ApiException.conflict(message);
         }
     }
 
-    private void assertSlotFree(Long tenantId, Long equipmentId, Long driverId, LocalDate date, ShiftType type,
-                                Long excludeId) {
-        long exclude = excludeId == null ? -1L : excludeId;
-        if (shifts.equipmentBusy(tenantId, equipmentId, date, type, exclude)) {
-            throw ApiException.conflict("هذه المعدة مسجّلة بالفعل في نفس الوردية في هذا التاريخ.");
-        }
-        if (shifts.driverBusy(tenantId, driverId, date, type, exclude)) {
-            throw ApiException.conflict("هذا السائق أو العامل مسجّل بالفعل في نفس الوردية في هذا التاريخ.");
-        }
-    }
-
-    private Site requireSite(Long tenantId, Long id, Long currentId) {
+    private Site requireSite(Long tenantId, Long id) {
         Site site = sites.findByIdAndTenantId(id, tenantId)
                 .orElseThrow(() -> ApiException.notFound("الموقع غير موجود."));
-        if (!site.isActive() && !id.equals(currentId)) {
+        if (!site.isActive()) {
             throw ApiException.badRequest("الموقع معطّل. اختر موقعًا فعّالًا.");
         }
         return site;
     }
 
-    private Driver requireDriver(Long tenantId, Long id, Long currentId) {
-        Driver driver = drivers.findByIdAndTenantId(id, tenantId)
+    private Driver requireDriverForStart(Long tenantId, Long id) {
+        Driver driver = drivers.findByIdAndTenantIdForUpdate(id, tenantId)
                 .orElseThrow(() -> ApiException.notFound("السائق أو العامل غير موجود."));
-        if (!driver.isActive() && !id.equals(currentId)) {
+        if (!driver.isActive()) {
             throw ApiException.badRequest("السائق أو العامل معطّل. اختر شخصًا فعّالًا.");
         }
         return driver;
     }
 
-    private Equipment requireEquipment(Long tenantId, Long id, Long currentId) {
-        Equipment item = equipment.findByIdAndTenantId(id, tenantId)
+    private Equipment requireEquipmentForStart(Long tenantId, Long id) {
+        Equipment item = equipment.findByIdAndTenantIdForUpdate(id, tenantId)
                 .orElseThrow(() -> ApiException.notFound("المعدة غير موجودة."));
-        if (!item.isActive() && !id.equals(currentId)) {
+        if (!item.isActive()) {
             throw ApiException.badRequest("المعدة معطّلة. اختر معدة فعّالة.");
+        }
+        if (item.getStatus() != EquipmentStatus.AVAILABLE) {
+            throw ApiException.badRequest("لا يمكن بدء وردية لمعدة غير متاحة.");
         }
         return item;
     }
@@ -302,10 +272,6 @@ public class ShiftService {
             default:
                 return driver.getNightRate();
         }
-    }
-
-    private static BigDecimal scaleOrNull(BigDecimal value) {
-        return value == null ? null : Money.scale(value);
     }
 
     private void log(AuthenticatedUser me, Long shiftId, ShiftAuditAction action, String field, String oldValue,
@@ -337,38 +303,6 @@ public class ShiftService {
             return new ShiftResponse(s, siteNames.get(s.getSiteId()), driverNames.get(s.getDriverId()),
                     e == null ? null : e.getCode(), e == null ? null : e.getName());
         }).collect(Collectors.toList());
-    }
-
-    private static final class Change {
-        private final String field;
-        private final String oldValue;
-        private final String newValue;
-
-        private Change(String field, String oldValue, String newValue) {
-            this.field = field;
-            this.oldValue = oldValue;
-            this.newValue = newValue;
-        }
-    }
-
-    private static void track(List<Change> changes, String field, Object oldValue, Object newValue) {
-        boolean same;
-        if (oldValue instanceof BigDecimal && newValue instanceof BigDecimal) {
-            same = ((BigDecimal) oldValue).compareTo((BigDecimal) newValue) == 0;
-        } else {
-            same = Objects.equals(oldValue, newValue);
-        }
-        if (!same) {
-            changes.add(new Change(field, text(oldValue), text(newValue)));
-        }
-    }
-
-    private static String text(Object value) {
-        if (value == null) {
-            return null;
-        }
-        String s = value instanceof BigDecimal ? ((BigDecimal) value).toPlainString() : value.toString();
-        return s.length() > 480 ? s.substring(0, 480) : s;
     }
 
     private static Specification<Shift> filter(Long tenantId, LocalDate from, LocalDate to, Long siteId,
