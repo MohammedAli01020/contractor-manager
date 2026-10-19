@@ -1,0 +1,12 @@
+.env
+backend/target/
+.idea/
+*.iml
+.vscode/
+mobile/build/
+mobile/.dart_tool/
+mobile/android/local.properties
+mobile/android/key.properties
+*.jks
+*.keystore
+backups/

@@ -1,0 +1,68 @@
+package com.contractor.app.common.security;
+
+import io.jsonwebtoken.JwtException;
+import io.jsonwebtoken.JwtParser;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.SignatureAlgorithm;
+import io.jsonwebtoken.security.Keys;
+import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.util.Date;
+import java.util.Optional;
+import javax.crypto.SecretKey;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+
+@Service
+public class JwtService {
+
+    private static final String TENANT_CLAIM = "tid";
+
+    private final SecretKey key;
+    private final String issuer;
+    private final long accessTtlSeconds;
+    private final JwtParser parser;
+
+    public JwtService(@Value("${app.jwt.secret}") String secret,
+                      @Value("${app.jwt.issuer:contractor-manager}") String issuer,
+                      @Value("${app.jwt.access-token-minutes:15}") long accessTokenMinutes) {
+        byte[] bytes = secret.getBytes(StandardCharsets.UTF_8);
+        if (bytes.length < 32) {
+            throw new IllegalStateException("APP_JWT_SECRET must be at least 32 characters long");
+        }
+        this.key = Keys.hmacShaKeyFor(bytes);
+        this.issuer = issuer;
+        this.accessTtlSeconds = accessTokenMinutes * 60;
+        this.parser = Jwts.parserBuilder().requireIssuer(issuer).setSigningKey(key).build();
+    }
+
+    public String createAccessToken(Long userId, Long tenantId) {
+        Instant now = Instant.now();
+        return Jwts.builder()
+                .setIssuer(issuer)
+                .setSubject(String.valueOf(userId))
+                .claim(TENANT_CLAIM, tenantId)
+                .setIssuedAt(Date.from(now))
+                .setExpiration(Date.from(now.plusSeconds(accessTtlSeconds)))
+                .signWith(key, SignatureAlgorithm.HS256)
+                .compact();
+    }
+
+    /** يعيد فارغًا لأي رمز غير صالح (منتهٍ أو معدَّل أو بتوقيع خاطئ). */
+    public Optional<TokenClaims> parse(String token) {
+        try {
+            io.jsonwebtoken.Claims claims = parser.parseClaimsJws(token).getBody();
+            Object tenant = claims.get(TENANT_CLAIM);
+            if (!(tenant instanceof Number)) {
+                return Optional.empty();
+            }
+            return Optional.of(new TokenClaims(Long.parseLong(claims.getSubject()), ((Number) tenant).longValue()));
+        } catch (JwtException | IllegalArgumentException e) {
+            return Optional.empty();
+        }
+    }
+
+    public long getAccessTtlSeconds() {
+        return accessTtlSeconds;
+    }
+}

@@ -1,0 +1,184 @@
+package com.contractor.app.shift.domain;
+
+import com.contractor.app.common.domain.BaseTenantEntity;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import javax.persistence.Column;
+import javax.persistence.Entity;
+import javax.persistence.EnumType;
+import javax.persistence.Enumerated;
+import javax.persistence.Table;
+
+@Entity
+@Table(name = "shifts")
+public class Shift extends BaseTenantEntity {
+
+    @Column(name = "shift_date", nullable = false)
+    private LocalDate shiftDate;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "shift_type", nullable = false, length = 20)
+    private ShiftType shiftType;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private ShiftStatus status = ShiftStatus.COMPLETED;
+
+    @Column(name = "site_id", nullable = false)
+    private Long siteId;
+
+    @Column(name = "driver_id", nullable = false)
+    private Long driverId;
+
+    @Column(name = "equipment_id", nullable = false)
+    private Long equipmentId;
+
+    @Column(precision = 5, scale = 2)
+    private BigDecimal hours;
+
+    @Column(precision = 12, scale = 2)
+    private BigDecimal quantity;
+
+    @Column(name = "quantity_unit", length = 30)
+    private String quantityUnit;
+
+    @Column(nullable = false, precision = 15, scale = 2)
+    private BigDecimal price;
+
+    @Column(name = "driver_wage", nullable = false, precision = 15, scale = 2)
+    private BigDecimal driverWage;
+
+    @Column(name = "equipment_operating_cost", nullable = false, precision = 15, scale = 2)
+    private BigDecimal equipmentOperatingCost;
+
+    @Column(length = 500)
+    private String notes;
+
+    @Column(name = "cancel_reason", length = 300)
+    private String cancelReason;
+
+    protected Shift() {
+    }
+
+    public Shift(Long tenantId, LocalDate shiftDate, ShiftType shiftType, Long siteId, Long driverId,
+                 Long equipmentId) {
+        super(tenantId);
+        this.shiftDate = shiftDate;
+        this.shiftType = shiftType;
+        this.siteId = siteId;
+        this.driverId = driverId;
+        this.equipmentId = equipmentId;
+    }
+
+    public LocalDate getShiftDate() {
+        return shiftDate;
+    }
+
+    public void setShiftDate(LocalDate shiftDate) {
+        this.shiftDate = shiftDate;
+    }
+
+    public ShiftType getShiftType() {
+        return shiftType;
+    }
+
+    public void setShiftType(ShiftType shiftType) {
+        this.shiftType = shiftType;
+    }
+
+    public ShiftStatus getStatus() {
+        return status;
+    }
+
+    public void setStatus(ShiftStatus status) {
+        this.status = status;
+    }
+
+    public Long getSiteId() {
+        return siteId;
+    }
+
+    public void setSiteId(Long siteId) {
+        this.siteId = siteId;
+    }
+
+    public Long getDriverId() {
+        return driverId;
+    }
+
+    public void setDriverId(Long driverId) {
+        this.driverId = driverId;
+    }
+
+    public Long getEquipmentId() {
+        return equipmentId;
+    }
+
+    public void setEquipmentId(Long equipmentId) {
+        this.equipmentId = equipmentId;
+    }
+
+    public BigDecimal getHours() {
+        return hours;
+    }
+
+    public void setHours(BigDecimal hours) {
+        this.hours = hours;
+    }
+
+    public BigDecimal getQuantity() {
+        return quantity;
+    }
+
+    public void setQuantity(BigDecimal quantity) {
+        this.quantity = quantity;
+    }
+
+    public String getQuantityUnit() {
+        return quantityUnit;
+    }
+
+    public void setQuantityUnit(String quantityUnit) {
+        this.quantityUnit = quantityUnit;
+    }
+
+    public BigDecimal getPrice() {
+        return price;
+    }
+
+    public void setPrice(BigDecimal price) {
+        this.price = price;
+    }
+
+    public BigDecimal getDriverWage() {
+        return driverWage;
+    }
+
+    public void setDriverWage(BigDecimal driverWage) {
+        this.driverWage = driverWage;
+    }
+
+    public BigDecimal getEquipmentOperatingCost() {
+        return equipmentOperatingCost;
+    }
+
+    public void setEquipmentOperatingCost(BigDecimal equipmentOperatingCost) {
+        this.equipmentOperatingCost = equipmentOperatingCost;
+    }
+
+    public String getNotes() {
+        return notes;
+    }
+
+    public void setNotes(String notes) {
+        this.notes = notes;
+    }
+
+    public String getCancelReason() {
+        return cancelReason;
+    }
+
+    public void setCancelReason(String cancelReason) {
+        this.cancelReason = cancelReason;
+    }
+}

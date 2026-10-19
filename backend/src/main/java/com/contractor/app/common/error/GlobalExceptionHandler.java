@@ -1,0 +1,99 @@
+package com.contractor.app.common.error;
+
+import java.util.List;
+import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.context.request.ServletWebRequest;
+import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
+
+@RestControllerAdvice
+public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    @ExceptionHandler(ApiException.class)
+    public ResponseEntity<Object> handleApi(ApiException ex, WebRequest request) {
+        return build(ex.getStatus(), ex.getCode(), ex.getMessage(), request, null);
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<Object> handleAccessDenied(AccessDeniedException ex, WebRequest request) {
+        return build(HttpStatus.FORBIDDEN, "FORBIDDEN", "ليست لديك صلاحية لتنفيذ هذا الإجراء.", request, null);
+    }
+
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<Object> handleOptimisticLock(ObjectOptimisticLockingFailureException ex,
+                                                       WebRequest request) {
+        return build(HttpStatus.CONFLICT, "CONFLICT",
+                "تم تعديل هذا السجل بواسطة مستخدم آخر. أعد التحميل ثم حاول مجددًا.", request, null);
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<Object> handleDataIntegrity(DataIntegrityViolationException ex, WebRequest request) {
+        log.warn("Data integrity violation: {}", ex.getMostSpecificCause().getMessage());
+        return build(HttpStatus.CONFLICT, "CONFLICT", "تعذّر الحفظ بسبب تعارض في البيانات.", request, null);
+    }
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<Object> handleUnexpected(Exception ex, WebRequest request) {
+        log.error("Unexpected error", ex);
+        return build(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR",
+                "حدث خطأ غير متوقع في الخادم. حاول لاحقًا.", request, null);
+    }
+
+    @Override
+    protected ResponseEntity<Object> handleMethodArgumentNotValid(MethodArgumentNotValidException ex,
+                                                                  HttpHeaders headers, HttpStatus status,
+                                                                  WebRequest request) {
+        List<ApiError.FieldIssue> issues = ex.getBindingResult().getFieldErrors().stream()
+                .map(fe -> new ApiError.FieldIssue(fe.getField(), fe.getDefaultMessage()))
+                .collect(Collectors.toList());
+        return build(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", "البيانات المدخلة غير صحيحة.", request, issues);
+    }
+
+    @Override
+    protected ResponseEntity<Object> handleHttpMessageNotReadable(HttpMessageNotReadableException ex,
+                                                                  HttpHeaders headers, HttpStatus status,
+                                                                  WebRequest request) {
+        return build(HttpStatus.BAD_REQUEST, "BAD_REQUEST", "صيغة الطلب غير صحيحة.", request, null);
+    }
+
+    @Override
+    protected ResponseEntity<Object> handleExceptionInternal(Exception ex, Object body, HttpHeaders headers,
+                                                             HttpStatus status, WebRequest request) {
+        return build(status, status.name(), messageFor(status), request, null);
+    }
+
+    private static String messageFor(HttpStatus status) {
+        switch (status) {
+            case NOT_FOUND:
+                return "المسار المطلوب غير موجود.";
+            case METHOD_NOT_ALLOWED:
+                return "طريقة الطلب غير مدعومة.";
+            case UNSUPPORTED_MEDIA_TYPE:
+                return "نوع المحتوى غير مدعوم.";
+            default:
+                return "الطلب غير صالح.";
+        }
+    }
+
+    private static ResponseEntity<Object> build(HttpStatus status, String code, String message,
+                                                WebRequest request, List<ApiError.FieldIssue> issues) {
+        String path = request instanceof ServletWebRequest
+                ? ((ServletWebRequest) request).getRequest().getRequestURI()
+                : null;
+        return new ResponseEntity<Object>(new ApiError(status.value(), code, message, path, issues), status);
+    }
+}

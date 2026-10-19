@@ -1,0 +1,7 @@
+# للتطوير فقط: يفتح منفذ MySQL على جهازك أنت (127.0.0.1) كي يتصل به IntelliJ.
+# المنفذ 3308 لأن 3307 مستخدم عندك في مشروع آخر.
+# الاستخدام:  docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d db
+services:
+  db:
+    ports:
+      - "127.0.0.1:3308:3306"
