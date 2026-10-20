@@ -14,6 +14,8 @@ public class DriverResponse {
     private final BigDecimal morningRate;
     private final BigDecimal eveningRate;
     private final BigDecimal nightRate;
+    private final String availability;
+    private final String unavailableReason;
     private final String notes;
     private final boolean active;
     private final Long version;
@@ -29,6 +31,8 @@ public class DriverResponse {
         this.morningRate = d.getMorningRate();
         this.eveningRate = d.getEveningRate();
         this.nightRate = d.getNightRate();
+        this.availability = d.getAvailability().name();
+        this.unavailableReason = d.getUnavailableReason();
         this.notes = d.getNotes();
         this.active = d.isActive();
         this.version = d.getVersion();
@@ -70,6 +74,14 @@ public class DriverResponse {
 
     public BigDecimal getNightRate() {
         return nightRate;
+    }
+
+    public String getAvailability() {
+        return availability;
+    }
+
+    public String getUnavailableReason() {
+        return unavailableReason;
     }
 
     public String getNotes() {

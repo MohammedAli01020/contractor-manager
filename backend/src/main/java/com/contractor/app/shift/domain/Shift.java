@@ -3,6 +3,7 @@ package com.contractor.app.shift.domain;
 import com.contractor.app.common.domain.BaseTenantEntity;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import javax.persistence.Column;
 import javax.persistence.Entity;
 import javax.persistence.EnumType;
@@ -22,7 +23,11 @@ public class Shift extends BaseTenantEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
-    private ShiftStatus status = ShiftStatus.COMPLETED;
+    private ShiftStatus status = ShiftStatus.IN_PROGRESS;
+
+    /** وقت الضغط على "إنهاء" (UTC). يبقى بعد الإلغاء، وهو ما يسمح بإعادة تفعيل الوردية المنتهية. */
+    @Column(name = "finished_at")
+    private LocalDateTime finishedAt;
 
     @Column(name = "site_id", nullable = false)
     private Long siteId;
@@ -32,15 +37,6 @@ public class Shift extends BaseTenantEntity {
 
     @Column(name = "equipment_id", nullable = false)
     private Long equipmentId;
-
-    @Column(precision = 5, scale = 2)
-    private BigDecimal hours;
-
-    @Column(precision = 12, scale = 2)
-    private BigDecimal quantity;
-
-    @Column(name = "quantity_unit", length = 30)
-    private String quantityUnit;
 
     @Column(nullable = false, precision = 15, scale = 2)
     private BigDecimal price;
@@ -94,6 +90,14 @@ public class Shift extends BaseTenantEntity {
         this.status = status;
     }
 
+    public LocalDateTime getFinishedAt() {
+        return finishedAt;
+    }
+
+    public void setFinishedAt(LocalDateTime finishedAt) {
+        this.finishedAt = finishedAt;
+    }
+
     public Long getSiteId() {
         return siteId;
     }
@@ -116,30 +120,6 @@ public class Shift extends BaseTenantEntity {
 
     public void setEquipmentId(Long equipmentId) {
         this.equipmentId = equipmentId;
-    }
-
-    public BigDecimal getHours() {
-        return hours;
-    }
-
-    public void setHours(BigDecimal hours) {
-        this.hours = hours;
-    }
-
-    public BigDecimal getQuantity() {
-        return quantity;
-    }
-
-    public void setQuantity(BigDecimal quantity) {
-        this.quantity = quantity;
-    }
-
-    public String getQuantityUnit() {
-        return quantityUnit;
-    }
-
-    public void setQuantityUnit(String quantityUnit) {
-        this.quantityUnit = quantityUnit;
     }
 
     public BigDecimal getPrice() {

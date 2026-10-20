@@ -1,4 +1,4 @@
-package com.contractor.app.shift.domain;
+package com.contractor.app.audit.domain;
 
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -12,10 +12,10 @@ import javax.persistence.Id;
 import javax.persistence.PrePersist;
 import javax.persistence.Table;
 
-/** سطر في سجل التعديلات. لا يوجد أي setter عمدًا: السجل لا يُعدَّل بعد كتابته. */
+/** سطر في سجل التدقيق. لا توجد setters عمدًا: السجل لا يُعدَّل بعد كتابته. */
 @Entity
-@Table(name = "shift_audit_log")
-public class ShiftAuditLog {
+@Table(name = "audit_log")
+public class AuditLog {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -24,15 +24,16 @@ public class ShiftAuditLog {
     @Column(name = "tenant_id", nullable = false, updatable = false)
     private Long tenantId;
 
-    @Column(name = "shift_id", nullable = false, updatable = false)
-    private Long shiftId;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "entity_type", nullable = false, updatable = false, length = 20)
+    private AuditEntityType entityType;
 
-    @Column(name = "user_id", nullable = false, updatable = false)
-    private Long userId;
+    @Column(name = "entity_id", nullable = false, updatable = false)
+    private Long entityId;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, updatable = false, length = 20)
-    private ShiftAuditAction action;
+    private AuditAction action;
 
     @Column(name = "field_name", updatable = false, length = 40)
     private String fieldName;
@@ -43,17 +44,21 @@ public class ShiftAuditLog {
     @Column(name = "new_value", updatable = false, length = 500)
     private String newValue;
 
+    @Column(name = "user_id", nullable = false, updatable = false)
+    private Long userId;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    protected ShiftAuditLog() {
+    protected AuditLog() {
     }
 
-    public ShiftAuditLog(Long tenantId, Long shiftId, Long userId, ShiftAuditAction action, String fieldName,
-                         String oldValue, String newValue) {
+    public AuditLog(Long tenantId, Long userId, AuditEntityType entityType, Long entityId, AuditAction action,
+                    String fieldName, String oldValue, String newValue) {
         this.tenantId = tenantId;
-        this.shiftId = shiftId;
         this.userId = userId;
+        this.entityType = entityType;
+        this.entityId = entityId;
         this.action = action;
         this.fieldName = fieldName;
         this.oldValue = oldValue;
@@ -69,11 +74,15 @@ public class ShiftAuditLog {
         return id;
     }
 
-    public Long getUserId() {
-        return userId;
+    public AuditEntityType getEntityType() {
+        return entityType;
     }
 
-    public ShiftAuditAction getAction() {
+    public Long getEntityId() {
+        return entityId;
+    }
+
+    public AuditAction getAction() {
         return action;
     }
 
@@ -87,6 +96,10 @@ public class ShiftAuditLog {
 
     public String getNewValue() {
         return newValue;
+    }
+
+    public Long getUserId() {
+        return userId;
     }
 
     public LocalDateTime getCreatedAt() {

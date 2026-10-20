@@ -1,11 +1,13 @@
-package com.contractor.app.shift.api.dto;
+package com.contractor.app.audit.api.dto;
 
-import com.contractor.app.shift.domain.ShiftAuditLog;
+import com.contractor.app.audit.domain.AuditLog;
 import java.time.LocalDateTime;
 
-public class ShiftHistoryResponse {
+public class AuditResponse {
 
     private final Long id;
+    private final String entityType;
+    private final Long entityId;
     private final String action;
     private final String fieldName;
     private final String oldValue;
@@ -14,8 +16,10 @@ public class ShiftHistoryResponse {
     private final String userName;
     private final LocalDateTime createdAt;
 
-    public ShiftHistoryResponse(ShiftAuditLog log, String userName) {
+    public AuditResponse(AuditLog log, String userName) {
         this.id = log.getId();
+        this.entityType = log.getEntityType().name();
+        this.entityId = log.getEntityId();
         this.action = log.getAction().name();
         this.fieldName = log.getFieldName();
         this.oldValue = log.getOldValue();
@@ -27,6 +31,14 @@ public class ShiftHistoryResponse {
 
     public Long getId() {
         return id;
+    }
+
+    public String getEntityType() {
+        return entityType;
+    }
+
+    public Long getEntityId() {
+        return entityId;
     }
 
     public String getAction() {

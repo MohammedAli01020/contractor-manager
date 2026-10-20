@@ -3,15 +3,15 @@ package com.contractor.app.shift.api.dto;
 import com.contractor.app.shift.domain.ShiftType;
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import javax.validation.constraints.DecimalMax;
 import javax.validation.constraints.DecimalMin;
 import javax.validation.constraints.Digits;
 import javax.validation.constraints.NotNull;
 import javax.validation.constraints.Size;
 
+/** يُستخدم لبدء وردية (POST) ولتعديلها (PUT). */
 public class ShiftRequest {
 
-    @NotNull(message = "تاريخ الوردية مطلوب")
+    /** عند البدء: إن لم يُرسل يكون تاريخ اليوم. عند التعديل: مطلوب. لا يُقبل تاريخ مستقبلي. */
     private LocalDate shiftDate;
 
     @NotNull(message = "نوع الوردية مطلوب (MORNING أو EVENING أو NIGHT)")
@@ -26,19 +26,7 @@ public class ShiftRequest {
     @NotNull(message = "المعدة مطلوبة")
     private Long equipmentId;
 
-    @DecimalMin(value = "0", message = "عدد الساعات لا يمكن أن يكون سالبًا")
-    @DecimalMax(value = "24", message = "عدد الساعات لا يتجاوز 24")
-    @Digits(integer = 2, fraction = 2, message = "عدد الساعات: حتى خانتين عشريتين")
-    private BigDecimal hours;
-
-    @DecimalMin(value = "0", message = "الكمية لا يمكن أن تكون سالبة")
-    @Digits(integer = 10, fraction = 2, message = "الكمية: حتى خانتين عشريتين")
-    private BigDecimal quantity;
-
-    @Size(max = 30, message = "وحدة الكمية يجب ألا تتجاوز 30 حرفًا")
-    private String quantityUnit;
-
-    /** اختياري: إن لم يُرسل يؤخذ السعر الافتراضي للمعدة (عند الإنشاء)، أو يبقى كما هو (عند التعديل). */
+    /** اختياري: إن لم يُرسل يؤخذ السعر الافتراضي للمعدة (عند البدء)، أو يبقى كما هو (عند التعديل). */
     @DecimalMin(value = "0", message = "السعر لا يمكن أن يكون سالبًا")
     @Digits(integer = 13, fraction = 2, message = "السعر: حتى خانتين عشريتين")
     private BigDecimal price;
@@ -92,30 +80,6 @@ public class ShiftRequest {
 
     public void setEquipmentId(Long equipmentId) {
         this.equipmentId = equipmentId;
-    }
-
-    public BigDecimal getHours() {
-        return hours;
-    }
-
-    public void setHours(BigDecimal hours) {
-        this.hours = hours;
-    }
-
-    public BigDecimal getQuantity() {
-        return quantity;
-    }
-
-    public void setQuantity(BigDecimal quantity) {
-        this.quantity = quantity;
-    }
-
-    public String getQuantityUnit() {
-        return quantityUnit;
-    }
-
-    public void setQuantityUnit(String quantityUnit) {
-        this.quantityUnit = quantityUnit;
     }
 
     public BigDecimal getPrice() {

@@ -11,6 +11,7 @@ public class ShiftResponse {
     private final LocalDate shiftDate;
     private final String shiftType;
     private final String status;
+    private final LocalDateTime finishedAt;
     private final Long siteId;
     private final String siteName;
     private final Long driverId;
@@ -18,9 +19,6 @@ public class ShiftResponse {
     private final Long equipmentId;
     private final String equipmentCode;
     private final String equipmentName;
-    private final BigDecimal hours;
-    private final BigDecimal quantity;
-    private final String quantityUnit;
     private final BigDecimal price;
     private final BigDecimal driverWage;
     private final BigDecimal equipmentOperatingCost;
@@ -36,6 +34,7 @@ public class ShiftResponse {
         this.shiftDate = s.getShiftDate();
         this.shiftType = s.getShiftType().name();
         this.status = s.getStatus().name();
+        this.finishedAt = s.getFinishedAt();
         this.siteId = s.getSiteId();
         this.siteName = siteName;
         this.driverId = s.getDriverId();
@@ -43,9 +42,6 @@ public class ShiftResponse {
         this.equipmentId = s.getEquipmentId();
         this.equipmentCode = equipmentCode;
         this.equipmentName = equipmentName;
-        this.hours = s.getHours();
-        this.quantity = s.getQuantity();
-        this.quantityUnit = s.getQuantityUnit();
         this.price = s.getPrice();
         this.driverWage = s.getDriverWage();
         this.equipmentOperatingCost = s.getEquipmentOperatingCost();
@@ -74,6 +70,10 @@ public class ShiftResponse {
         return status;
     }
 
+    public LocalDateTime getFinishedAt() {
+        return finishedAt;
+    }
+
     public Long getSiteId() {
         return siteId;
     }
@@ -100,18 +100,6 @@ public class ShiftResponse {
 
     public String getEquipmentName() {
         return equipmentName;
-    }
-
-    public BigDecimal getHours() {
-        return hours;
-    }
-
-    public BigDecimal getQuantity() {
-        return quantity;
-    }
-
-    public String getQuantityUnit() {
-        return quantityUnit;
     }
 
     public BigDecimal getPrice() {

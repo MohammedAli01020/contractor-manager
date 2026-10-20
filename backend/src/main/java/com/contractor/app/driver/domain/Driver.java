@@ -25,6 +25,13 @@ public class Driver extends BaseTenantEntity {
     @Column(name = "worker_type", nullable = false, length = 20)
     private WorkerType workerType;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private DriverAvailability availability = DriverAvailability.AVAILABLE;
+
+    @Column(name = "unavailable_reason", length = 200)
+    private String unavailableReason;
+
     @Column(name = "morning_rate", nullable = false, precision = 15, scale = 2)
     private BigDecimal morningRate;
 
@@ -103,6 +110,22 @@ public class Driver extends BaseTenantEntity {
 
     public void setNightRate(BigDecimal nightRate) {
         this.nightRate = nightRate;
+    }
+
+    public DriverAvailability getAvailability() {
+        return availability;
+    }
+
+    public void setAvailability(DriverAvailability availability) {
+        this.availability = availability;
+    }
+
+    public String getUnavailableReason() {
+        return unavailableReason;
+    }
+
+    public void setUnavailableReason(String unavailableReason) {
+        this.unavailableReason = unavailableReason;
     }
 
     public String getNotes() {

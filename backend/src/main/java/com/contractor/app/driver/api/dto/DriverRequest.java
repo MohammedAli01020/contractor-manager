@@ -1,5 +1,6 @@
 package com.contractor.app.driver.api.dto;
 
+import com.contractor.app.driver.domain.DriverAvailability;
 import com.contractor.app.driver.domain.WorkerType;
 import java.math.BigDecimal;
 import javax.validation.constraints.DecimalMin;
@@ -37,6 +38,12 @@ public class DriverRequest {
     @DecimalMin(value = "0", message = "الأجر لا يمكن أن يكون سالبًا")
     @Digits(integer = 13, fraction = 2, message = "الأجر: حتى خانتين عشريتين")
     private BigDecimal nightRate;
+
+    /** اختياري: إن لم يُرسل تبقى الحالة وسببها كما هما. "غير متاح" يتطلب سببًا. */
+    private DriverAvailability availability;
+
+    @Size(max = 200, message = "السبب يجب ألا يتجاوز 200 حرف")
+    private String unavailableReason;
 
     @Size(max = 500, message = "الملاحظات يجب ألا تتجاوز 500 حرف")
     private String notes;
@@ -99,6 +106,22 @@ public class DriverRequest {
 
     public void setNightRate(BigDecimal nightRate) {
         this.nightRate = nightRate;
+    }
+
+    public DriverAvailability getAvailability() {
+        return availability;
+    }
+
+    public void setAvailability(DriverAvailability availability) {
+        this.availability = availability;
+    }
+
+    public String getUnavailableReason() {
+        return unavailableReason;
+    }
+
+    public void setUnavailableReason(String unavailableReason) {
+        this.unavailableReason = unavailableReason;
     }
 
     public String getNotes() {

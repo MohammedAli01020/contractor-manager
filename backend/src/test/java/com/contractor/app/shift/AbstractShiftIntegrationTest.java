@@ -9,6 +9,7 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.HashMap;
 import java.util.Map;
+import org.springframework.test.web.servlet.ResultActions;
 
 /** أدوات مشتركة لاختبارات الورديات: إنشاء موقع/سائق/نوع/معدة ووردية بسرعة. */
 abstract class AbstractShiftIntegrationTest extends AbstractIntegrationTest {
@@ -57,7 +58,9 @@ abstract class AbstractShiftIntegrationTest extends AbstractIntegrationTest {
     protected Map<String, Object> shiftBody(long siteId, long driverId, long equipmentId, LocalDate date,
                                             String type) {
         Map<String, Object> body = new HashMap<>();
-        body.put("shiftDate", date);
+        if (date != null) {
+            body.put("shiftDate", date);
+        }
         body.put("shiftType", type);
         body.put("siteId", siteId);
         body.put("driverId", driverId);
@@ -65,7 +68,60 @@ abstract class AbstractShiftIntegrationTest extends AbstractIntegrationTest {
         return body;
     }
 
-    protected JsonNode createShift(String token, Map<String, Object> body) throws Exception {
+    /** "بدء الوردية": تُسجَّل شغالة. */
+    protected JsonNode startShift(String token, Map<String, Object> body) throws Exception {
         return body(postJson("/api/v1/shifts", body, token).andExpect(status().isCreated()));
+    }
+
+    protected Map<String, Object> versionBody(long version) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("version", version);
+        return body;
+    }
+
+    protected JsonNode finishShift(String token, JsonNode shift) throws Exception {
+        return body(postJson("/api/v1/shifts/" + shift.path("id").asLong() + "/finish",
+                versionBody(shift.path("version").asLong()), token).andExpect(status().isOk()));
+    }
+
+    /** يغيّر حالة السائق (يقرأ بياناته الحالية ثم يعدّل). */
+    protected ResultActions setDriverAvailability(String token, long driverId, String availability, String reason)
+            throws Exception {
+        JsonNode d = body(getJson("/api/v1/drivers/" + driverId, token));
+        Map<String, Object> body = new HashMap<>();
+        body.put("name", d.path("name").asText());
+        body.put("workerType", d.path("workerType").asText());
+        body.put("morningRate", d.path("morningRate").decimalValue());
+        body.put("eveningRate", d.path("eveningRate").decimalValue());
+        body.put("nightRate", d.path("nightRate").decimalValue());
+        body.put("availability", availability);
+        if (reason != null) {
+            body.put("unavailableReason", reason);
+        }
+        body.put("version", d.path("version").asLong());
+        return putJson("/api/v1/drivers/" + driverId, body, token);
+    }
+
+    /** يغيّر الحالة التشغيلية للمعدة (يقرأ بياناتها الحالية ثم يعدّل). */
+    protected ResultActions setEquipmentStatus(String token, long equipmentId, String statusValue)
+            throws Exception {
+        JsonNode e = body(getJson("/api/v1/equipment/" + equipmentId, token));
+        Map<String, Object> body = new HashMap<>();
+        body.put("code", e.path("code").asText());
+        body.put("equipmentTypeId", e.path("equipmentTypeId").asLong());
+        body.put("operatingCostPerShift", e.path("operatingCostPerShift").decimalValue());
+        body.put("defaultShiftPrice", e.path("defaultShiftPrice").decimalValue());
+        body.put("status", statusValue);
+        body.put("version", e.path("version").asLong());
+        return putJson("/api/v1/equipment/" + equipmentId, body, token);
+    }
+
+    protected static JsonNode findBy(JsonNode array, String field, String value) {
+        for (JsonNode item : array) {
+            if (value.equals(item.path(field).asText())) {
+                return item;
+            }
+        }
+        return null;
     }
 }

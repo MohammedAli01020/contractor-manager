@@ -1,17 +1,18 @@
 package com.contractor.app.shift.api;
 
+import com.contractor.app.audit.api.dto.AuditResponse;
 import com.contractor.app.common.api.PageResponse;
-import com.contractor.app.common.security.AuthenticatedUser;
 import com.contractor.app.common.security.CurrentUser;
 import com.contractor.app.shift.api.dto.ShiftCancelRequest;
 import com.contractor.app.shift.api.dto.ShiftDefaultsResponse;
-import com.contractor.app.shift.api.dto.ShiftHistoryResponse;
 import com.contractor.app.shift.api.dto.ShiftRequest;
 import com.contractor.app.shift.api.dto.ShiftResponse;
 import com.contractor.app.shift.api.dto.ShiftVersionRequest;
 import com.contractor.app.shift.domain.ShiftService;
 import com.contractor.app.shift.domain.ShiftStatus;
 import com.contractor.app.shift.domain.ShiftType;
+import com.contractor.app.audit.domain.AuditEntityType;
+import com.contractor.app.audit.domain.AuditService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.LocalDate;
@@ -35,9 +36,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class ShiftController {
 
     private final ShiftService service;
+    private final AuditService auditService;
 
-    public ShiftController(ShiftService service) {
+    public ShiftController(ShiftService service, AuditService auditService) {
         this.service = service;
+        this.auditService = auditService;
     }
 
     @GetMapping
@@ -55,6 +58,12 @@ public class ShiftController {
         return service.list(CurrentUser.tenantId(), from, to, siteId, driverId, equipmentId, type, status, page, size);
     }
 
+    @GetMapping("/running")
+    @Operation(summary = "الورديات الشغالة الآن (الأقدم أولًا، فتظهر المنسية في الأعلى)")
+    public List<ShiftResponse> running() {
+        return service.running(CurrentUser.tenantId());
+    }
+
     @GetMapping("/defaults")
     @Operation(summary = "الأجر والسعر وتكلفة التشغيل المقترحة لسائق ومعدة ونوع وردية (لتعبئة النموذج)")
     public ShiftDefaultsResponse defaults(@RequestParam Long driverId, @RequestParam Long equipmentId,
@@ -67,35 +76,35 @@ public class ShiftController {
         return service.get(CurrentUser.tenantId(), id);
     }
 
-    @GetMapping("/{id}/history")
-    @Operation(summary = "سجل تعديلات الوردية (الأحدث أولًا)")
-    public List<ShiftHistoryResponse> history(@PathVariable Long id) {
-        return service.history(CurrentUser.tenantId(), id);
-    }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "تسجيل وردية (السعر والأجر اختياريان وتُؤخذان من الافتراضيات)")
-    public ShiftResponse create(@Valid @RequestBody ShiftRequest request) {
-        return service.create(CurrentUser.get(), request);
+    @Operation(summary = "بدء وردية (تُسجَّل شغالة). التاريخ الافتراضي اليوم، ويقبل تاريخًا سابقًا")
+    public ShiftResponse start(@Valid @RequestBody ShiftRequest request) {
+        return service.start(CurrentUser.tenantId(), request);
     }
 
     @PutMapping("/{id}")
-    @Operation(summary = "تعديل وردية (يتطلب version، ويُسجَّل كل تغيير في السجل)")
+    @Operation(summary = "تعديل وردية (يتطلب version، ويُسجَّل كل تغيير في سجل التدقيق)")
     public ShiftResponse update(@PathVariable Long id, @Valid @RequestBody ShiftRequest request) {
-        return service.update(CurrentUser.get(), id, request);
+        return service.update(CurrentUser.tenantId(), id, request);
+    }
+
+    @PostMapping("/{id}/finish")
+    @Operation(summary = "إنهاء وردية شغالة: يغيّر المؤشر فقط")
+    public ShiftResponse finish(@PathVariable Long id, @Valid @RequestBody ShiftVersionRequest request) {
+        return service.finish(CurrentUser.tenantId(), id, request.getVersion());
     }
 
     @PostMapping("/{id}/cancel")
-    @Operation(summary = "إلغاء وردية بسبب (تُستبعد من الحسابات ويتحرر موعدها)")
+    @Operation(summary = "إلغاء وردية بسبب (تُستبعد من الحسابات)")
     public ShiftResponse cancel(@PathVariable Long id, @Valid @RequestBody ShiftCancelRequest request) {
-        AuthenticatedUser me = CurrentUser.get();
-        return service.cancel(me, id, request);
+        return service.cancel(CurrentUser.tenantId(), id, request);
     }
 
     @PostMapping("/{id}/reinstate")
-    @Operation(summary = "إعادة تفعيل وردية ملغاة (إن كان موعدها ما زال حرًّا)")
+    @Operation(summary = "إعادة تفعيل وردية ملغاة كانت منتهية (الملغاة وهي شغالة لا تعود)")
     public ShiftResponse reinstate(@PathVariable Long id, @Valid @RequestBody ShiftVersionRequest request) {
-        return service.reinstate(CurrentUser.get(), id, request.getVersion());
+        return service.reinstate(CurrentUser.tenantId(), id, request.getVersion());
     }
 }

@@ -15,6 +15,7 @@ public final class PageParams {
     public static Pageable of(int page, int size, Sort sort) {
         int safePage = Math.max(page, 0);
         int safeSize = Math.min(Math.max(size, 1), MAX_SIZE);
-        return PageRequest.of(safePage, safeSize, sort.and(Sort.by("id").ascending()));
+        Sort ordered = sort.getOrderFor("id") == null ? sort.and(Sort.by("id").ascending()) : sort;
+        return PageRequest.of(safePage, safeSize, ordered);
     }
 }

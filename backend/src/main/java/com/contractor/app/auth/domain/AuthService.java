@@ -1,5 +1,8 @@
 package com.contractor.app.auth.domain;
 
+import com.contractor.app.audit.domain.AuditAction;
+import com.contractor.app.audit.domain.AuditEntityType;
+import com.contractor.app.audit.domain.AuditService;
 import com.contractor.app.auth.api.dto.AuthResponse;
 import com.contractor.app.auth.api.dto.ChangePasswordRequest;
 import com.contractor.app.auth.api.dto.LoginRequest;
@@ -36,13 +39,14 @@ public class AuthService {
     private final RefreshTokenRepository refreshTokens;
     private final PasswordEncoder encoder;
     private final JwtService jwt;
+    private final AuditService audit;
     private final boolean registrationEnabled;
     private final long refreshTokenDays;
     /** يُستخدم عند غياب المستخدم كي يتساوى زمن الاستجابة ولا يمكن تخمين أسماء المستخدمين. */
     private final String dummyHash;
 
     public AuthService(TenantRepository tenants, UserRepository users, RefreshTokenRepository refreshTokens,
-                       PasswordEncoder encoder, JwtService jwt,
+                       PasswordEncoder encoder, JwtService jwt, AuditService audit,
                        @Value("${app.registration.enabled:true}") boolean registrationEnabled,
                        @Value("${app.jwt.refresh-token-days:30}") long refreshTokenDays) {
         this.tenants = tenants;
@@ -50,6 +54,7 @@ public class AuthService {
         this.refreshTokens = refreshTokens;
         this.encoder = encoder;
         this.jwt = jwt;
+        this.audit = audit;
         this.registrationEnabled = registrationEnabled;
         this.refreshTokenDays = refreshTokenDays;
         this.dummyHash = encoder.encode("timing-equalizer-not-a-real-password");
@@ -129,6 +134,8 @@ public class AuthService {
         }
         user.setPasswordHash(encoder.encode(request.getNewPassword()));
         refreshTokens.revokeAllForUser(user.getId(), user.getTenantId());
+        audit.record(user.getTenantId(), AuditEntityType.USER, user.getId(), AuditAction.PASSWORD_CHANGED,
+                null, null, null);
     }
 
     private AuthResponse issueTokens(User user) {

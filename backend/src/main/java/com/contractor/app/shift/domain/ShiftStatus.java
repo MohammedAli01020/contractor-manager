@@ -1,7 +1,8 @@
 package com.contractor.app.shift.domain;
 
-/** الوردية تُسجَّل بعد حدوثها، فهي إما مكتملة أو ملغاة. الملغاة لا تدخل في أي حساب. */
+/** مؤشر الوردية: شغالة ثم منتهية، أو ملغاة. الملغاة والشغالة لا تدخلان في أي حساب. */
 public enum ShiftStatus {
+    IN_PROGRESS,
     COMPLETED,
     CANCELLED
 }

@@ -33,11 +33,14 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
         return today().minusDays(daysAgo);
     }
 
-    @Test
-    void createTakesDefaultsAndSnapshotsThem() throws Exception {
-        JsonNode shift = createShift(token, shiftBody(siteId, driverId, equipmentId, day(1), "MORNING"));
+    // ---------------------------------------------------------------- start
 
-        assertThat(shift.path("status").asText()).isEqualTo("COMPLETED");
+    @Test
+    void startCreatesARunningShiftWithSnapshots() throws Exception {
+        JsonNode shift = startShift(token, shiftBody(siteId, driverId, equipmentId, day(1), "MORNING"));
+
+        assertThat(shift.path("status").asText()).isEqualTo("IN_PROGRESS");
+        assertThat(shift.path("finishedAt").isNull()).isTrue();
         assertThat(shift.path("price").decimalValue()).isEqualByComparingTo("1200.00");
         assertThat(shift.path("driverWage").decimalValue()).isEqualByComparingTo("150.00");
         assertThat(shift.path("equipmentOperatingCost").decimalValue()).isEqualByComparingTo("500.00");
@@ -49,9 +52,19 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
     }
 
     @Test
+    void dateDefaultsToTodayAndFutureDatesAreRejected() throws Exception {
+        JsonNode shift = startShift(token, shiftBody(siteId, driverId, equipmentId, null, "MORNING"));
+        assertThat(shift.path("shiftDate").asText()).isEqualTo(today().toString());
+
+        postJson("/api/v1/shifts", shiftBody(siteId, driverId, equipmentId, today().plusDays(5), "EVENING"), token)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("BAD_REQUEST"));
+    }
+
+    @Test
     void wageFollowsTheShiftType() throws Exception {
-        JsonNode evening = createShift(token, shiftBody(siteId, driverId, equipmentId, day(1), "EVENING"));
-        JsonNode night = createShift(token, shiftBody(siteId, driverId, equipmentId, day(1), "NIGHT"));
+        JsonNode evening = startShift(token, shiftBody(siteId, driverId, equipmentId, day(1), "EVENING"));
+        JsonNode night = startShift(token, shiftBody(siteId, driverId, equipmentId, day(1), "NIGHT"));
 
         assertThat(evening.path("driverWage").decimalValue()).isEqualByComparingTo("175.00");
         assertThat(night.path("driverWage").decimalValue()).isEqualByComparingTo("200.00");
@@ -63,18 +76,61 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
         body.put("price", new BigDecimal("1500"));
         body.put("driverWage", new BigDecimal("180.50"));
 
-        JsonNode shift = createShift(token, body);
+        JsonNode shift = startShift(token, body);
 
         assertThat(shift.path("price").decimalValue()).isEqualByComparingTo("1500.00");
         assertThat(shift.path("driverWage").decimalValue()).isEqualByComparingTo("180.50");
     }
 
     @Test
+    void duplicatesAreAllowed() throws Exception {
+        // قرارك: لا منع تكرار. نفس السائق والمعدة والتاريخ والنوع يمكن تسجيلها أكثر من مرة
+        startShift(token, shiftBody(siteId, driverId, equipmentId, day(1), "MORNING"));
+        startShift(token, shiftBody(siteId, driverId, equipmentId, day(1), "MORNING"));
+    }
+
+    @Test
+    void defaultsEndpointSuggestsWageAndPrice() throws Exception {
+        getJson("/api/v1/shifts/defaults?driverId=" + driverId + "&equipmentId=" + equipmentId
+                + "&shiftType=EVENING", token)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.driverWage").value(175.0))
+                .andExpect(jsonPath("$.price").value(1200.0))
+                .andExpect(jsonPath("$.equipmentOperatingCost").value(500.0));
+    }
+
+    // ---------------------------------------------------------------- finish
+
+    @Test
+    void finishChangesOnlyTheIndicator() throws Exception {
+        JsonNode running = startShift(token, shiftBody(siteId, driverId, equipmentId, day(1), "MORNING"));
+
+        JsonNode done = finishShift(token, running);
+
+        assertThat(done.path("status").asText()).isEqualTo("COMPLETED");
+        assertThat(done.path("finishedAt").isNull()).isFalse();
+        assertThat(done.path("price").decimalValue()).isEqualByComparingTo("1200.00");
+        assertThat(done.path("driverWage").decimalValue()).isEqualByComparingTo("150.00");
+        assertThat(done.path("version").asLong()).isGreaterThan(running.path("version").asLong());
+
+        // لا إنهاء ثانٍ، ولا إنهاء بنسخة قديمة أو بدون نسخة
+        postJson("/api/v1/shifts/" + running.path("id").asLong() + "/finish", versionBody(done.path("version").asLong()),
+                token).andExpect(status().isConflict());
+        JsonNode other = startShift(token, shiftBody(siteId, driverId, equipmentId, day(2), "MORNING"));
+        postJson("/api/v1/shifts/" + other.path("id").asLong() + "/finish", versionBody(999), token)
+                .andExpect(status().isConflict());
+        postJson("/api/v1/shifts/" + other.path("id").asLong() + "/finish", new HashMap<String, Object>(), token)
+                .andExpect(status().isBadRequest());
+    }
+
+    // ---------------------------------------------------------------- snapshots
+
+    @Test
     void oldShiftsAreNotRepricedWhenMasterDataChanges() throws Exception {
-        JsonNode shift = createShift(token, shiftBody(siteId, driverId, equipmentId, day(2), "MORNING"));
+        JsonNode shift = finishShift(token,
+                startShift(token, shiftBody(siteId, driverId, equipmentId, day(2), "MORNING")));
         long shiftId = shift.path("id").asLong();
 
-        // رفع أجر السائق وسعر المعدة وتكلفتها
         JsonNode driver = body(getJson("/api/v1/drivers/" + driverId, token));
         Map<String, Object> driverUpdate = new HashMap<>();
         driverUpdate.put("name", "Driver One");
@@ -94,13 +150,12 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
         equipmentUpdate.put("version", equipment.path("version").asLong());
         putJson("/api/v1/equipment/" + equipmentId, equipmentUpdate, token).andExpect(status().isOk());
 
-        // الوردية القديمة كما هي
         JsonNode stored = body(getJson("/api/v1/shifts/" + shiftId, token));
         assertThat(stored.path("driverWage").decimalValue()).isEqualByComparingTo("150.00");
         assertThat(stored.path("price").decimalValue()).isEqualByComparingTo("1200.00");
         assertThat(stored.path("equipmentOperatingCost").decimalValue()).isEqualByComparingTo("500.00");
 
-        // وتعديل ملاحظة فقط (بدون إرسال سعر أو أجر) لا يعيد التسعير
+        // تعديل ملاحظة فقط (بدون سعر أو أجر) لا يعيد التسعير
         Map<String, Object> edit = shiftBody(siteId, driverId, equipmentId, day(2), "MORNING");
         edit.put("notes", "only a note");
         edit.put("version", stored.path("version").asLong());
@@ -108,37 +163,40 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
         assertThat(edited.path("driverWage").decimalValue()).isEqualByComparingTo("150.00");
         assertThat(edited.path("price").decimalValue()).isEqualByComparingTo("1200.00");
 
-        // أما الوردية الجديدة فتأخذ القيم الجديدة
-        JsonNode fresh = createShift(token, shiftBody(siteId, driverId, equipmentId, day(1), "MORNING"));
+        // الوردية الجديدة تأخذ القيم الجديدة
+        JsonNode fresh = startShift(token, shiftBody(siteId, driverId, equipmentId, day(1), "MORNING"));
         assertThat(fresh.path("driverWage").decimalValue()).isEqualByComparingTo("999.00");
         assertThat(fresh.path("price").decimalValue()).isEqualByComparingTo("5000.00");
         assertThat(fresh.path("equipmentOperatingCost").decimalValue()).isEqualByComparingTo("900.00");
     }
 
-    @Test
-    void sameEquipmentOrDriverCannotWorkTheSameSlotTwice() throws Exception {
-        createShift(token, shiftBody(siteId, driverId, equipmentId, day(1), "MORNING"));
-
-        long otherDriver = createDriver(token, "Driver Two", "100", "100", "100");
-        long otherEquipment = createEquipment(token, "EX-02", typeId, "400", "1000");
-
-        postJson("/api/v1/shifts", shiftBody(siteId, otherDriver, equipmentId, day(1), "MORNING"), token)
-                .andExpect(status().isConflict());
-        postJson("/api/v1/shifts", shiftBody(siteId, driverId, otherEquipment, day(1), "MORNING"), token)
-                .andExpect(status().isConflict());
-
-        // وردية أخرى لنفس الشخص والمعدة مسموحة (مسائية) كما أن تاريخًا آخر مسموح
-        createShift(token, shiftBody(siteId, driverId, equipmentId, day(1), "EVENING"));
-        createShift(token, shiftBody(siteId, driverId, equipmentId, day(2), "MORNING"));
-        // وسائق ومعدة مختلفان في نفس الموعد مسموح
-        createShift(token, shiftBody(siteId, otherDriver, otherEquipment, day(1), "MORNING"));
-    }
+    // ---------------------------------------------------------------- availability rules
 
     @Test
-    void futureDatesAreRejected() throws Exception {
-        postJson("/api/v1/shifts", shiftBody(siteId, driverId, equipmentId, today().plusDays(5), "MORNING"), token)
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("BAD_REQUEST"));
+    void unavailableDriverOrEquipmentCannotBeScheduledOnAnyDate() throws Exception {
+        // سبب عدم التوفر إلزامي
+        setDriverAvailability(token, driverId, "UNAVAILABLE", null).andExpect(status().isBadRequest());
+
+        setDriverAvailability(token, driverId, "UNAVAILABLE", "sick leave").andExpect(status().isOk())
+                .andExpect(jsonPath("$.availability").value("UNAVAILABLE"))
+                .andExpect(jsonPath("$.unavailableReason").value("sick leave"));
+        postJson("/api/v1/shifts", shiftBody(siteId, driverId, equipmentId, today(), "MORNING"), token)
+                .andExpect(status().isBadRequest());
+        postJson("/api/v1/shifts", shiftBody(siteId, driverId, equipmentId, day(30), "MORNING"), token)
+                .andExpect(status().isBadRequest());
+
+        setDriverAvailability(token, driverId, "AVAILABLE", null).andExpect(status().isOk())
+                .andExpect(jsonPath("$.unavailableReason").doesNotExist());
+
+        setEquipmentStatus(token, equipmentId, "MAINTENANCE").andExpect(status().isOk());
+        postJson("/api/v1/shifts", shiftBody(siteId, driverId, equipmentId, day(1), "MORNING"), token)
+                .andExpect(status().isBadRequest());
+        setEquipmentStatus(token, equipmentId, "OUT_OF_SERVICE").andExpect(status().isOk());
+        postJson("/api/v1/shifts", shiftBody(siteId, driverId, equipmentId, day(1), "MORNING"), token)
+                .andExpect(status().isBadRequest());
+
+        setEquipmentStatus(token, equipmentId, "AVAILABLE").andExpect(status().isOk());
+        startShift(token, shiftBody(siteId, driverId, equipmentId, day(1), "MORNING"));
     }
 
     @Test
@@ -154,28 +212,77 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
     }
 
     @Test
-    void hoursAndQuantityAreValidatedAndStored() throws Exception {
-        Map<String, Object> tooManyHours = shiftBody(siteId, driverId, equipmentId, day(1), "MORNING");
-        tooManyHours.put("hours", new BigDecimal("25"));
-        postJson("/api/v1/shifts", tooManyHours, token).andExpect(status().isBadRequest());
+    void statusChangesAreBlockedWhileAShiftIsRunning() throws Exception {
+        JsonNode running = startShift(token, shiftBody(siteId, driverId, equipmentId, day(1), "MORNING"));
 
-        Map<String, Object> negativeQuantity = shiftBody(siteId, driverId, equipmentId, day(1), "MORNING");
-        negativeQuantity.put("quantity", new BigDecimal("-1"));
-        postJson("/api/v1/shifts", negativeQuantity, token).andExpect(status().isBadRequest());
+        setDriverAvailability(token, driverId, "UNAVAILABLE", "leave").andExpect(status().isConflict());
+        setEquipmentStatus(token, equipmentId, "MAINTENANCE").andExpect(status().isConflict());
+        deleteJson("/api/v1/drivers/" + driverId, token).andExpect(status().isConflict());
+        deleteJson("/api/v1/equipment/" + equipmentId, token).andExpect(status().isConflict());
 
-        Map<String, Object> valid = shiftBody(siteId, driverId, equipmentId, day(1), "MORNING");
-        valid.put("hours", new BigDecimal("8.5"));
-        valid.put("quantity", new BigDecimal("120.5"));
-        valid.put("quantityUnit", "m3");
-        JsonNode shift = createShift(token, valid);
-        assertThat(shift.path("hours").decimalValue()).isEqualByComparingTo("8.50");
-        assertThat(shift.path("quantity").decimalValue()).isEqualByComparingTo("120.50");
-        assertThat(shift.path("quantityUnit").asText()).isEqualTo("m3");
+        finishShift(token, running);
+
+        setDriverAvailability(token, driverId, "UNAVAILABLE", "leave").andExpect(status().isOk());
+        setEquipmentStatus(token, equipmentId, "MAINTENANCE").andExpect(status().isOk());
     }
+
+    // ---------------------------------------------------------------- live lists
+
+    @Test
+    void liveListsReflectRunningShifts() throws Exception {
+        long secondDriver = createDriver(token, "Driver Two", "1", "1", "1");
+        long thirdDriver = createDriver(token, "Driver Three", "1", "1", "1");
+        long secondEquipment = createEquipment(token, "EX-02", typeId, "1", "1");
+        setDriverAvailability(token, secondDriver, "UNAVAILABLE", "sick").andExpect(status().isOk());
+        setEquipmentStatus(token, secondEquipment, "MAINTENANCE").andExpect(status().isOk());
+
+        JsonNode eqBefore = body(getJson("/api/v1/live/equipment", token).andExpect(status().isOk()));
+        assertThat(findBy(eqBefore, "code", "EX-01").path("liveStatus").asText()).isEqualTo("AVAILABLE");
+        assertThat(findBy(eqBefore, "code", "EX-02").path("liveStatus").asText()).isEqualTo("MAINTENANCE");
+
+        JsonNode running = startShift(token, shiftBody(siteId, driverId, equipmentId, day(3), "MORNING"));
+
+        JsonNode eq = body(getJson("/api/v1/live/equipment", token));
+        JsonNode working = findBy(eq, "code", "EX-01");
+        assertThat(working.path("liveStatus").asText()).isEqualTo("WORKING");
+        assertThat(working.path("driverName").asText()).isEqualTo("Driver One");
+        assertThat(working.path("siteName").asText()).isEqualTo("Main Site");
+        assertThat(working.path("runningShiftDate").asText()).isEqualTo(day(3).toString());
+        assertThat(working.path("runningShiftsCount").asInt()).isEqualTo(1);
+        assertThat(working.path("currentShiftId").asLong()).isEqualTo(running.path("id").asLong());
+
+        // قائمة الاختيار (onlyFree): لا شغالة ولا في الصيانة
+        JsonNode freeEquipment = body(getJson("/api/v1/live/equipment?onlyFree=true", token));
+        assertThat(freeEquipment.size()).isZero();
+
+        JsonNode drivers = body(getJson("/api/v1/live/drivers", token));
+        assertThat(findBy(drivers, "name", "Driver One").path("liveStatus").asText()).isEqualTo("WORKING");
+        assertThat(findBy(drivers, "name", "Driver One").path("equipmentCode").asText()).isEqualTo("EX-01");
+        assertThat(findBy(drivers, "name", "Driver Two").path("liveStatus").asText()).isEqualTo("UNAVAILABLE");
+        assertThat(findBy(drivers, "name", "Driver Two").path("unavailableReason").asText()).isEqualTo("sick");
+        assertThat(findBy(drivers, "name", "Driver Three").path("liveStatus").asText()).isEqualTo("AVAILABLE");
+
+        JsonNode freeDrivers = body(getJson("/api/v1/live/drivers?onlyFree=true", token));
+        assertThat(freeDrivers.size()).isEqualTo(1);
+        assertThat(freeDrivers.get(0).path("id").asLong()).isEqualTo(thirdDriver);
+
+        // قائمة الورديات الشغالة
+        JsonNode list = body(getJson("/api/v1/shifts/running", token).andExpect(status().isOk()));
+        assertThat(list.size()).isEqualTo(1);
+        assertThat(list.get(0).path("id").asLong()).isEqualTo(running.path("id").asLong());
+
+        finishShift(token, running);
+
+        JsonNode after = body(getJson("/api/v1/live/equipment", token));
+        assertThat(findBy(after, "code", "EX-01").path("liveStatus").asText()).isEqualTo("AVAILABLE");
+        assertThat(body(getJson("/api/v1/shifts/running", token)).size()).isZero();
+    }
+
+    // ---------------------------------------------------------------- update & audit
 
     @Test
     void updatesAreAuditedAndVersionChecked() throws Exception {
-        JsonNode shift = createShift(token, shiftBody(siteId, driverId, equipmentId, day(1), "MORNING"));
+        JsonNode shift = startShift(token, shiftBody(siteId, driverId, equipmentId, day(1), "MORNING"));
         long id = shift.path("id").asLong();
         long version = shift.path("version").asLong();
 
@@ -188,112 +295,114 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
         assertThat(updated.path("version").asLong()).isGreaterThan(version);
 
         JsonNode history = body(getJson("/api/v1/shifts/" + id + "/history", token).andExpect(status().isOk()));
-        JsonNode priceChange = findHistory(history, "UPDATED", "price");
+        JsonNode priceChange = null;
+        boolean created = false;
+        boolean wageChanged = false;
+        for (JsonNode row : history) {
+            if ("UPDATED".equals(row.path("action").asText()) && "price".equals(row.path("fieldName").asText())) {
+                priceChange = row;
+            }
+            if ("CREATED".equals(row.path("action").asText())) {
+                created = true;
+            }
+            if ("driverWage".equals(row.path("fieldName").asText())) {
+                wageChanged = true;
+            }
+        }
         assertThat(priceChange).isNotNull();
         assertThat(priceChange.path("oldValue").asText()).isEqualTo("1200.00");
         assertThat(priceChange.path("newValue").asText()).isEqualTo("1300.00");
         assertThat(priceChange.path("userName").asText()).isNotBlank();
-        assertThat(findHistory(history, "UPDATED", "notes")).isNotNull();
-        assertThat(findHistory(history, "CREATED", null)).isNotNull();
-        // لم يتغير الأجر فلا يظهر في السجل
-        assertThat(findHistory(history, "UPDATED", "driverWage")).isNull();
+        assertThat(created).isTrue();
+        assertThat(wageChanged).isFalse(); // الأجر لم يتغير فلا يظهر
 
-        // نسخة قديمة -> 409 ، وبدون نسخة -> 400
-        putJson("/api/v1/shifts/" + id, edit, token).andExpect(status().isConflict());
+        putJson("/api/v1/shifts/" + id, edit, token).andExpect(status().isConflict()); // نسخة قديمة
         edit.remove("version");
-        putJson("/api/v1/shifts/" + id, edit, token).andExpect(status().isBadRequest());
+        putJson("/api/v1/shifts/" + id, edit, token).andExpect(status().isBadRequest()); // بدون نسخة
+        Map<String, Object> noDate = shiftBody(siteId, driverId, equipmentId, null, "MORNING");
+        noDate.put("version", updated.path("version").asLong());
+        putJson("/api/v1/shifts/" + id, noDate, token).andExpect(status().isBadRequest()); // بدون تاريخ
+    }
+
+    // ---------------------------------------------------------------- cancel & reinstate
+
+    @Test
+    void completedShiftCanBeCancelledAndReinstated() throws Exception {
+        JsonNode done = finishShift(token,
+                startShift(token, shiftBody(siteId, driverId, equipmentId, day(1), "MORNING")));
+        long id = done.path("id").asLong();
+
+        Map<String, Object> noReason = versionBody(done.path("version").asLong());
+        postJson("/api/v1/shifts/" + id + "/cancel", noReason, token).andExpect(status().isBadRequest());
+
+        Map<String, Object> cancel = versionBody(done.path("version").asLong());
+        cancel.put("reason", "work did not happen");
+        JsonNode cancelled = body(postJson("/api/v1/shifts/" + id + "/cancel", cancel, token)
+                .andExpect(status().isOk()));
+        assertThat(cancelled.path("status").asText()).isEqualTo("CANCELLED");
+        assertThat(cancelled.path("cancelReason").asText()).isEqualTo("work did not happen");
+
+        // لا تعديل على الملغاة ولا إلغاء ثانٍ
+        Map<String, Object> edit = shiftBody(siteId, driverId, equipmentId, day(1), "MORNING");
+        edit.put("version", cancelled.path("version").asLong());
+        putJson("/api/v1/shifts/" + id, edit, token).andExpect(status().isConflict());
+        cancel.put("version", cancelled.path("version").asLong());
+        postJson("/api/v1/shifts/" + id + "/cancel", cancel, token).andExpect(status().isConflict());
+
+        postJson("/api/v1/shifts/" + id + "/reinstate", versionBody(cancelled.path("version").asLong()), token)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("COMPLETED"))
+                .andExpect(jsonPath("$.cancelReason").doesNotExist());
+
+        JsonNode history = body(getJson("/api/v1/shifts/" + id + "/history", token));
+        assertThat(findBy(history, "action", "CANCELLED")).isNotNull();
+        assertThat(findBy(history, "action", "REINSTATED")).isNotNull();
+        assertThat(findBy(history, "action", "FINISHED")).isNotNull();
     }
 
     @Test
-    void cancelFreesTheSlotAndReinstateChecksIt() throws Exception {
-        JsonNode first = createShift(token, shiftBody(siteId, driverId, equipmentId, day(1), "MORNING"));
-        long firstId = first.path("id").asLong();
+    void shiftCancelledWhileRunningCannotBeReinstated() throws Exception {
+        JsonNode running = startShift(token, shiftBody(siteId, driverId, equipmentId, day(1), "MORNING"));
+        Map<String, Object> cancel = versionBody(running.path("version").asLong());
+        cancel.put("reason", "started by mistake");
+        JsonNode cancelled = body(postJson("/api/v1/shifts/" + running.path("id").asLong() + "/cancel", cancel,
+                token).andExpect(status().isOk()));
 
-        Map<String, Object> cancel = new HashMap<>();
-        cancel.put("reason", "rain stopped work");
-        cancel.put("version", first.path("version").asLong());
-        JsonNode cancelled = body(postJson("/api/v1/shifts/" + firstId + "/cancel", cancel, token)
-                .andExpect(status().isOk()));
-        assertThat(cancelled.path("status").asText()).isEqualTo("CANCELLED");
-        assertThat(cancelled.path("cancelReason").asText()).isEqualTo("rain stopped work");
+        postJson("/api/v1/shifts/" + running.path("id").asLong() + "/reinstate",
+                versionBody(cancelled.path("version").asLong()), token).andExpect(status().isConflict());
 
-        // لا تعديل على الملغاة ولا إلغاء ثانٍ، والسبب مطلوب
-        Map<String, Object> edit = shiftBody(siteId, driverId, equipmentId, day(1), "MORNING");
-        edit.put("version", cancelled.path("version").asLong());
-        putJson("/api/v1/shifts/" + firstId, edit, token).andExpect(status().isConflict());
-        cancel.put("version", cancelled.path("version").asLong());
-        postJson("/api/v1/shifts/" + firstId + "/cancel", cancel, token).andExpect(status().isConflict());
-        Map<String, Object> noReason = new HashMap<>();
-        noReason.put("version", 0);
-        postJson("/api/v1/shifts/" + firstId + "/cancel", noReason, token).andExpect(status().isBadRequest());
-
-        // الموعد تحرر: يمكن تسجيل وردية بديلة
-        JsonNode second = createShift(token, shiftBody(siteId, driverId, equipmentId, day(1), "MORNING"));
-
-        // وإعادة تفعيل الأولى مرفوضة لأن الموعد صار مشغولًا
-        Map<String, Object> reinstate = new HashMap<>();
-        reinstate.put("version", cancelled.path("version").asLong());
-        postJson("/api/v1/shifts/" + firstId + "/reinstate", reinstate, token).andExpect(status().isConflict());
-
-        // بعد إلغاء البديلة تصبح ممكنة
-        Map<String, Object> cancelSecond = new HashMap<>();
-        cancelSecond.put("reason", "duplicate entry");
-        cancelSecond.put("version", second.path("version").asLong());
-        postJson("/api/v1/shifts/" + second.path("id").asLong() + "/cancel", cancelSecond, token)
-                .andExpect(status().isOk());
-        postJson("/api/v1/shifts/" + firstId + "/reinstate", reinstate, token)
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("COMPLETED"));
-
-        JsonNode history = body(getJson("/api/v1/shifts/" + firstId + "/history", token));
-        assertThat(findHistory(history, "CANCELLED", "status")).isNotNull();
-        assertThat(findHistory(history, "REINSTATED", "status")).isNotNull();
+        // الملغاة لا تحجز السائق: يمكن تغيير حالته الآن
+        setDriverAvailability(token, driverId, "UNAVAILABLE", "leave").andExpect(status().isOk());
     }
+
+    // ---------------------------------------------------------------- list
 
     @Test
     void listIsFilteredPagedAndNewestFirst() throws Exception {
-        createShift(token, shiftBody(siteId, driverId, equipmentId, day(1), "MORNING"));
-        createShift(token, shiftBody(siteId, driverId, equipmentId, day(2), "MORNING"));
-        createShift(token, shiftBody(siteId, driverId, equipmentId, day(3), "MORNING"));
+        JsonNode first = startShift(token, shiftBody(siteId, driverId, equipmentId, day(1), "MORNING"));
+        startShift(token, shiftBody(siteId, driverId, equipmentId, day(2), "EVENING"));
+        startShift(token, shiftBody(siteId, driverId, equipmentId, day(3), "NIGHT"));
+        finishShift(token, first);
 
         JsonNode all = body(getJson("/api/v1/shifts", token).andExpect(status().isOk()));
         assertThat(all.path("totalElements").asLong()).isEqualTo(3);
         assertThat(all.path("items").get(0).path("shiftDate").asText()).isEqualTo(day(1).toString());
         assertThat(all.path("items").get(2).path("shiftDate").asText()).isEqualTo(day(3).toString());
 
-        JsonNode range = body(getJson("/api/v1/shifts?from=" + day(2) + "&to=" + day(1), token));
-        assertThat(range.path("totalElements").asLong()).isEqualTo(2);
-
-        JsonNode page2 = body(getJson("/api/v1/shifts?size=2&page=1", token));
-        assertThat(page2.path("items").size()).isEqualTo(1);
+        assertThat(body(getJson("/api/v1/shifts?status=IN_PROGRESS", token)).path("totalElements").asLong())
+                .isEqualTo(2);
+        assertThat(body(getJson("/api/v1/shifts?status=COMPLETED", token)).path("totalElements").asLong())
+                .isEqualTo(1);
+        assertThat(body(getJson("/api/v1/shifts?status=CANCELLED", token)).path("totalElements").asLong()).isZero();
+        assertThat(body(getJson("/api/v1/shifts?type=NIGHT", token)).path("totalElements").asLong()).isEqualTo(1);
+        assertThat(body(getJson("/api/v1/shifts?from=" + day(2) + "&to=" + day(1), token))
+                .path("totalElements").asLong()).isEqualTo(2);
+        assertThat(body(getJson("/api/v1/shifts?size=2&page=1", token)).path("items").size()).isEqualTo(1);
 
         long otherDriver = createDriver(token, "Driver Two", "1", "1", "1");
         assertThat(body(getJson("/api/v1/shifts?driverId=" + otherDriver, token)).path("totalElements").asLong())
                 .isZero();
-        assertThat(body(getJson("/api/v1/shifts?status=CANCELLED", token)).path("totalElements").asLong()).isZero();
-        assertThat(body(getJson("/api/v1/shifts?type=NIGHT", token)).path("totalElements").asLong()).isZero();
 
         getJson("/api/v1/shifts?from=" + day(1) + "&to=" + day(3), token).andExpect(status().isBadRequest());
-    }
-
-    @Test
-    void defaultsEndpointSuggestsWageAndPrice() throws Exception {
-        getJson("/api/v1/shifts/defaults?driverId=" + driverId + "&equipmentId=" + equipmentId
-                + "&shiftType=EVENING", token)
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.driverWage").value(175.0))
-                .andExpect(jsonPath("$.price").value(1200.0))
-                .andExpect(jsonPath("$.equipmentOperatingCost").value(500.0));
-    }
-
-    private static JsonNode findHistory(JsonNode history, String action, String field) {
-        for (JsonNode row : history) {
-            boolean sameField = field == null ? row.path("fieldName").isNull() || row.path("fieldName").isMissingNode()
-                    : field.equals(row.path("fieldName").asText());
-            if (action.equals(row.path("action").asText()) && sameField) {
-                return row;
-            }
-        }
-        return null;
     }
 }

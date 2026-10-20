@@ -1,5 +1,8 @@
 package com.contractor.app.user.domain;
 
+import com.contractor.app.audit.domain.AuditAction;
+import com.contractor.app.audit.domain.AuditEntityType;
+import com.contractor.app.audit.domain.AuditService;
 import com.contractor.app.auth.infra.RefreshTokenRepository;
 import com.contractor.app.common.error.ApiException;
 import com.contractor.app.common.util.Texts;
@@ -22,11 +25,14 @@ public class UserService {
     private final UserRepository users;
     private final RefreshTokenRepository refreshTokens;
     private final PasswordEncoder encoder;
+    private final AuditService audit;
 
-    public UserService(UserRepository users, RefreshTokenRepository refreshTokens, PasswordEncoder encoder) {
+    public UserService(UserRepository users, RefreshTokenRepository refreshTokens, PasswordEncoder encoder,
+                       AuditService audit) {
         this.users = users;
         this.refreshTokens = refreshTokens;
         this.encoder = encoder;
+        this.audit = audit;
     }
 
     @Transactional(readOnly = true)
@@ -49,7 +55,10 @@ public class UserService {
         }
         User user = new User(tenantId, username, request.getFullName().trim(),
                 Texts.blankToNull(request.getPhone()), encoder.encode(request.getPassword()), Role.ADMIN);
-        return UserResponse.from(users.save(user));
+        users.save(user);
+        audit.record(tenantId, AuditEntityType.USER, user.getId(), AuditAction.CREATED, null, null,
+                "username=" + user.getUsername());
+        return UserResponse.from(user);
     }
 
     @Transactional
@@ -59,6 +68,10 @@ public class UserService {
         if (!active && user.getId().equals(currentUserId)) {
             throw ApiException.badRequest("لا يمكنك تعطيل حسابك الخاص.");
         }
+        String oldName = user.getFullName();
+        String oldPhone = user.getPhone();
+        boolean oldActive = user.isActive();
+
         user.setFullName(request.getFullName().trim());
         user.setPhone(Texts.blankToNull(request.getPhone()));
         user.setActive(active);
@@ -66,6 +79,10 @@ public class UserService {
             // أي جلسة مفتوحة لهذا المستخدم تُنهى فورًا
             refreshTokens.revokeAllForUser(user.getId(), tenantId);
         }
+        audit.recordChanges(tenantId, AuditEntityType.USER, user.getId(), new AuditService.ChangeSet()
+                .track("fullName", oldName, user.getFullName())
+                .track("phone", oldPhone, user.getPhone())
+                .track("active", oldActive, user.isActive()));
         return UserResponse.from(user);
     }
 
@@ -74,6 +91,7 @@ public class UserService {
         User user = find(tenantId, id);
         user.setPasswordHash(encoder.encode(request.getNewPassword()));
         refreshTokens.revokeAllForUser(user.getId(), tenantId);
+        audit.record(tenantId, AuditEntityType.USER, user.getId(), AuditAction.PASSWORD_RESET, null, null, null);
     }
 
     /** المصدر الوحيد لقراءة مستخدم: دائمًا ضمن مقاول بعينه، وغير الموجود يعطي 404 حتى لو كان لمقاول آخر. */
