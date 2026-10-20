@@ -4,6 +4,7 @@ import 'package:contractor_mobile/features/health/domain/entities/health_info.da
 import 'package:contractor_mobile/features/health/domain/repositories/health_repository.dart';
 import 'package:contractor_mobile/features/health/presentation/bloc/health_bloc.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 class MockHealthRepository extends Mock implements HealthRepository {}
 

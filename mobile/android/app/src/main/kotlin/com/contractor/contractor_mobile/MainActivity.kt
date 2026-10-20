@@ -1,0 +1,6 @@
+package com.contractor.contractor_mobile
+
+import io.flutter.embedding.android.FlutterActivity
+
+class MainActivity: FlutterActivity() {
+}
