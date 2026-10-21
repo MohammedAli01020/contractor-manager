@@ -171,6 +171,7 @@ class _ShiftsView extends StatelessWidget {
                             return _ShiftCard(
                               shift: shift,
                               previousDayRunning: isPreviousDayRunning,
+                              onManage: () => _manageShift(context, shift, bloc),
                             );
                           },
                         ),
@@ -430,10 +431,12 @@ class _TabChip extends StatelessWidget {
 class _ShiftCard extends StatelessWidget {
   const _ShiftCard({
     required this.shift,
+    required this.onManage,
     this.previousDayRunning = false,
   });
 
   final ShiftModel shift;
+  final VoidCallback onManage;
   final bool previousDayRunning;
 
   @override
@@ -515,6 +518,15 @@ class _ShiftCard extends StatelessWidget {
               const SizedBox(height: 8),
               Text('ملاحظات: ${shift.notes}'),
             ],
+            const SizedBox(height: 12),
+            Align(
+              alignment: AlignmentDirectional.centerEnd,
+              child: OutlinedButton.icon(
+                onPressed: onManage,
+                icon: const Icon(Icons.more_horiz),
+                label: const Text('إجراءات الوردية'),
+              ),
+            ),
           ],
         ),
       ),
