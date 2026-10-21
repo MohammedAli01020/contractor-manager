@@ -80,9 +80,36 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Object> handleUnexpected(Exception ex, WebRequest request) {
+        String triggerError = findActiveShiftTriggerError(ex);
+        if (triggerError != null) {
+            String message = "ACTIVE_SHIFT_DRIVER_RUNNING".equals(triggerError)
+                    ? "لا يمكن تغيير حالة السائق أو تعطيله أثناء وجود وردية نشطة."
+                    : "لا يمكن تغيير حالة المعدة أو تعطيلها أثناء وجود وردية نشطة.";
+            return build(HttpStatus.CONFLICT, "ACTIVE_SHIFT_CONFLICT", message, request, null);
+        }
+
         log.error("Unexpected error", ex);
         return build(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR",
                 "حدث خطأ غير متوقع في الخادم. حاول لاحقًا.", request, null);
+    }
+
+    private static String findActiveShiftTriggerError(Throwable ex) {
+        java.util.Set<Throwable> visited =
+                java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<Throwable, Boolean>());
+        Throwable current = ex;
+        while (current != null && visited.add(current)) {
+            String message = current.getMessage();
+            if (message != null) {
+                if (message.contains("ACTIVE_SHIFT_DRIVER_RUNNING")) {
+                    return "ACTIVE_SHIFT_DRIVER_RUNNING";
+                }
+                if (message.contains("ACTIVE_SHIFT_EQUIPMENT_RUNNING")) {
+                    return "ACTIVE_SHIFT_EQUIPMENT_RUNNING";
+                }
+            }
+            current = current.getCause();
+        }
+        return null;
     }
 
     @Override
