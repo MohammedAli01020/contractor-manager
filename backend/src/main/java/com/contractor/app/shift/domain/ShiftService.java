@@ -270,13 +270,13 @@ public class ShiftService {
 
     private void assertDriverNotRunning(Long tenantId, Long driverId) {
         if (shifts.existsByTenantIdAndDriverIdAndStatus(tenantId, driverId, ShiftStatus.IN_PROGRESS)) {
-            throw ApiException.conflict("السائق أو العامل لديه وردية نشطة بالفعل.");
+            throw ApiException.activeShiftConflict("السائق أو العامل لديه وردية نشطة بالفعل.");
         }
     }
 
     private void assertEquipmentNotRunning(Long tenantId, Long equipmentId) {
         if (shifts.existsByTenantIdAndEquipmentIdAndStatus(tenantId, equipmentId, ShiftStatus.IN_PROGRESS)) {
-            throw ApiException.conflict("المعدة مستخدمة في وردية نشطة بالفعل.");
+            throw ApiException.activeShiftConflict("المعدة مستخدمة في وردية نشطة بالفعل.");
         }
     }
 
@@ -303,11 +303,11 @@ public class ShiftService {
 
         if (shifts.existsByTenantIdAndDriverIdAndStatusAndIdNot(
                 tenantId, request.getDriverId(), ShiftStatus.IN_PROGRESS, shift.getId())) {
-            throw ApiException.conflict("السائق أو العامل لديه وردية نشطة بالفعل.");
+            throw ApiException.activeShiftConflict("السائق أو العامل لديه وردية نشطة بالفعل.");
         }
         if (shifts.existsByTenantIdAndEquipmentIdAndStatusAndIdNot(
                 tenantId, request.getEquipmentId(), ShiftStatus.IN_PROGRESS, shift.getId())) {
-            throw ApiException.conflict("المعدة مستخدمة في وردية نشطة بالفعل.");
+            throw ApiException.activeShiftConflict("المعدة مستخدمة في وردية نشطة بالفعل.");
         }
     }
 
