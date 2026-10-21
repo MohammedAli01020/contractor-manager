@@ -490,10 +490,11 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
         assertThat(all.path("items").get(0).path("shiftDate").asText()).isEqualTo(day(1).toString());
         assertThat(all.path("items").get(2).path("shiftDate").asText()).isEqualTo(day(3).toString());
 
+        // Uniqueness rule: only the third shift may remain IN_PROGRESS.
         assertThat(body(getJson("/api/v1/shifts?status=IN_PROGRESS", token)).path("totalElements").asLong())
-                .isEqualTo(2);
-        assertThat(body(getJson("/api/v1/shifts?status=COMPLETED", token)).path("totalElements").asLong())
                 .isEqualTo(1);
+        assertThat(body(getJson("/api/v1/shifts?status=COMPLETED", token)).path("totalElements").asLong())
+                .isEqualTo(2);
         assertThat(body(getJson("/api/v1/shifts?status=CANCELLED", token)).path("totalElements").asLong()).isZero();
         assertThat(body(getJson("/api/v1/shifts?type=NIGHT", token)).path("totalElements").asLong()).isEqualTo(1);
         assertThat(body(getJson("/api/v1/shifts?from=" + day(2) + "&to=" + day(1), token))
