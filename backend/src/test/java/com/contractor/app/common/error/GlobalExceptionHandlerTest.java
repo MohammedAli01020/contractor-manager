@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.sql.SQLException;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -36,6 +37,20 @@ class GlobalExceptionHandlerTest {
                 new SQLException("ACTIVE_SHIFT_EQUIPMENT_RUNNING"));
 
         ResponseEntity<Object> response = handler.handleUnexpected(
+                wrapped, new ServletWebRequest(new MockHttpServletRequest()));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        ApiError error = (ApiError) response.getBody();
+        assertThat(error.getCode()).isEqualTo("ACTIVE_SHIFT_CONFLICT");
+        assertThat(error.getMessage()).contains("المعدة");
+    }
+
+    @Test
+    void mapsTriggerSignalToConflictWhenSpringClassifiesItAsDataIntegrityViolation() {
+        DataIntegrityViolationException wrapped = new DataIntegrityViolationException(
+                "database update failed", new SQLException("ACTIVE_SHIFT_EQUIPMENT_RUNNING"));
+
+        ResponseEntity<Object> response = handler.handleDataIntegrity(
                 wrapped, new ServletWebRequest(new MockHttpServletRequest()));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
