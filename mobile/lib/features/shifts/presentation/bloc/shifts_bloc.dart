@@ -248,6 +248,7 @@ class ShiftsBloc extends Bloc<ShiftsEvent, ShiftsState> {
           allPage: result.page,
           allTotalPages: result.totalPages,
           allStatus: event.status,
+          clearAllStatus: event.status == null,
           loadingMore: false,
         ));
       }
