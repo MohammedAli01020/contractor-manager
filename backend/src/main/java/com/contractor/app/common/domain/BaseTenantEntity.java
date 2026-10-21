@@ -58,7 +58,7 @@ public abstract class BaseTenantEntity {
             throw ApiException.badRequest("رقم النسخة (version) مطلوب عند التعديل.");
         }
         if (!expected.equals(version)) {
-            throw ApiException.conflict("تم تعديل هذا السجل بواسطة مستخدم آخر. أعد التحميل ثم حاول مجددًا.");
+            throw ApiException.concurrentUpdate("تم تعديل هذا السجل بواسطة مستخدم آخر. أعد التحميل ثم حاول مجددًا.");
         }
     }
 
