@@ -45,4 +45,8 @@ public class ApiException extends RuntimeException {
     public static ApiException concurrentUpdate(String message) {
         return new ApiException(HttpStatus.CONFLICT, "CONCURRENT_UPDATE", message);
     }
+
+    public static ApiException activeShiftConflict(String message) {
+        return new ApiException(HttpStatus.CONFLICT, "ACTIVE_SHIFT_CONFLICT", message);
+    }
 }
