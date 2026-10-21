@@ -12,6 +12,11 @@ class ShiftModel {
     required this.driverWage,
     required this.priceAfterWage,
     required this.notes,
+    this.siteId,
+    this.driverId,
+    this.equipmentId,
+    this.version,
+    this.cancelReason = '',
   });
 
   factory ShiftModel.fromJson(Map<String, dynamic> json) {
@@ -28,6 +33,11 @@ class ShiftModel {
       driverWage: _numberValue(json['driverWage']),
       priceAfterWage: _numberValue(json['priceAfterWage']),
       notes: _stringValue(json['notes'], ''),
+      siteId: _nullableInt(json['siteId']),
+      driverId: _nullableInt(json['driverId']),
+      equipmentId: _nullableInt(json['equipmentId']),
+      version: _nullableInt(json['version']),
+      cancelReason: _stringValue(json['cancelReason'], ''),
     );
   }
 
@@ -43,6 +53,17 @@ class ShiftModel {
   final double driverWage;
   final double priceAfterWage;
   final String notes;
+  final int? siteId;
+  final int? driverId;
+  final int? equipmentId;
+  final int? version;
+  final String cancelReason;
+
+  static int? _nullableInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '');
+  }
 
   static int _intValue(dynamic value) {
     if (value is int) return value;
