@@ -54,7 +54,20 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             return build(HttpStatus.CONFLICT, "ACTIVE_SHIFT_CONFLICT",
                     "السائق أو المعدة مستخدم بالفعل في وردية نشطة.", request, null);
         }
-        return build(HttpStatus.CONFLICT, "CONFLICT", "تعذّر الحفظ بسبب تعارض في البيانات.", request, null);
+
+        // Map only known business uniqueness constraints. Unknown integrity failures may
+        // indicate a schema, foreign-key, CHECK, or data problem and must not masquerade
+        // as an ordinary business conflict.
+        if (causeMessage.contains("uq_equipment_tenant_code")
+                || causeMessage.contains("uq_sites_tenant_name")
+                || causeMessage.contains("uq_equipment_types_tenant_name")) {
+            return build(HttpStatus.CONFLICT, "CONFLICT",
+                    "القيمة مستخدمة بالفعل داخل هذا المقاول.", request, null);
+        }
+
+        log.error("Unclassified database integrity violation", ex);
+        return build(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR",
+                "حدث خطأ في حفظ البيانات. راجع سجل الخادم لمعرفة التفاصيل.", request, null);
     }
 
     @ExceptionHandler(PessimisticLockingFailureException.class)
