@@ -3,6 +3,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/di/injector.dart';
 import '../../../core/widgets/loading_view.dart';
+import '../../../core/di/injector.dart';
+import '../data/datasources/shifts_api.dart';
+import 'shift_editor_screen.dart';
 import '../data/models/shift_model.dart';
 import 'bloc/shifts_bloc.dart';
 
@@ -167,6 +170,163 @@ class _ShiftsView extends StatelessWidget {
         },
       ),
     );
+  }
+
+
+  Future<void> _manageShift(
+    BuildContext context,
+    ShiftModel shift,
+    ShiftsBloc bloc,
+  ) async {
+    final actions = <String, String>{};
+    if (shift.status == 'IN_PROGRESS') {
+      actions['edit'] = 'تعديل الوردية';
+      actions['finish'] = 'إنهاء الوردية';
+      actions['cancel'] = 'إلغاء الوردية';
+    } else if (shift.status == 'CANCELLED') {
+      actions['reinstate'] = 'إعادة تفعيل الوردية';
+      actions['history'] = 'عرض سجل التعديلات';
+    } else {
+      actions['edit'] = 'عرض / تعديل البيانات';
+      actions['history'] = 'عرض سجل التعديلات';
+    }
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text('إجراءات الوردية #${shift.id}',
+                  style: Theme.of(sheetContext).textTheme.titleMedium),
+            ),
+            ...actions.entries.map((entry) => ListTile(
+                  leading: Icon(_actionIcon(entry.key)),
+                  title: Text(entry.value),
+                  onTap: () => Navigator.of(sheetContext).pop(entry.key),
+                )),
+          ],
+        ),
+      ),
+    );
+    if (choice == null || !context.mounted) return;
+    if (choice == 'edit') {
+      final saved = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(builder: (_) => ShiftEditorScreen(shift: shift)),
+      );
+      if (saved == true && context.mounted) {
+        bloc.add(const ShiftsRequested());
+      }
+      return;
+    }
+    if (choice == 'cancel') {
+      final reasonController = TextEditingController();
+      final reason = await showDialog<String>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text('إلغاء الوردية #${shift.id}'),
+          content: TextField(
+            controller: reasonController,
+            autofocus: true,
+            maxLength: 300,
+            maxLines: 3,
+            decoration: const InputDecoration(
+              labelText: 'سبب الإلغاء (مطلوب)',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('رجوع'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final value = reasonController.text.trim();
+                if (value.isNotEmpty) Navigator.pop(dialogContext, value);
+              },
+              child: const Text('تأكيد الإلغاء'),
+            ),
+          ],
+        ),
+      );
+      reasonController.dispose();
+      if (reason == null || reason.trim().isEmpty || !context.mounted) return;
+      await _runShiftAction(context, bloc, () => getIt<ShiftsApi>().cancelShift(shift, reason));
+      return;
+    }
+    if (choice == 'finish') {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text('إنهاء الوردية #${shift.id}؟'),
+          content: const Text('سيتم تغيير حالة الوردية إلى منتهية.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('رجوع')),
+            FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('إنهاء')),
+          ],
+        ),
+      );
+      if (confirm == true && context.mounted) {
+        await _runShiftAction(context, bloc, () => getIt<ShiftsApi>().finishShift(shift));
+      }
+      return;
+    }
+    if (choice == 'reinstate') {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text('إعادة تفعيل الوردية #${shift.id}؟'),
+          content: const Text('سيقبل الخادم العملية فقط إذا كانت الوردية قابلة لإعادة التفعيل.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('رجوع')),
+            FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('إعادة التفعيل')),
+          ],
+        ),
+      );
+      if (confirm == true && context.mounted) {
+        await _runShiftAction(context, bloc, () => getIt<ShiftsApi>().reinstateShift(shift));
+      }
+      return;
+    }
+    if (choice == 'history') {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('عرض سجل التعديلات سنضيفه في خطوة مستقلة.')),
+        );
+      }
+    }
+  }
+
+  IconData _actionIcon(String action) {
+    switch (action) {
+      case 'edit': return Icons.edit_outlined;
+      case 'finish': return Icons.check_circle_outline;
+      case 'cancel': return Icons.cancel_outlined;
+      case 'reinstate': return Icons.restore;
+      default: return Icons.history;
+    }
+  }
+
+  Future<void> _runShiftAction(
+    BuildContext context,
+    ShiftsBloc bloc,
+    Future<ShiftModel> Function() action,
+  ) async {
+    try {
+      await action();
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تم تنفيذ الإجراء بنجاح.')),
+      );
+      bloc.add(const ShiftsRequested());
+    } catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('تعذر تنفيذ الإجراء. ${error.toString()}')),
+      );
+    }
   }
 
   String _emptyMessage(ShiftListTab tab) {
