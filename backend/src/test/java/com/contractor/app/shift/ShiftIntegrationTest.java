@@ -118,8 +118,8 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
         };
 
         try {
-            Future<Integer> first = executor.submit(request);
-            Future<Integer> second = executor.submit(request);
+            Future<org.springframework.test.web.servlet.MvcResult> first = executor.submit(request);
+            Future<org.springframework.test.web.servlet.MvcResult> second = executor.submit(request);
             assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
             start.countDown();
             org.springframework.test.web.servlet.MvcResult firstResult = first.get(30, TimeUnit.SECONDS);
