@@ -88,7 +88,8 @@ public class EquipmentService {
 
     @Transactional
     public EquipmentResponse update(Long tenantId, Long id, EquipmentRequest request) {
-        Equipment item = find(tenantId, id);
+        Equipment item = equipment.findByIdAndTenantIdForUpdate(id, tenantId)
+                .orElseThrow(() -> ApiException.notFound(NOT_FOUND));
         item.requireVersion(request.getVersion());
         String code = request.getCode().trim();
         if (equipment.existsByTenantIdAndCodeIgnoreCaseAndIdNot(tenantId, code, id)) {
@@ -136,7 +137,8 @@ public class EquipmentService {
 
     @Transactional
     public void deactivate(Long tenantId, Long id) {
-        Equipment item = find(tenantId, id);
+        Equipment item = equipment.findByIdAndTenantIdForUpdate(id, tenantId)
+                .orElseThrow(() -> ApiException.notFound(NOT_FOUND));
         if (!item.isActive()) {
             return;
         }
