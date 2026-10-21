@@ -259,7 +259,7 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
                         },
                       ),
                       const SizedBox(height: 12),
-                      _resourceDropdown(
+                      _resourcePicker(
                         label: 'المعدة',
                         items: _equipment,
                         selectedId: _equipmentId,
