@@ -17,6 +17,7 @@ class ShiftModel {
     this.equipmentId,
     this.version,
     this.cancelReason = '',
+    this.equipmentOperatingCost = 0.0,
   });
 
   factory ShiftModel.fromJson(Map<String, dynamic> json) {
@@ -31,6 +32,7 @@ class ShiftModel {
       equipmentName: _stringValue(json['equipmentName'], 'غير محددة'),
       price: _numberValue(json['price']),
       driverWage: _numberValue(json['driverWage']),
+      equipmentOperatingCost: _numberValue(json['equipmentOperatingCost']),
       priceAfterWage: _numberValue(json['priceAfterWage']),
       notes: _stringValue(json['notes'], ''),
       siteId: _nullableInt(json['siteId']),
@@ -51,6 +53,7 @@ class ShiftModel {
   final String equipmentName;
   final double price;
   final double driverWage;
+  final double equipmentOperatingCost;
   final double priceAfterWage;
   final String notes;
   final int? siteId;
