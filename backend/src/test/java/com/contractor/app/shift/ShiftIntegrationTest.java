@@ -163,7 +163,8 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
                 token).andExpect(status().isConflict());
         JsonNode other = startShift(token, shiftBody(siteId, driverId, equipmentId, day(2), "MORNING"));
         postJson("/api/v1/shifts/" + other.path("id").asLong() + "/finish", versionBody(999), token)
-                .andExpect(status().isConflict());
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CONCURRENT_UPDATE"));
         postJson("/api/v1/shifts/" + other.path("id").asLong() + "/finish", new HashMap<String, Object>(), token)
                 .andExpect(status().isBadRequest());
     }
