@@ -51,13 +51,14 @@ class ShiftsApi {
       queryParameters: query,
     );
     final data = response.data;
-    final items = data == null ? null : data['items'];
-    if (items is! List) {
+    if (data == null || data['items'] is! List) {
       throw const AppFailure(
         FailureType.server,
         'استجابة قائمة الورديات غير صالحة.',
       );
     }
+
+    final items = data['items'] as List;
     return ShiftPage(
       items: items.map(_parseShift).toList(),
       page: _intValue(data['page'], page),
