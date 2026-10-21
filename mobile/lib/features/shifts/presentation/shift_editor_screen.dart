@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/di/injector.dart';
+import '../../../core/error/app_failure.dart';
 import '../data/datasources/shifts_api.dart';
 import '../data/models/shift_model.dart';
 
@@ -107,10 +108,8 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
   }
 
   String _message(Object error) {
-    final value = error.toString();
-    return value.startsWith('AppFailure(') ? value.split(', ').length > 1
-        ? value.split(', ').skip(1).join(', ').split(')').first
-        : 'حدث خطأ أثناء تحميل البيانات.' : 'تعذر تنفيذ الطلب. تحقق من الاتصال وحاول مرة أخرى.';
+    if (error is AppFailure) return error.message;
+    return 'تعذر تنفيذ الطلب. تحقق من الاتصال وحاول مرة أخرى.';
   }
 
   bool _available(Map<String, dynamic> item, String kind) {
