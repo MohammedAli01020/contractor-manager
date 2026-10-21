@@ -154,6 +154,41 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
     }
 
     @Test
+    void databaseUniqueIndexViolationMapsEquipmentConflictToActiveShiftConflict() throws Exception {
+        JsonNode first = startShift(token,
+                shiftBody(siteId, driverId, equipmentId, day(1), "MORNING"));
+        Long tenantId = jdbcTemplate.queryForObject(
+                "SELECT tenant_id FROM shifts WHERE id = ?", Long.class, first.path("id").asLong());
+
+        long secondDriverId = createDriver(token, "Driver Two", "160", "180", "210");
+        Shift duplicate = new Shift(tenantId, day(2), ShiftType.EVENING, siteId, secondDriverId, equipmentId);
+        duplicate.setPrice(new BigDecimal("1200.00"));
+        duplicate.setDriverWage(new BigDecimal("180.00"));
+        duplicate.setEquipmentOperatingCost(new BigDecimal("500.00"));
+
+        DataIntegrityViolationException violation = null;
+        try {
+            // Use a different driver so only the active-equipment unique index should reject this row.
+            shiftRepository.saveAndFlush(duplicate);
+        } catch (DataIntegrityViolationException ex) {
+            violation = ex;
+        }
+
+        assertThat(violation).as("MySQL must reject a second active shift for the same tenant and equipment")
+                .isNotNull();
+        String causeMessage = violation.getMostSpecificCause() == null
+                ? ""
+                : String.valueOf(violation.getMostSpecificCause().getMessage());
+        assertThat(causeMessage).contains("uq_shifts_one_active_equipment");
+
+        org.springframework.http.ResponseEntity<Object> response = globalExceptionHandler.handleDataIntegrity(
+                violation, new ServletWebRequest(new MockHttpServletRequest("POST", "/api/v1/shifts")));
+        assertThat(response.getStatusCodeValue()).isEqualTo(409);
+        assertThat(response.getBody()).isInstanceOf(ApiError.class);
+        assertThat(((ApiError) response.getBody()).getCode()).isEqualTo("ACTIVE_SHIFT_CONFLICT");
+    }
+
+    @Test
     void concurrentStartsForSameResourcesAllowOnlyOneRequest() throws Exception {
         ExecutorService executor = Executors.newFixedThreadPool(2);
         CountDownLatch ready = new CountDownLatch(2);
