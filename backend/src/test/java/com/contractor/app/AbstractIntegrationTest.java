@@ -45,7 +45,8 @@ public abstract class AbstractIntegrationTest {
             container = new MySQLContainer<>("mysql:8.0")
                     .withDatabaseName("contractor_test")
                     .withUsername("test")
-                    .withPassword("test");
+                    .withPassword("test")
+                    .withCommand("--log-bin-trust-function-creators=1");
             container.start();
         }
         MYSQL = container;
