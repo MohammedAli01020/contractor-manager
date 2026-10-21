@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'core/theme/app_theme.dart';
-import 'features/health/presentation/health_screen.dart';
+import 'features/auth/auth_screens.dart';
 
 class ContractorApp extends StatelessWidget {
   const ContractorApp({Key? key}) : super(key: key);
@@ -13,7 +13,6 @@ class ContractorApp extends StatelessWidget {
       title: 'إدارة المقاول',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
-      // اللغة العربية فقط، وهذا يفعّل الاتجاه من اليمين إلى اليسار تلقائيًا.
       locale: const Locale('ar'),
       supportedLocales: const [Locale('ar')],
       localizationsDelegates: const [
@@ -21,7 +20,7 @@ class ContractorApp extends StatelessWidget {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      home: const HealthScreen(),
+      home: const AuthGate(),
     );
   }
 }
