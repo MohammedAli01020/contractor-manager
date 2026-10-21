@@ -7,7 +7,6 @@ import java.util.Optional;
 import javax.persistence.LockModeType;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.jpa.repository.QueryHints;
 import org.springframework.data.jpa.repository.QueryHint;
 import org.springframework.data.repository.query.Param;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -18,7 +17,6 @@ public interface ShiftRepository extends JpaRepository<Shift, Long>, JpaSpecific
     Optional<Shift> findByIdAndTenantId(Long id, Long tenantId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @QueryHints(@QueryHint(name = "javax.persistence.lock.timeout", value = "3000"))
     @Query("select s from Shift s where s.id = :id and s.tenantId = :tenantId")
     Optional<Shift> findByIdAndTenantIdForUpdate(@Param("id") Long id, @Param("tenantId") Long tenantId);
 
