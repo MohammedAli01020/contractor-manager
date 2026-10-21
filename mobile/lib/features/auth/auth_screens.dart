@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../core/di/injector.dart';
 import '../../core/widgets/loading_view.dart';
+import '../shifts/presentation/shifts_screen.dart';
 import 'auth_bloc.dart';
 
 class AuthGate extends StatelessWidget {
@@ -198,6 +199,19 @@ class HomeScreen extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text('رقم حساب الشركة: ' + user.tenantId.toString()),
                 ],
+              ),
+            ),
+          ),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.view_list_outlined),
+              title: const Text('قائمة الورديات'),
+              subtitle: const Text('عرض الورديات المسجلة وحالتها وقيمتها'),
+              trailing: const Icon(Icons.chevron_left),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const ShiftsScreen(),
+                ),
               ),
             ),
           ),
