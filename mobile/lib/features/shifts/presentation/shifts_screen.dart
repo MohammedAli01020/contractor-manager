@@ -215,7 +215,7 @@ class _ShiftsView extends StatelessWidget {
       final saved = await Navigator.of(context).push<bool>(
         MaterialPageRoute(builder: (_) => ShiftEditorScreen(shift: shift)),
       );
-      if (saved == true && context.mounted) {
+      if (saved == true) {
         bloc.add(const ShiftsRequested());
       }
       return;
@@ -241,7 +241,7 @@ class _ShiftsView extends StatelessWidget {
               onPressed: () => Navigator.pop(dialogContext),
               child: const Text('رجوع'),
             ),
-            FilledButton(
+            ElevatedButton(
               onPressed: () {
                 final value = reasonController.text.trim();
                 if (value.isNotEmpty) Navigator.pop(dialogContext, value);
@@ -264,11 +264,11 @@ class _ShiftsView extends StatelessWidget {
           content: const Text('سيتم تغيير حالة الوردية إلى منتهية.'),
           actions: [
             TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('رجوع')),
-            FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('إنهاء')),
+            ElevatedButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('إنهاء')),
           ],
         ),
       );
-      if (confirm == true && context.mounted) {
+      if (confirm == true) {
         await _runShiftAction(context, bloc, () => getIt<ShiftsApi>().finishShift(shift));
       }
       return;
@@ -281,11 +281,11 @@ class _ShiftsView extends StatelessWidget {
           content: const Text('سيقبل الخادم العملية فقط إذا كانت الوردية قابلة لإعادة التفعيل.'),
           actions: [
             TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('رجوع')),
-            FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('إعادة التفعيل')),
+            ElevatedButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('إعادة التفعيل')),
           ],
         ),
       );
-      if (confirm == true && context.mounted) {
+      if (confirm == true) {
         await _runShiftAction(context, bloc, () => getIt<ShiftsApi>().reinstateShift(shift));
       }
       return;
@@ -316,13 +316,13 @@ class _ShiftsView extends StatelessWidget {
   ) async {
     try {
       await action();
-      if (!context.mounted) return;
+      
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('تم تنفيذ الإجراء بنجاح.')),
       );
       bloc.add(const ShiftsRequested());
     } catch (error) {
-      if (!context.mounted) return;
+      
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('تعذر تنفيذ الإجراء. ${error.toString()}')),
       );
