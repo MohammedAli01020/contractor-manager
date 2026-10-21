@@ -76,6 +76,12 @@ public class ShiftController {
         return service.get(CurrentUser.tenantId(), id);
     }
 
+    @GetMapping("/{id}/history")
+    @Operation(summary = "سجل تعديلات الوردية (الأحدث أولًا)")
+    public List<AuditResponse> history(@PathVariable Long id) {
+        service.get(CurrentUser.tenantId(), id);
+        return auditService.history(CurrentUser.tenantId(), AuditEntityType.SHIFT, id);
+    }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
