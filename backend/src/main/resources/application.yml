@@ -12,12 +12,14 @@ spring:
   lifecycle:
     timeout-per-shutdown-phase: 20s
   datasource:
-    # القيم الحساسة تأتي من متغيرات البيئة فقط ولا توجد افتراضيات لها.
+    # القيم الحساسة تأتي من متغيرات البيئة فقط ولا توجد افتراضات لها.
     url: ${DB_URL:jdbc:mysql://localhost:3308/contractor?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&characterEncoding=UTF-8}
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
     hikari:
       maximum-pool-size: 10
+      # Applied to each newly created physical connection; bounds InnoDB row-lock waits.
+      connection-init-sql: SET SESSION innodb_lock_wait_timeout=3
   jpa:
     open-in-view: false
     hibernate:
