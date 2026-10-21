@@ -39,8 +39,10 @@ class ShiftsApi {
     String? to,
     int page = 0,
     int size = 50,
+    String? status,
   }) async {
     final query = <String, dynamic>{'page': page, 'size': size};
+    if (status != null) query['status'] = status;
     if (from != null) query['from'] = from;
     if (to != null) query['to'] = to;
 
