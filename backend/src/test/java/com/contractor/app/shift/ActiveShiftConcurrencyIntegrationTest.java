@@ -109,6 +109,16 @@ class ActiveShiftConcurrencyIntegrationTest extends AbstractShiftIntegrationTest
                 .isInstanceOf(DataAccessException.class)
                 .hasRootCauseInstanceOf(SQLException.class)
                 .hasMessageContaining("ACTIVE_SHIFT_EQUIPMENT_RUNNING");
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "UPDATE drivers SET active = FALSE WHERE id = ?", driver))
+                .isInstanceOf(DataAccessException.class)
+                .hasRootCauseInstanceOf(SQLException.class)
+                .hasMessageContaining("ACTIVE_SHIFT_DRIVER_RUNNING");
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "UPDATE equipment SET active = FALSE WHERE id = ?", equipment))
+                .isInstanceOf(DataAccessException.class)
+                .hasRootCauseInstanceOf(SQLException.class)
+                .hasMessageContaining("ACTIVE_SHIFT_EQUIPMENT_RUNNING");
 
         // Ordinary edits are deliberately not blocked during a running shift.
         assertThat(jdbcTemplate.update("UPDATE drivers SET phone = '01000000000' WHERE id = ?", driver)).isEqualTo(1);
