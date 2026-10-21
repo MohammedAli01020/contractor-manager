@@ -210,7 +210,7 @@ class _ShiftsView extends StatelessWidget {
         ),
       ),
     );
-    if (choice == null || !context.mounted) return;
+    if (choice == null) return;
     if (choice == 'edit') {
       final saved = await Navigator.of(context).push<bool>(
         MaterialPageRoute(builder: (_) => ShiftEditorScreen(shift: shift)),
@@ -252,7 +252,7 @@ class _ShiftsView extends StatelessWidget {
         ),
       );
       reasonController.dispose();
-      if (reason == null || reason.trim().isEmpty || !context.mounted) return;
+      if (reason == null || reason.trim().isEmpty) return;
       await _runShiftAction(context, bloc, () => getIt<ShiftsApi>().cancelShift(shift, reason));
       return;
     }
@@ -291,7 +291,7 @@ class _ShiftsView extends StatelessWidget {
       return;
     }
     if (choice == 'history') {
-      if (context.mounted) {
+      {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('عرض سجل التعديلات سنضيفه في خطوة مستقلة.')),
         );
