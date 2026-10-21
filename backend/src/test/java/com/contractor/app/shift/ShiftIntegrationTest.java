@@ -108,14 +108,13 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
         ExecutorService executor = Executors.newFixedThreadPool(2);
         CountDownLatch ready = new CountDownLatch(2);
         CountDownLatch start = new CountDownLatch(1);
-        Callable<Integer> request = () -> {
+        Callable<org.springframework.test.web.servlet.MvcResult> request = () -> {
             ready.countDown();
             if (!start.await(10, TimeUnit.SECONDS)) {
                 throw new IllegalStateException("Timed out waiting to start concurrent request.");
             }
             return postJson("/api/v1/shifts",
-                    shiftBody(siteId, driverId, equipmentId, day(1), "MORNING"), token)
-                    .andReturn().getResponse().getStatus();
+                    shiftBody(siteId, driverId, equipmentId, day(1), "MORNING"), token).andReturn();
         };
 
         try {
@@ -123,10 +122,15 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
             Future<Integer> second = executor.submit(request);
             assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
             start.countDown();
-            int firstStatus = first.get(30, TimeUnit.SECONDS);
-            int secondStatus = second.get(30, TimeUnit.SECONDS);
-            assertThat(java.util.Arrays.asList(firstStatus, secondStatus))
-                    .containsExactlyInAnyOrder(201, 409);
+            org.springframework.test.web.servlet.MvcResult firstResult = first.get(30, TimeUnit.SECONDS);
+            org.springframework.test.web.servlet.MvcResult secondResult = second.get(30, TimeUnit.SECONDS);
+            assertThat(java.util.Arrays.asList(firstResult.getResponse().getStatus(),
+                    secondResult.getResponse().getStatus())).containsExactlyInAnyOrder(201, 409);
+
+            org.springframework.test.web.servlet.MvcResult conflictResult =
+                    firstResult.getResponse().getStatus() == 409 ? firstResult : secondResult;
+            assertThat(conflictResult.getResponse().getContentAsString())
+                    .contains("\"code\":\"ACTIVE_SHIFT_CONFLICT\"");
         } finally {
             start.countDown();
             executor.shutdownNow();
