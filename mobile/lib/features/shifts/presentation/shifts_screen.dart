@@ -3,7 +3,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/di/injector.dart';
 import '../../../core/widgets/loading_view.dart';
-import '../../../core/di/injector.dart';
 import '../data/datasources/shifts_api.dart';
 import 'shift_editor_screen.dart';
 import '../data/models/shift_model.dart';
@@ -28,6 +27,18 @@ class _ShiftsView extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('الورديات')),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () async {
+          final saved = await Navigator.of(context).push<bool>(
+            MaterialPageRoute(builder: (_) => const ShiftEditorScreen()),
+          );
+          if (saved == true) {
+            context.read<ShiftsBloc>().add(const ShiftsRequested());
+          }
+        },
+        icon: const Icon(Icons.add),
+        label: const Text('بدء وردية'),
+      ),
       body: BlocBuilder<ShiftsBloc, ShiftsState>(
         builder: (context, state) {
           if (state is ShiftsInitial || state is ShiftsLoading) {
