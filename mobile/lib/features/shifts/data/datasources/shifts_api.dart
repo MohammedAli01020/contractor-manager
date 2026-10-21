@@ -66,6 +66,95 @@ class ShiftsApi {
     );
   }
 
+
+  Future<List<Map<String, dynamic>>> fetchLiveDrivers() async {
+    final response = await _dio.get<List<dynamic>>('/live/drivers');
+    return _mapList(response.data, 'قائمة السائقين غير صالحة.');
+  }
+
+  Future<List<Map<String, dynamic>>> fetchLiveEquipment() async {
+    final response = await _dio.get<List<dynamic>>('/live/equipment');
+    return _mapList(response.data, 'قائمة المعدات غير صالحة.');
+  }
+
+  Future<List<Map<String, dynamic>>> fetchSites() async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/sites',
+      queryParameters: const {'page': 0, 'size': 100},
+    );
+    final data = response.data;
+    if (data == null || data['items'] is! List) {
+      throw const AppFailure(FailureType.server, 'قائمة المواقع غير صالحة.');
+    }
+    return _mapList(data['items'] as List, 'قائمة المواقع غير صالحة.');
+  }
+
+  Future<Map<String, dynamic>> fetchDefaults({
+    required int driverId,
+    required int equipmentId,
+    required String shiftType,
+  }) async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/shifts/defaults',
+      queryParameters: {
+        'driverId': driverId,
+        'equipmentId': equipmentId,
+        'shiftType': shiftType,
+      },
+    );
+    return response.data ?? <String, dynamic>{};
+  }
+
+  Future<ShiftModel> saveShift(Map<String, dynamic> payload, {int? id}) async {
+    final response = id == null
+        ? await _dio.post<Map<String, dynamic>>('/shifts', data: payload)
+        : await _dio.put<Map<String, dynamic>>('/shifts/$id', data: payload);
+    if (response.data == null) {
+      throw const AppFailure(FailureType.server, 'لم تصل بيانات الوردية بعد الحفظ.');
+    }
+    return ShiftModel.fromJson(response.data!);
+  }
+
+  Future<ShiftModel> finishShift(ShiftModel shift) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/shifts/${shift.id}/finish',
+      data: {'version': shift.version},
+    );
+    if (response.data == null) {
+      throw const AppFailure(FailureType.server, 'لم تصل بيانات الوردية بعد الإنهاء.');
+    }
+    return ShiftModel.fromJson(response.data!);
+  }
+
+  Future<ShiftModel> cancelShift(ShiftModel shift, String reason) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/shifts/${shift.id}/cancel',
+      data: {'version': shift.version, 'reason': reason},
+    );
+    if (response.data == null) {
+      throw const AppFailure(FailureType.server, 'لم تصل بيانات الوردية بعد الإلغاء.');
+    }
+    return ShiftModel.fromJson(response.data!);
+  }
+
+  Future<ShiftModel> reinstateShift(ShiftModel shift) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/shifts/${shift.id}/reinstate',
+      data: {'version': shift.version},
+    );
+    if (response.data == null) {
+      throw const AppFailure(FailureType.server, 'لم تصل بيانات الوردية بعد إعادة التفعيل.');
+    }
+    return ShiftModel.fromJson(response.data!);
+  }
+
+  List<Map<String, dynamic>> _mapList(List<dynamic>? items, String message) {
+    if (items == null) {
+      throw AppFailure(FailureType.server, message);
+    }
+    return items.whereType<Map<String, dynamic>>().toList();
+  }
+
   ShiftModel _parseShift(dynamic item) {
     if (item is! Map<String, dynamic>) {
       throw const FormatException('Invalid shift item');
