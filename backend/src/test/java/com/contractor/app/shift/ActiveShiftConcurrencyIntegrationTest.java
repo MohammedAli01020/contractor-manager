@@ -130,9 +130,7 @@ class ActiveShiftConcurrencyIntegrationTest extends AbstractShiftIntegrationTest
             MvcResult resultB = b.get(30, TimeUnit.SECONDS);
             assertThat(Arrays.asList(resultA.getResponse().getStatus(), resultB.getResponse().getStatus()))
                     .as("one operation may win; the conflicting transition must be rejected")
-                    .containsOnly(201, 200, 400, 409);
-            assertThat(resultA.getResponse().getStatus()).isNotEqualTo(500);
-            assertThat(resultB.getResponse().getStatus()).isNotEqualTo(500);
+                    .allMatch(status -> status == 201 || status == 200 || status == 400 || status == 409);
         } finally {
             start.countDown();
             executor.shutdownNow();
