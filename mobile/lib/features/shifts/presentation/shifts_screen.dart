@@ -302,12 +302,55 @@ class _ShiftsView extends StatelessWidget {
       return;
     }
     if (choice == 'history') {
-      {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('عرض سجل التعديلات سنضيفه في خطوة مستقلة.')),
-        );
-      }
+      await _showHistory(context, shift.id);
     }
+  }
+
+  Future<void> _showHistory(BuildContext context, int shiftId) async {
+    try {
+      final items = await getIt<ShiftsApi>().fetchShiftHistory(shiftId);
+      if (!context.mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text('سجل الوردية #$shiftId'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: items.isEmpty
+                ? const Text('لا توجد تغييرات مسجلة.')
+                : ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: items.length,
+                    separatorBuilder: (_, __) => const Divider(),
+                    itemBuilder: (_, index) {
+                      final item = items[index];
+                      final field = (item['fieldName'] ?? item['action'] ?? 'تغيير').toString();
+                      final oldValue = (item['oldValue'] ?? '—').toString();
+                      final newValue = (item['newValue'] ?? '—').toString();
+                      final user = (item['userName'] ?? 'مستخدم').toString();
+                      final time = (item['createdAt'] ?? '').toString().replaceFirst('T', ' ');
+                      return ListTile(
+                        dense: true,
+                        title: Text(field),
+                        subtitle: Text('قبل: $oldValue\nبعد: $newValue\nبواسطة: $user\n$time'),
+                      );
+                    },
+                  ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('إغلاق'),
+            ),
+          ],
+        ),
+      );
+    } catch (error) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('تعذر تحميل سجل الوردية: $error')),
+      );
+    }
+
   }
 
   IconData _actionIcon(String action) {
