@@ -7,6 +7,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.JsonNode;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.HashMap;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -90,11 +96,42 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
 
         // منع التكرار لا يعتمد على فحص Java فقط؛ قيد MySQL يحمي أيضًا عند التزامن بين instances.
         postJson("/api/v1/shifts",
-                shiftBody(siteId, driverId, equipmentId, day(1), "MORNING"), token)
+                shiftBody(siteId, driverId, equipmentId, day(2), "EVENING"), token)
                 .andExpect(status().isConflict());
 
         finishShift(token, first);
         startShift(token, shiftBody(siteId, driverId, equipmentId, day(1), "MORNING"));
+    }
+
+    @Test
+    void concurrentStartsForSameResourcesAllowOnlyOneRequest() throws Exception {
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        Callable<Integer> request = () -> {
+            ready.countDown();
+            if (!start.await(10, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("Timed out waiting to start concurrent request.");
+            }
+            return postJson("/api/v1/shifts",
+                    shiftBody(siteId, driverId, equipmentId, day(1), "MORNING"), token)
+                    .andReturn().getResponse().getStatus();
+        };
+
+        try {
+            Future<Integer> first = executor.submit(request);
+            Future<Integer> second = executor.submit(request);
+            assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+            int firstStatus = first.get(30, TimeUnit.SECONDS);
+            int secondStatus = second.get(30, TimeUnit.SECONDS);
+            assertThat(java.util.Arrays.asList(firstStatus, secondStatus))
+                    .containsExactlyInAnyOrder(201, 409);
+        } finally {
+            start.countDown();
+            executor.shutdownNow();
+            executor.awaitTermination(10, TimeUnit.SECONDS);
+        }
     }
 
     @Test
