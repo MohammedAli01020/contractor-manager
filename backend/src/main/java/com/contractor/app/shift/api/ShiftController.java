@@ -107,4 +107,12 @@ public class ShiftController {
     public ShiftResponse reinstate(@PathVariable Long id, @Valid @RequestBody ShiftVersionRequest request) {
         return service.reinstate(CurrentUser.tenantId(), id, request.getVersion());
     }
+
+    @GetMapping("/{id}/history")
+    @Operation(summary = "سجل تعديلات الوردية (الأحدث أولًا)")
+    public List<AuditResponse> history(@PathVariable Long id) {
+        service.get(CurrentUser.tenantId(), id);
+        return auditService.history(CurrentUser.tenantId(), AuditEntityType.SHIFT, id);
+    }
+
 }
