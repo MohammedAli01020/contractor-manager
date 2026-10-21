@@ -43,6 +43,14 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<Object> handleDataIntegrity(DataIntegrityViolationException ex, WebRequest request) {
+        String triggerError = findActiveShiftTriggerError(ex);
+        if (triggerError != null) {
+            String message = "ACTIVE_SHIFT_DRIVER_RUNNING".equals(triggerError)
+                    ? "لا يمكن تغيير حالة السائق أو تعطيله أثناء وجود وردية نشطة."
+                    : "لا يمكن تغيير حالة المعدة أو تعطيلها أثناء وجود وردية نشطة.";
+            return build(HttpStatus.CONFLICT, "ACTIVE_SHIFT_CONFLICT", message, request, null);
+        }
+
         String causeMessage = ex.getMostSpecificCause() == null
                 ? ""
                 : String.valueOf(ex.getMostSpecificCause().getMessage());
