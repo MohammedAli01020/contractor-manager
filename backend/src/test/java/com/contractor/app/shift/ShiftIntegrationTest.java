@@ -64,9 +64,10 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
     @Test
     void wageFollowsTheShiftType() throws Exception {
         JsonNode evening = startShift(token, shiftBody(siteId, driverId, equipmentId, day(1), "EVENING"));
-        JsonNode night = startShift(token, shiftBody(siteId, driverId, equipmentId, day(1), "NIGHT"));
-
         assertThat(evening.path("driverWage").decimalValue()).isEqualByComparingTo("175.00");
+        finishShift(token, evening);
+
+        JsonNode night = startShift(token, shiftBody(siteId, driverId, equipmentId, day(1), "NIGHT"));
         assertThat(night.path("driverWage").decimalValue()).isEqualByComparingTo("200.00");
     }
 
@@ -83,9 +84,16 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
     }
 
     @Test
-    void duplicatesAreAllowed() throws Exception {
-        // قرارك: لا منع تكرار. نفس السائق والمعدة والتاريخ والنوع يمكن تسجيلها أكثر من مرة
-        startShift(token, shiftBody(siteId, driverId, equipmentId, day(1), "MORNING"));
+    void activeDriverAndEquipmentCannotBeUsedByTwoRunningShifts() throws Exception {
+        Map<String, Object> firstRequest = shiftBody(siteId, driverId, equipmentId, day(1), "MORNING");
+        JsonNode first = startShift(token, firstRequest);
+
+        // منع التكرار لا يعتمد على فحص Java فقط؛ قيد MySQL يحمي أيضًا عند التزامن بين instances.
+        postJson("/api/v1/shifts",
+                shiftBody(siteId, driverId, equipmentId, day(1), "MORNING"), token)
+                .andExpect(status().isConflict());
+
+        finishShift(token, first);
         startShift(token, shiftBody(siteId, driverId, equipmentId, day(1), "MORNING"));
     }
 
@@ -380,9 +388,10 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
     @Test
     void listIsFilteredPagedAndNewestFirst() throws Exception {
         JsonNode first = startShift(token, shiftBody(siteId, driverId, equipmentId, day(1), "MORNING"));
-        startShift(token, shiftBody(siteId, driverId, equipmentId, day(2), "EVENING"));
-        startShift(token, shiftBody(siteId, driverId, equipmentId, day(3), "NIGHT"));
         finishShift(token, first);
+        JsonNode second = startShift(token, shiftBody(siteId, driverId, equipmentId, day(2), "EVENING"));
+        finishShift(token, second);
+        startShift(token, shiftBody(siteId, driverId, equipmentId, day(3), "NIGHT"));
 
         JsonNode all = body(getJson("/api/v1/shifts", token).andExpect(status().isOk()));
         assertThat(all.path("totalElements").asLong()).isEqualTo(3);
