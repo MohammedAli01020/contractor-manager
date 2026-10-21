@@ -202,6 +202,7 @@ class ShiftsBloc extends Bloc<ShiftsEvent, ShiftsState> {
         size: 50,
         from: null,
         to: null,
+        status: current.allStatus,
       );
       final refreshed = state;
       if (refreshed is ShiftsLoaded) {
@@ -238,13 +239,12 @@ class ShiftsBloc extends Bloc<ShiftsEvent, ShiftsState> {
       final result = await _repository.fetchShifts(
         page: 0,
         size: 50,
+        status: event.status,
       );
       final refreshed = state;
       if (refreshed is ShiftsLoaded) {
         emit(refreshed.copyWith(
-          allItems: event.status == null
-              ? result.items
-              : result.items.where((shift) => shift.status == event.status).toList(),
+          allItems: result.items,
           allPage: result.page,
           allTotalPages: result.totalPages,
           allStatus: event.status,
