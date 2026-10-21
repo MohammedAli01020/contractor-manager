@@ -309,7 +309,6 @@ class _ShiftsView extends StatelessWidget {
   Future<void> _showHistory(BuildContext context, int shiftId) async {
     try {
       final items = await getIt<ShiftsApi>().fetchShiftHistory(shiftId);
-      if (!context.mounted) return;
       await showDialog<void>(
         context: context,
         builder: (dialogContext) => AlertDialog(
