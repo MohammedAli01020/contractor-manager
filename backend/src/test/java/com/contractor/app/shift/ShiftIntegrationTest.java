@@ -5,6 +5,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.contractor.app.common.error.ApiError;
+import com.contractor.app.common.error.GlobalExceptionHandler;
+import com.contractor.app.shift.domain.Shift;
+import com.contractor.app.shift.domain.ShiftType;
+import com.contractor.app.shift.infra.ShiftRepository;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.concurrent.Callable;
@@ -16,9 +21,18 @@ import java.util.concurrent.TimeUnit;
 import java.util.HashMap;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.web.context.request.ServletWebRequest;
 import org.junit.jupiter.api.Test;
 
 class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
+
+    @Autowired private ShiftRepository shiftRepository;
+    @Autowired private JdbcTemplate jdbcTemplate;
+    @Autowired private GlobalExceptionHandler globalExceptionHandler;
 
     private String token;
     private long siteId;
@@ -104,29 +118,69 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
     }
 
     @Test
+    void databaseUniqueIndexViolationMapsToActiveShiftConflict() throws Exception {
+        JsonNode first = startShift(token,
+                shiftBody(siteId, driverId, equipmentId, day(1), "MORNING"));
+        Long tenantId = jdbcTemplate.queryForObject(
+                "SELECT tenant_id FROM shifts WHERE id = ?", Long.class, first.path("id").asLong());
+
+        // Different equipment isolates the driver constraint as the source of the failure.
+        long secondEquipmentId = createEquipment(token, "EX-02", typeId, "600", "1300");
+        Shift duplicate = new Shift(tenantId, day(2), ShiftType.EVENING, siteId, driverId, secondEquipmentId);
+        duplicate.setPrice(new BigDecimal("1300.00"));
+        duplicate.setDriverWage(new BigDecimal("175.00"));
+        duplicate.setEquipmentOperatingCost(new BigDecimal("600.00"));
+
+        DataIntegrityViolationException violation = null;
+        try {
+            // Bypass ShiftService pre-checks so MySQL's unique index is exercised directly.
+            shiftRepository.saveAndFlush(duplicate);
+        } catch (DataIntegrityViolationException ex) {
+            violation = ex;
+        }
+
+        assertThat(violation).as("MySQL must reject a second active shift for the same tenant and driver")
+                .isNotNull();
+        String causeMessage = violation.getMostSpecificCause() == null
+                ? ""
+                : String.valueOf(violation.getMostSpecificCause().getMessage());
+        assertThat(causeMessage).contains("uq_shifts_one_active_driver");
+
+        org.springframework.http.ResponseEntity<Object> response = globalExceptionHandler.handleDataIntegrity(
+                violation, new ServletWebRequest(new MockHttpServletRequest("POST", "/api/v1/shifts")));
+        assertThat(response.getStatusCodeValue()).isEqualTo(409);
+        assertThat(response.getBody()).isInstanceOf(ApiError.class);
+        assertThat(((ApiError) response.getBody()).getCode()).isEqualTo("ACTIVE_SHIFT_CONFLICT");
+    }
+
+    @Test
     void concurrentStartsForSameResourcesAllowOnlyOneRequest() throws Exception {
         ExecutorService executor = Executors.newFixedThreadPool(2);
         CountDownLatch ready = new CountDownLatch(2);
         CountDownLatch start = new CountDownLatch(1);
-        Callable<Integer> request = () -> {
+        Callable<org.springframework.test.web.servlet.MvcResult> request = () -> {
             ready.countDown();
             if (!start.await(10, TimeUnit.SECONDS)) {
                 throw new IllegalStateException("Timed out waiting to start concurrent request.");
             }
             return postJson("/api/v1/shifts",
-                    shiftBody(siteId, driverId, equipmentId, day(1), "MORNING"), token)
-                    .andReturn().getResponse().getStatus();
+                    shiftBody(siteId, driverId, equipmentId, day(1), "MORNING"), token).andReturn();
         };
 
         try {
-            Future<Integer> first = executor.submit(request);
-            Future<Integer> second = executor.submit(request);
+            Future<org.springframework.test.web.servlet.MvcResult> first = executor.submit(request);
+            Future<org.springframework.test.web.servlet.MvcResult> second = executor.submit(request);
             assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
             start.countDown();
-            int firstStatus = first.get(30, TimeUnit.SECONDS);
-            int secondStatus = second.get(30, TimeUnit.SECONDS);
-            assertThat(java.util.Arrays.asList(firstStatus, secondStatus))
-                    .containsExactlyInAnyOrder(201, 409);
+            org.springframework.test.web.servlet.MvcResult firstResult = first.get(30, TimeUnit.SECONDS);
+            org.springframework.test.web.servlet.MvcResult secondResult = second.get(30, TimeUnit.SECONDS);
+            assertThat(java.util.Arrays.asList(firstResult.getResponse().getStatus(),
+                    secondResult.getResponse().getStatus())).containsExactlyInAnyOrder(201, 409);
+
+            org.springframework.test.web.servlet.MvcResult conflictResult =
+                    firstResult.getResponse().getStatus() == 409 ? firstResult : secondResult;
+            assertThat(conflictResult.getResponse().getContentAsString())
+                    .contains("\"code\":\"ACTIVE_SHIFT_CONFLICT\"");
         } finally {
             start.countDown();
             executor.shutdownNow();
@@ -163,7 +217,8 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
                 token).andExpect(status().isConflict());
         JsonNode other = startShift(token, shiftBody(siteId, driverId, equipmentId, day(2), "MORNING"));
         postJson("/api/v1/shifts/" + other.path("id").asLong() + "/finish", versionBody(999), token)
-                .andExpect(status().isConflict());
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CONCURRENT_UPDATE"));
         postJson("/api/v1/shifts/" + other.path("id").asLong() + "/finish", new HashMap<String, Object>(), token)
                 .andExpect(status().isBadRequest());
     }

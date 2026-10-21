@@ -5,6 +5,7 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -36,14 +37,32 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
     public ResponseEntity<Object> handleOptimisticLock(ObjectOptimisticLockingFailureException ex,
                                                        WebRequest request) {
-        return build(HttpStatus.CONFLICT, "CONFLICT",
+        return build(HttpStatus.CONFLICT, "CONCURRENT_UPDATE",
                 "تم تعديل هذا السجل بواسطة مستخدم آخر. أعد التحميل ثم حاول مجددًا.", request, null);
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<Object> handleDataIntegrity(DataIntegrityViolationException ex, WebRequest request) {
-        log.warn("Data integrity violation: {}", ex.getMostSpecificCause().getMessage());
+        String causeMessage = ex.getMostSpecificCause() == null
+                ? ""
+                : String.valueOf(ex.getMostSpecificCause().getMessage());
+        log.warn("Data integrity violation: {}", causeMessage);
+
+        // Keep these names in sync with V6__prevent_duplicate_active_shifts.sql.
+        if (causeMessage.contains("uq_shifts_one_active_driver")
+                || causeMessage.contains("uq_shifts_one_active_equipment")) {
+            return build(HttpStatus.CONFLICT, "ACTIVE_SHIFT_CONFLICT",
+                    "السائق أو المعدة مستخدم بالفعل في وردية نشطة.", request, null);
+        }
         return build(HttpStatus.CONFLICT, "CONFLICT", "تعذّر الحفظ بسبب تعارض في البيانات.", request, null);
+    }
+
+    @ExceptionHandler(PessimisticLockingFailureException.class)
+    public ResponseEntity<Object> handlePessimisticLock(PessimisticLockingFailureException ex,
+                                                        WebRequest request) {
+        log.warn("Pessimistic lock could not be acquired: {}", ex.getClass().getSimpleName());
+        return build(HttpStatus.CONFLICT, "LOCK_TIMEOUT",
+                "هناك عملية أخرى تعدّل هذه البيانات الآن. انتظر قليلًا ثم حاول مجددًا.", request, null);
     }
 
     @ExceptionHandler(Exception.class)
