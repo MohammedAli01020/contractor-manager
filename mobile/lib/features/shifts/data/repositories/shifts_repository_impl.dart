@@ -32,6 +32,7 @@ class ShiftsRepositoryImpl {
     String? to,
     int page = 0,
     int size = 50,
+    String? status,
   }) async {
     try {
       return await _api.fetchShifts(
@@ -39,6 +40,7 @@ class ShiftsRepositoryImpl {
         to: to,
         page: page,
         size: size,
+        status: status,
       );
     } on DioError catch (error) {
       throw AppFailure.fromDio(error);
