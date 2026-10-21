@@ -333,7 +333,6 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
       helpText: 'اختار تاريخ الوردية',
       cancelText: 'إلغاء',
       confirmText: 'اختيار',
-      locale: const Locale('ar', 'EG'),
     );
     if (picked == null || !mounted) return;
     setState(() {
