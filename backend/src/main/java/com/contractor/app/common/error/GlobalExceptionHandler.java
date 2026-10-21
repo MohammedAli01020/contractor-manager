@@ -37,7 +37,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
     public ResponseEntity<Object> handleOptimisticLock(ObjectOptimisticLockingFailureException ex,
                                                        WebRequest request) {
-        return build(HttpStatus.CONFLICT, "CONFLICT",
+        return build(HttpStatus.CONFLICT, "CONCURRENT_UPDATE",
                 "تم تعديل هذا السجل بواسطة مستخدم آخر. أعد التحميل ثم حاول مجددًا.", request, null);
     }
 
@@ -48,6 +48,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 : String.valueOf(ex.getMostSpecificCause().getMessage());
         log.warn("Data integrity violation: {}", causeMessage);
 
+        // Keep these names in sync with V6__prevent_duplicate_active_shifts.sql.
         if (causeMessage.contains("uq_shifts_one_active_driver")
                 || causeMessage.contains("uq_shifts_one_active_equipment")) {
             return build(HttpStatus.CONFLICT, "ACTIVE_SHIFT_CONFLICT",
