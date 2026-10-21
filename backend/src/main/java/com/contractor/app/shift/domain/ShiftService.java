@@ -114,8 +114,6 @@ public class ShiftService {
     public ShiftResponse start(Long tenantId, ShiftRequest request) {
         LocalDate date = request.getShiftDate() == null ? today() : request.getShiftDate();
         assertNotFuture(date);
-        requireSite(tenantId, request.getSiteId(), null);
-
         // Serialize starts for the same driver/equipment across concurrent requests and instances.
         drivers.findByIdAndTenantIdForUpdate(request.getDriverId(), tenantId)
                 .orElseThrow(() -> ApiException.notFound("السائق أو العامل غير موجود."));
@@ -124,6 +122,9 @@ public class ShiftService {
 
         Driver driver = requireDriver(tenantId, request.getDriverId(), null);
         Equipment item = requireEquipment(tenantId, request.getEquipmentId(), null);
+        // Do non-locking validation reads only after the resource locks are held. This avoids
+        // establishing a MySQL REPEATABLE READ snapshot before waiting for a competing start.
+        requireSite(tenantId, request.getSiteId(), null);
         assertDriverNotRunning(tenantId, request.getDriverId());
         assertEquipmentNotRunning(tenantId, request.getEquipmentId());
 
@@ -149,7 +150,7 @@ public class ShiftService {
 
     @Transactional
     public ShiftResponse update(Long tenantId, Long id, ShiftRequest request) {
-        Shift shift = find(tenantId, id);
+        Shift shift = findForUpdate(tenantId, id);
         if (shift.getStatus() == ShiftStatus.CANCELLED) {
             throw ApiException.conflict("لا يمكن تعديل وردية ملغاة. أعد تفعيلها أولًا.");
         }
@@ -208,7 +209,7 @@ public class ShiftService {
     /** إنهاء: يغيّر المؤشر فقط، ووقت الضغط ومن ضغط يُسجَّلان. */
     @Transactional
     public ShiftResponse finish(Long tenantId, Long id, Long version) {
-        Shift shift = find(tenantId, id);
+        Shift shift = findForUpdate(tenantId, id);
         if (shift.getStatus() != ShiftStatus.IN_PROGRESS) {
             throw ApiException.conflict("الوردية ليست شغالة.");
         }
@@ -223,7 +224,7 @@ public class ShiftService {
 
     @Transactional
     public ShiftResponse cancel(Long tenantId, Long id, ShiftCancelRequest request) {
-        Shift shift = find(tenantId, id);
+        Shift shift = findForUpdate(tenantId, id);
         if (shift.getStatus() == ShiftStatus.CANCELLED) {
             throw ApiException.conflict("الوردية ملغاة بالفعل.");
         }
@@ -239,7 +240,7 @@ public class ShiftService {
 
     @Transactional
     public ShiftResponse reinstate(Long tenantId, Long id, Long version) {
-        Shift shift = find(tenantId, id);
+        Shift shift = findForUpdate(tenantId, id);
         if (shift.getStatus() != ShiftStatus.CANCELLED) {
             throw ApiException.conflict("الوردية ليست ملغاة.");
         }
@@ -259,6 +260,12 @@ public class ShiftService {
 
     private Shift find(Long tenantId, Long id) {
         return shifts.findByIdAndTenantId(id, tenantId).orElseThrow(() -> ApiException.notFound(NOT_FOUND));
+    }
+
+    /** Lock the shift row before a state-changing command to serialize finish/cancel/reinstate/update. */
+    private Shift findForUpdate(Long tenantId, Long id) {
+        return shifts.findByIdAndTenantIdForUpdate(id, tenantId)
+                .orElseThrow(() -> ApiException.notFound(NOT_FOUND));
     }
 
     private void assertDriverNotRunning(Long tenantId, Long driverId) {
