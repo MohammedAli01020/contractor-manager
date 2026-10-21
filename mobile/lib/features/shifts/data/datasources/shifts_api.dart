@@ -115,6 +115,12 @@ class ShiftsApi {
     return ShiftModel.fromJson(response.data!);
   }
 
+
+  Future<List<Map<String, dynamic>>> fetchShiftHistory(int shiftId) async {
+    final response = await _dio.get<List<dynamic>>('/shifts/$shiftId/history');
+    return _mapList(response.data, 'سجل التعديلات غير صالح.');
+  }
+
   Future<ShiftModel> finishShift(ShiftModel shift) async {
     final response = await _dio.post<Map<String, dynamic>>(
       '/shifts/${shift.id}/finish',
