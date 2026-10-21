@@ -66,7 +66,8 @@ public class ShiftController {
 
     @GetMapping("/defaults")
     @Operation(summary = "الأجر والسعر وتكلفة التشغيل المقترحة لسائق ومعدة ونوع وردية (لتعبئة النموذج)")
-    public ShiftDefaultsResponse defaults(@RequestParam Long driverId, @RequestParam Long equipmentId,
+    public ShiftDefaultsResponse defaults(@RequestParam(required = false) Long driverId,
+                                          @RequestParam(required = false) Long equipmentId,
                                           @RequestParam ShiftType shiftType) {
         return service.defaults(CurrentUser.tenantId(), driverId, equipmentId, shiftType);
     }
