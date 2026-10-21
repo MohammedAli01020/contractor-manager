@@ -253,18 +253,18 @@ class _ShiftCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.errorContainer,
+                  color: Colors.orange.shade100,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(Icons.warning_amber_rounded,
-                        size: 18, color: theme.colorScheme.onErrorContainer),
+                        size: 18, color: Colors.orange.shade900),
                     const SizedBox(width: 6),
                     Text(
                       'مستمرة من يوم سابق',
-                      style: TextStyle(color: theme.colorScheme.onErrorContainer),
+                      style: TextStyle(color: Colors.orange.shade900),
                     ),
                   ],
                 ),
