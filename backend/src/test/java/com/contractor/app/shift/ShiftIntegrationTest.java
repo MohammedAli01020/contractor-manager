@@ -424,6 +424,19 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
         putJson("/api/v1/shifts/" + id, noDate, token).andExpect(status().isBadRequest()); // بدون تاريخ
     }
 
+    @Test
+    void shiftHistoryIsIsolatedByTenant() throws Exception {
+        JsonNode shift = startShift(token, shiftBody(siteId, driverId, equipmentId, day(1), "MORNING"));
+        long shiftId = shift.path("id").asLong();
+
+        String otherTenantToken = registerTenant("Other Shift Co", uniqueName("otherowner"))
+                .path("accessToken").asText();
+
+        // History must not disclose whether another tenant's shift exists.
+        getJson("/api/v1/shifts/" + shiftId + "/history", otherTenantToken)
+                .andExpect(status().isNotFound());
+    }
+
     // ---------------------------------------------------------------- cancel & reinstate
 
     @Test
