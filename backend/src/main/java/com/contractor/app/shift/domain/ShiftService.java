@@ -33,6 +33,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.Arrays;
+import java.util.TreeSet;
 import java.util.stream.Collectors;
 import javax.persistence.criteria.Predicate;
 import org.springframework.beans.factory.annotation.Value;
@@ -113,8 +115,17 @@ public class ShiftService {
         LocalDate date = request.getShiftDate() == null ? today() : request.getShiftDate();
         assertNotFuture(date);
         requireSite(tenantId, request.getSiteId(), null);
+
+        // Serialize starts for the same driver/equipment across concurrent requests and instances.
+        drivers.findByIdAndTenantIdForUpdate(request.getDriverId(), tenantId)
+                .orElseThrow(() -> ApiException.notFound("السائق أو العامل غير موجود."));
+        equipment.findByIdAndTenantIdForUpdate(request.getEquipmentId(), tenantId)
+                .orElseThrow(() -> ApiException.notFound("المعدة غير موجودة."));
+
         Driver driver = requireDriver(tenantId, request.getDriverId(), null);
         Equipment item = requireEquipment(tenantId, request.getEquipmentId(), null);
+        assertDriverNotRunning(tenantId, request.getDriverId());
+        assertEquipmentNotRunning(tenantId, request.getEquipmentId());
 
         Shift shift = new Shift(tenantId, date, request.getShiftType(), request.getSiteId(), request.getDriverId(),
                 request.getEquipmentId());
@@ -147,6 +158,7 @@ public class ShiftService {
             throw ApiException.badRequest("تاريخ الوردية مطلوب عند التعديل.");
         }
         assertNotFuture(request.getShiftDate());
+        lockAndValidateActiveShiftUpdate(tenantId, shift, request);
         requireSite(tenantId, request.getSiteId(), shift.getSiteId());
         Driver driver = requireDriver(tenantId, request.getDriverId(), shift.getDriverId());
         Equipment item = requireEquipment(tenantId, request.getEquipmentId(), shift.getEquipmentId());
@@ -247,6 +259,49 @@ public class ShiftService {
 
     private Shift find(Long tenantId, Long id) {
         return shifts.findByIdAndTenantId(id, tenantId).orElseThrow(() -> ApiException.notFound(NOT_FOUND));
+    }
+
+    private void assertDriverNotRunning(Long tenantId, Long driverId) {
+        if (shifts.existsByTenantIdAndDriverIdAndStatus(tenantId, driverId, ShiftStatus.IN_PROGRESS)) {
+            throw ApiException.conflict("السائق أو العامل لديه وردية نشطة بالفعل.");
+        }
+    }
+
+    private void assertEquipmentNotRunning(Long tenantId, Long equipmentId) {
+        if (shifts.existsByTenantIdAndEquipmentIdAndStatus(tenantId, equipmentId, ShiftStatus.IN_PROGRESS)) {
+            throw ApiException.conflict("المعدة مستخدمة في وردية نشطة بالفعل.");
+        }
+    }
+
+    /**
+     * If an active shift changes its assigned resources, reserve affected rows in a stable order.
+     * The generated-column unique indexes remain the final protection against races.
+     */
+    private void lockAndValidateActiveShiftUpdate(Long tenantId, Shift shift, ShiftRequest request) {
+        if (shift.getStatus() != ShiftStatus.IN_PROGRESS) {
+            return;
+        }
+
+        Set<Long> driverIds = new TreeSet<>(Arrays.asList(shift.getDriverId(), request.getDriverId()));
+        Set<Long> equipmentIds = new TreeSet<>(Arrays.asList(shift.getEquipmentId(), request.getEquipmentId()));
+
+        for (Long driverId : driverIds) {
+            drivers.findByIdAndTenantIdForUpdate(driverId, tenantId)
+                    .orElseThrow(() -> ApiException.notFound("السائق أو العامل غير موجود."));
+        }
+        for (Long equipmentId : equipmentIds) {
+            equipment.findByIdAndTenantIdForUpdate(equipmentId, tenantId)
+                    .orElseThrow(() -> ApiException.notFound("المعدة غير موجودة."));
+        }
+
+        if (shifts.existsByTenantIdAndDriverIdAndStatusAndIdNot(
+                tenantId, request.getDriverId(), ShiftStatus.IN_PROGRESS, shift.getId())) {
+            throw ApiException.conflict("السائق أو العامل لديه وردية نشطة بالفعل.");
+        }
+        if (shifts.existsByTenantIdAndEquipmentIdAndStatusAndIdNot(
+                tenantId, request.getEquipmentId(), ShiftStatus.IN_PROGRESS, shift.getId())) {
+            throw ApiException.conflict("المعدة مستخدمة في وردية نشطة بالفعل.");
+        }
     }
 
     private LocalDate today() {
