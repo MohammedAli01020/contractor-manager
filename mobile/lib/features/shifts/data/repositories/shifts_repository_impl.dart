@@ -9,9 +9,37 @@ class ShiftsRepositoryImpl {
 
   final ShiftsApi _api;
 
-  Future<List<ShiftModel>> fetchShifts() async {
+  Future<List<ShiftModel>> fetchRunningShifts() async {
     try {
-      return await _api.fetchShifts();
+      return await _api.fetchRunningShifts();
+    } on DioError catch (error) {
+      throw AppFailure.fromDio(error);
+    } on FormatException {
+      throw const AppFailure(
+        FailureType.server,
+        'استجابة الورديات الجارية غير صالحة.',
+      );
+    } on TypeError {
+      throw const AppFailure(
+        FailureType.server,
+        'استجابة الورديات الجارية غير صالحة.',
+      );
+    }
+  }
+
+  Future<ShiftPage> fetchShifts({
+    String? from,
+    String? to,
+    int page = 0,
+    int size = 50,
+  }) async {
+    try {
+      return await _api.fetchShifts(
+        from: from,
+        to: to,
+        page: page,
+        size: size,
+      );
     } on DioError catch (error) {
       throw AppFailure.fromDio(error);
     } on FormatException {
