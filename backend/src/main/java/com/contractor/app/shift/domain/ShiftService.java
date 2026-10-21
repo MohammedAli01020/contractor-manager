@@ -99,12 +99,17 @@ public class ShiftService {
     /** القيم التي سيقترحها النموذج قبل الحفظ. */
     @Transactional(readOnly = true)
     public ShiftDefaultsResponse defaults(Long tenantId, Long driverId, Long equipmentId, ShiftType type) {
-        Driver driver = drivers.findByIdAndTenantId(driverId, tenantId)
+        if (driverId == null && equipmentId == null) {
+            throw ApiException.badRequest("اختار سائقًا أو معدة لحساب القيم الافتراضية.");
+        }
+        Driver driver = driverId == null ? null : drivers.findByIdAndTenantId(driverId, tenantId)
                 .orElseThrow(() -> ApiException.notFound("السائق أو العامل غير موجود."));
-        Equipment item = equipment.findByIdAndTenantId(equipmentId, tenantId)
+        Equipment item = equipmentId == null ? null : equipment.findByIdAndTenantId(equipmentId, tenantId)
                 .orElseThrow(() -> ApiException.notFound("المعدة غير موجودة."));
-        return new ShiftDefaultsResponse(Money.scale(rateFor(driver, type)),
-                Money.scale(item.getDefaultShiftPrice()), Money.scale(item.getOperatingCostPerShift()));
+        return new ShiftDefaultsResponse(
+                driver == null ? null : Money.scale(rateFor(driver, type)),
+                item == null ? null : Money.scale(item.getDefaultShiftPrice()),
+                item == null ? null : Money.scale(item.getOperatingCostPerShift()));
     }
 
     // ------------------------------------------------------------------ commands
