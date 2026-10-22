@@ -372,7 +372,7 @@ class _ShiftsView extends StatelessWidget {
     } on DioError catch (error) {
       final failure = AppFailure.fromDio(error);
       if (error.response?.statusCode == 409) {
-        final match = RegExp(r'الوردية رقم\\s+(\\d+)').firstMatch(failure.message);
+        final match = RegExp(r'الوردية رقم\s+(\d+)').firstMatch(failure.message);
         final conflictingShiftId =
             match == null ? null : int.tryParse(match.group(1)!);
         final openConflictingShift = await showDialog<bool>(
