@@ -509,18 +509,40 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
     }
 
     @Test
-    void shiftCancelledWhileRunningCannotBeReinstated() throws Exception {
+    void shiftCancelledWhileRunningCanBeReinstatedWhenResourcesAreFree() throws Exception {
         JsonNode running = startShift(token, shiftBody(siteId, driverId, equipmentId, day(1), "MORNING"));
         Map<String, Object> cancel = versionBody(running.path("version").asLong());
         cancel.put("reason", "started by mistake");
         JsonNode cancelled = body(postJson("/api/v1/shifts/" + running.path("id").asLong() + "/cancel", cancel,
                 token).andExpect(status().isOk()));
 
-        postJson("/api/v1/shifts/" + running.path("id").asLong() + "/reinstate",
+        JsonNode reinstated = body(postJson("/api/v1/shifts/" + running.path("id").asLong() + "/reinstate",
+                versionBody(cancelled.path("version").asLong()), token).andExpect(status().isOk()));
+        assertThat(reinstated.path("status").asText()).isEqualTo("IN_PROGRESS");
+        assertThat(reinstated.path("finishedAt").isNull()).isTrue();
+        assertThat(reinstated.path("cancelReason").isNull()).isTrue();
+
+        JsonNode live = body(getJson("/api/v1/shifts/running", token).andExpect(status().isOk()));
+        assertThat(findBy(live, "id", Long.toString(running.path("id").asLong()))).isNotNull();
+        JsonNode history = body(getJson("/api/v1/shifts/" + running.path("id").asLong() + "/history", token));
+        assertThat(findBy(history, "action", "CANCELLED")).isNotNull();
+        assertThat(findBy(history, "action", "REINSTATED")).isNotNull();
+    }
+
+    @Test
+    void reinstatingRunningCancelledShiftFailsWhenDriverIsBusy() throws Exception {
+        JsonNode first = startShift(token, shiftBody(siteId, driverId, equipmentId, day(2), "MORNING"));
+        Map<String, Object> cancel = versionBody(first.path("version").asLong());
+        cancel.put("reason", "temporary cancellation");
+        JsonNode cancelled = body(postJson("/api/v1/shifts/" + first.path("id").asLong() + "/cancel", cancel,
+                token).andExpect(status().isOk()));
+
+        long secondEquipment = createEquipment(token, "EX-02", typeId, "1", "1200");
+        JsonNode second = startShift(token, shiftBody(siteId, driverId, secondEquipment, day(1), "EVENING"));
+        postJson("/api/v1/shifts/" + first.path("id").asLong() + "/reinstate",
                 versionBody(cancelled.path("version").asLong()), token).andExpect(status().isConflict());
 
-        // الملغاة لا تحجز السائق: يمكن تغيير حالته الآن
-        setDriverAvailability(token, driverId, "UNAVAILABLE", "leave").andExpect(status().isOk());
+        assertThat(second.path("status").asText()).isEqualTo("IN_PROGRESS");
     }
 
     // ---------------------------------------------------------------- list
