@@ -270,8 +270,8 @@ public class ShiftService {
                             tenantId, shift.getDriverId(), ShiftStatus.IN_PROGRESS)
                     .orElse(null);
             if (driverConflict != null) {
-                throw ApiException.activeShiftConflict(activeResourceConflict(
-                        "السائق " + driver.getName(), driverConflict, tenantId));
+                throw activeResourceConflict(
+                        "السائق " + driver.getName(), driverConflict, tenantId);
             }
 
             Shift equipmentConflict = shifts
@@ -280,8 +280,7 @@ public class ShiftService {
                     .orElse(null);
             if (equipmentConflict != null) {
                 String equipmentName = item.getCode() == null ? "المعدة" : "المعدة " + item.getCode();
-                throw ApiException.activeShiftConflict(activeResourceConflict(
-                        equipmentName, equipmentConflict, tenantId));
+                throw activeResourceConflict(equipmentName, equipmentConflict, tenantId);
             }
             restoredStatus = ShiftStatus.IN_PROGRESS;
         }
@@ -294,11 +293,16 @@ public class ShiftService {
         return get(tenantId, shift.getId());
     }
 
-    private String activeResourceConflict(String resource, Shift conflictingShift, Long tenantId) {
+    private ApiException activeResourceConflict(String resource, Shift conflictingShift, Long tenantId) {
         String siteName = sites.findByIdAndTenantId(conflictingShift.getSiteId(), tenantId)
                 .map(Site::getName).orElse("موقع غير معروف");
-        return resource + " مشغول في الوردية رقم " + conflictingShift.getId()
+        String message = resource + " مشغول في الوردية رقم " + conflictingShift.getId()
                 + " بموقع " + siteName + ". أنهِ الوردية الأخرى أو اختر إجراءً آخر.";
+        java.util.Map<String, Object> details = new java.util.HashMap<String, Object>();
+        details.put("conflictingShiftId", conflictingShift.getId());
+        details.put("resourceName", resource);
+        details.put("siteName", siteName);
+        return ApiException.activeShiftConflict(message, details);
     }
 
     // ------------------------------------------------------------------ helpers
