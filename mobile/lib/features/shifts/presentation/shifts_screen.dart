@@ -523,8 +523,8 @@ class _ShiftsView extends StatelessWidget {
                 builder: (detailsContext) => _ShiftDetailsScreen(
                   shift: conflictingShift,
                   conflictMessage: failure.message,
-                  onManage: () =>
-                      _manageShift(detailsContext, conflictingShift, bloc),
+                  onManage: (currentShift) =>
+                      _manageShift(detailsContext, currentShift, bloc),
                 ),
               ),
             );
@@ -811,7 +811,7 @@ class _MessageView extends StatelessWidget {
 }
 
 
-class _ShiftDetailsScreen extends StatelessWidget {
+class _ShiftDetailsScreen extends StatefulWidget {
   const _ShiftDetailsScreen({
     required this.shift,
     required this.onManage,
@@ -819,11 +819,46 @@ class _ShiftDetailsScreen extends StatelessWidget {
   });
 
   final ShiftModel shift;
-  final VoidCallback onManage;
+  final Future<void> Function(ShiftModel shift) onManage;
   final String? conflictMessage;
 
   @override
+  State<_ShiftDetailsScreen> createState() => _ShiftDetailsScreenState();
+}
+
+class _ShiftDetailsScreenState extends State<_ShiftDetailsScreen> {
+  late ShiftModel _shift;
+  bool _refreshing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _shift = widget.shift;
+  }
+
+  Future<void> _manageAndRefresh() async {
+    await widget.onManage(_shift);
+    if (!mounted) return;
+    setState(() => _refreshing = true);
+    try {
+      final latest = await getIt<ShiftsApi>().fetchShift(_shift.id);
+      if (mounted) setState(() => _shift = latest);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('تم تنفيذ الإجراء، لكن تعذر تحديث تفاصيل الوردية.'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _refreshing = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final shift = _shift; 
     final equipment = [
       shift.equipmentCode,
       shift.equipmentName,
@@ -837,7 +872,7 @@ class _ShiftDetailsScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          if (conflictMessage != null && conflictMessage!.trim().isNotEmpty) ...[
+          if (widget.conflictMessage != null && widget.conflictMessage!.trim().isNotEmpty) ...[
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(12),
@@ -851,7 +886,7 @@ class _ShiftDetailsScreen extends StatelessWidget {
                 children: [
                   Icon(Icons.warning_amber_rounded, color: theme.colorScheme.error),
                   const SizedBox(width: 8),
-                  Expanded(child: Text(conflictMessage!)),
+                  Expanded(child: Text(widget.conflictMessage!)),
                 ],
               ),
             ),
@@ -909,9 +944,9 @@ class _ShiftDetailsScreen extends StatelessWidget {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
-              onPressed: onManage,
+              onPressed: _refreshing ? null : _manageAndRefresh,
               icon: const Icon(Icons.tune),
-              label: const Text('إجراءات الوردية'),
+              label: Text(_refreshing ? 'جارٍ تحديث البيانات...' : 'إجراءات الوردية'),
             ),
           ),
           const SizedBox(height: 8),
