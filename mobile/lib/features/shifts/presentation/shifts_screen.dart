@@ -233,39 +233,16 @@ class _ShiftsView extends StatelessWidget {
       return;
     }
     if (choice == 'cancel') {
-      final reasonController = TextEditingController();
       final reason = await showDialog<String>(
         context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: Text('إلغاء الوردية #${shift.id}'),
-          content: TextField(
-            controller: reasonController,
-            autofocus: true,
-            maxLength: 300,
-            maxLines: 3,
-            decoration: const InputDecoration(
-              labelText: 'سبب الإلغاء (مطلوب)',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('رجوع'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                final value = reasonController.text.trim();
-                if (value.isNotEmpty) Navigator.pop(dialogContext, value);
-              },
-              child: const Text('تأكيد الإلغاء'),
-            ),
-          ],
-        ),
+        builder: (_) => _CancelShiftDialog(shiftId: shift.id),
       );
-      reasonController.dispose();
       if (reason == null || reason.trim().isEmpty) return;
-      await _runShiftAction(context, bloc, () => getIt<ShiftsApi>().cancelShift(shift, reason));
+      await _runShiftAction(
+        context,
+        bloc,
+        () => getIt<ShiftsApi>().cancelShift(shift, reason),
+      );
       return;
     }
     if (choice == 'finish') {
@@ -401,6 +378,55 @@ class _ShiftsView extends StatelessWidget {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     return date.isBefore(today);
+  }
+}
+
+class _CancelShiftDialog extends StatefulWidget {
+  const _CancelShiftDialog({required this.shiftId});
+
+  final int shiftId;
+
+  @override
+  State<_CancelShiftDialog> createState() => _CancelShiftDialogState();
+}
+
+class _CancelShiftDialogState extends State<_CancelShiftDialog> {
+  final TextEditingController _reasonController = TextEditingController();
+
+  @override
+  void dispose() {
+    _reasonController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text('إلغاء الوردية #${widget.shiftId}'),
+      content: TextField(
+        controller: _reasonController,
+        autofocus: true,
+        maxLength: 300,
+        maxLines: 3,
+        decoration: const InputDecoration(
+          labelText: 'سبب الإلغاء (مطلوب)',
+          border: OutlineInputBorder(),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('رجوع'),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            final value = _reasonController.text.trim();
+            if (value.isNotEmpty) Navigator.pop(context, value);
+          },
+          child: const Text('تأكيد الإلغاء'),
+        ),
+      ],
+    );
   }
 }
 
