@@ -277,7 +277,12 @@ class _ShiftsView extends StatelessWidget {
         ),
       );
       if (confirm == true) {
-        await _runShiftAction(context, bloc, () => getIt<ShiftsApi>().reinstateShift(shift));
+        await _runShiftAction(
+          context,
+          bloc,
+          () => getIt<ShiftsApi>().reinstateShift(shift),
+          conflictTitle: 'تعذر إعادة تفعيل الوردية',
+        );
       }
       return;
     }
@@ -345,8 +350,9 @@ class _ShiftsView extends StatelessWidget {
   Future<void> _runShiftAction(
     BuildContext context,
     ShiftsBloc bloc,
-    Future<ShiftModel> Function() action,
-  ) async {
+    Future<ShiftModel> Function() action, {
+    String conflictTitle = 'تعذر تنفيذ الإجراء',
+  }) async {
     try {
       await action();
       
@@ -360,7 +366,7 @@ class _ShiftsView extends StatelessWidget {
         await showDialog<void>(
           context: context,
           builder: (dialogContext) => AlertDialog(
-            title: const Text('تعذر تنفيذ الإجراء'),
+            title: Text(conflictTitle),
             content: Text(failure.message),
             actions: [
               TextButton(
