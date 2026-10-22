@@ -260,7 +260,12 @@ class _ShiftsView extends StatelessWidget {
         ),
       );
       if (confirm == true) {
-        await _runShiftAction(context, bloc, () => getIt<ShiftsApi>().finishShift(shift));
+        await _runShiftAction(
+          context,
+          bloc,
+          () => getIt<ShiftsApi>().finishShift(shift),
+          successMessage: 'تم إنهاء الوردية بنجاح.',
+        );
       }
       return;
     }
@@ -269,7 +274,9 @@ class _ShiftsView extends StatelessWidget {
         context: context,
         builder: (dialogContext) => AlertDialog(
           title: Text('إعادة تفعيل الوردية #${shift.id}؟'),
-          content: const Text('سيقبل الخادم العملية فقط إذا كانت الوردية قابلة لإعادة التفعيل.'),
+          content: const Text(
+            'سيتم استرجاع الوردية. إذا كان السائق أو المعدة مشغولين في وردية أخرى، سنوضح لك السبب.',
+          ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('رجوع')),
             ElevatedButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('إعادة التفعيل')),
@@ -282,6 +289,7 @@ class _ShiftsView extends StatelessWidget {
           bloc,
           () => getIt<ShiftsApi>().reinstateShift(shift),
           conflictTitle: 'تعذر إعادة تفعيل الوردية',
+          successMessage: 'تمت إعادة تفعيل الوردية بنجاح.',
         );
       }
       return;
@@ -352,30 +360,58 @@ class _ShiftsView extends StatelessWidget {
     ShiftsBloc bloc,
     Future<ShiftModel> Function() action, {
     String conflictTitle = 'تعذر تنفيذ الإجراء',
+    String successMessage = 'تم حفظ التغييرات بنجاح.',
   }) async {
     try {
       await action();
       
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تم تنفيذ الإجراء بنجاح.')),
+        SnackBar(content: Text(successMessage)),
       );
       bloc.add(const ShiftsRequested());
     } on DioError catch (error) {
       final failure = AppFailure.fromDio(error);
       if (error.response?.statusCode == 409) {
-        await showDialog<void>(
+        final match = RegExp(r'الوردية رقم\\s+(\\d+)').firstMatch(failure.message);
+        final conflictingShiftId =
+            match == null ? null : int.tryParse(match.group(1)!);
+        final openConflictingShift = await showDialog<bool>(
           context: context,
           builder: (dialogContext) => AlertDialog(
             title: Text(conflictTitle),
             content: Text(failure.message),
             actions: [
               TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(),
-                child: const Text('حسنًا'),
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('إغلاق'),
               ),
+              if (conflictingShiftId != null)
+                ElevatedButton.icon(
+                  onPressed: () => Navigator.of(dialogContext).pop(true),
+                  icon: const Icon(Icons.open_in_new),
+                  label: const Text('فتح الوردية'),
+                ),
             ],
           ),
         );
+        if (openConflictingShift == true && conflictingShiftId != null) {
+          try {
+            final conflictingShift =
+                await getIt<ShiftsApi>().fetchShift(conflictingShiftId);
+            if (context.mounted) {
+              await _manageShift(context, conflictingShift, bloc);
+            }
+          } catch (openError) {
+            final message = openError is AppFailure
+                ? openError.message
+                : 'تعذر فتح الوردية الأخرى. حدّث القائمة وحاول مرة أخرى.';
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(message)),
+              );
+            }
+          }
+        }
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(failure.message)),
