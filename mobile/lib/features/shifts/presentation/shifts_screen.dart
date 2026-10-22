@@ -244,6 +244,7 @@ class _ShiftsView extends StatelessWidget {
         context,
         bloc,
         () => getIt<ShiftsApi>().cancelShift(shift, reason),
+        successMessage: 'تم إلغاء الوردية بنجاح.',
       );
       return;
     }
