@@ -29,5 +29,11 @@ public interface ShiftRepository extends JpaRepository<Shift, Long>, JpaSpecific
     boolean existsByTenantIdAndEquipmentIdAndStatusAndIdNot(
             Long tenantId, Long equipmentId, ShiftStatus status, Long excludedShiftId);
 
+    Optional<Shift> findFirstByTenantIdAndDriverIdAndStatusOrderByIdAsc(
+            Long tenantId, Long driverId, ShiftStatus status);
+
+    Optional<Shift> findFirstByTenantIdAndEquipmentIdAndStatusOrderByIdAsc(
+            Long tenantId, Long equipmentId, ShiftStatus status);
+
     List<Shift> findByTenantIdAndStatusOrderByShiftDateDescIdDesc(Long tenantId, ShiftStatus status);
 }
