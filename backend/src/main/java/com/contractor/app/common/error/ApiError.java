@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 
 /** شكل موحّد لكل أخطاء الـ API. حقل message جاهز للعرض للمستخدم بالعربية. */
 @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -15,13 +16,20 @@ public class ApiError {
     private final String message;
     private final String path;
     private final List<FieldIssue> fieldErrors;
+    private final Map<String, Object> details;
 
     public ApiError(int status, String code, String message, String path, List<FieldIssue> fieldErrors) {
+        this(status, code, message, path, fieldErrors, null);
+    }
+
+    public ApiError(int status, String code, String message, String path,
+                    List<FieldIssue> fieldErrors, Map<String, Object> details) {
         this.status = status;
         this.code = code;
         this.message = message;
         this.path = path;
         this.fieldErrors = fieldErrors;
+        this.details = details;
     }
 
     public LocalDateTime getTimestamp() {
@@ -46,6 +54,10 @@ public class ApiError {
 
     public List<FieldIssue> getFieldErrors() {
         return fieldErrors;
+    }
+
+    public Map<String, Object> getDetails() {
+        return details;
     }
 
     public static class FieldIssue {
