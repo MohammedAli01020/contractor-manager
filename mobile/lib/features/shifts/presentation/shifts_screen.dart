@@ -1,7 +1,9 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/di/injector.dart';
+import '../../../core/error/app_failure.dart';
 import '../../../core/widgets/loading_view.dart';
 import '../data/datasources/shifts_api.dart';
 import 'shift_editor_screen.dart';
@@ -352,10 +354,33 @@ class _ShiftsView extends StatelessWidget {
         const SnackBar(content: Text('تم تنفيذ الإجراء بنجاح.')),
       );
       bloc.add(const ShiftsRequested());
+    } on DioError catch (error) {
+      final failure = AppFailure.fromDio(error);
+      if (error.response?.statusCode == 409) {
+        await showDialog<void>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('تعذر تنفيذ الإجراء'),
+            content: Text(failure.message),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('حسنًا'),
+              ),
+            ],
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(failure.message)),
+        );
+      }
     } catch (error) {
-      
+      final message = error is AppFailure
+          ? error.message
+          : 'حدث خطأ غير متوقع أثناء تنفيذ الإجراء.';
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('تعذر تنفيذ الإجراء. ${error.toString()}')),
+        SnackBar(content: Text(message)),
       );
     }
   }
