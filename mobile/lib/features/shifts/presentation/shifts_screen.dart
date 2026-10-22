@@ -404,7 +404,16 @@ class _ShiftsView extends StatelessWidget {
           try {
             final conflictingShift =
                 await getIt<ShiftsApi>().fetchShift(conflictingShiftId);
-            await _manageShift(context, conflictingShift, bloc);
+            await Navigator.of(context).push<void>(
+              MaterialPageRoute(
+                builder: (detailsContext) => _ShiftDetailsScreen(
+                  shift: conflictingShift,
+                  conflictMessage: failure.message,
+                  onManage: () =>
+                      _manageShift(detailsContext, conflictingShift, bloc),
+                ),
+              ),
+            );
           } catch (openError) {
             final message = openError is AppFailure
                 ? openError.message
@@ -682,6 +691,155 @@ class _MessageView extends StatelessWidget {
             ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+
+class _ShiftDetailsScreen extends StatelessWidget {
+  const _ShiftDetailsScreen({
+    required this.shift,
+    required this.onManage,
+    this.conflictMessage,
+  });
+
+  final ShiftModel shift;
+  final VoidCallback onManage;
+  final String? conflictMessage;
+
+  @override
+  Widget build(BuildContext context) {
+    final equipment = [
+      shift.equipmentCode,
+      shift.equipmentName,
+    ].where((value) => value.isNotEmpty).join(' - ');
+    final theme = Theme.of(context);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('تفاصيل الوردية #${shift.id}'),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          if (conflictMessage != null && conflictMessage!.trim().isNotEmpty) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.error.withOpacity(0.08),
+                border: Border.all(color: theme.colorScheme.error.withOpacity(0.35)),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.warning_amber_rounded, color: theme.colorScheme.error),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(conflictMessage!)),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'وردية #${shift.id}',
+                          style: theme.textTheme.titleLarge,
+                        ),
+                      ),
+                      Chip(label: Text(shift.statusLabel)),
+                    ],
+                  ),
+                  const Divider(height: 24),
+                  _InfoLine(icon: Icons.calendar_today_outlined, text: shift.shiftDate),
+                  _InfoLine(icon: Icons.wb_twilight_outlined, text: shift.shiftTypeLabel),
+                  _InfoLine(icon: Icons.location_on_outlined, text: shift.siteName),
+                  _InfoLine(icon: Icons.person_outline, text: shift.driverName),
+                  _InfoLine(icon: Icons.construction_outlined, text: equipment),
+                  const Divider(height: 24),
+                  _DetailMoneyLine(label: 'قيمة الوردية', value: shift.price),
+                  _DetailMoneyLine(label: 'أجر السائق', value: shift.driverWage),
+                  const Divider(),
+                  _DetailMoneyLine(
+                    label: 'الصافي بعد أجر السائق',
+                    value: shift.priceAfterWage,
+                    emphasize: true,
+                  ),
+                  if (shift.cancelReason.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Text('سبب الإلغاء', style: theme.textTheme.titleSmall),
+                    const SizedBox(height: 4),
+                    Text(shift.cancelReason),
+                  ],
+                  if (shift.notes.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Text('ملاحظات', style: theme.textTheme.titleSmall),
+                    const SizedBox(height: 4),
+                    Text(shift.notes),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: onManage,
+              icon: const Icon(Icons.tune),
+              label: const Text('إجراءات الوردية'),
+            ),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () => Navigator.of(context).pop(),
+              icon: const Icon(Icons.arrow_back),
+              label: const Text('العودة إلى الوردية الأصلية'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DetailMoneyLine extends StatelessWidget {
+  const _DetailMoneyLine({
+    required this.label,
+    required this.value,
+    this.emphasize = false,
+  });
+
+  final String label;
+  final double value;
+  final bool emphasize;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = emphasize
+        ? Theme.of(context).textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+            )
+        : Theme.of(context).textTheme.bodyMedium;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        children: [
+          Expanded(child: Text(label)),
+          Text('${value.toStringAsFixed(2)} جنيه', style: style),
+        ],
       ),
     );
   }
