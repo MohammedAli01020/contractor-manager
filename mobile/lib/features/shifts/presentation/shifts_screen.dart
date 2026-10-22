@@ -325,7 +325,7 @@ class _ShiftsView extends StatelessWidget {
             width: double.maxFinite,
             height: MediaQuery.of(dialogContext).size.height * 0.62,
             child: items.isEmpty
-                ? const Center(
+                ? Center(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
