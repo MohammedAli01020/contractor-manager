@@ -110,7 +110,7 @@ public class ShiftController {
     }
 
     @PostMapping("/{id}/reinstate")
-    @Operation(summary = "إعادة تفعيل وردية ملغاة كانت منتهية (الملغاة وهي شغالة لا تعود)")
+    @Operation(summary = "إعادة تفعيل وردية ملغاة: المنتهية تعود منتهية، والتي أُلغيت أثناء التشغيل تعود شغالة إذا كان السائق والمعدة متاحين")
     public ShiftResponse reinstate(@PathVariable Long id, @Valid @RequestBody ShiftVersionRequest request) {
         return service.reinstate(CurrentUser.tenantId(), id, request.getVersion());
     }
