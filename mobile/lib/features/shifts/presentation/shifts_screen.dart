@@ -398,18 +398,14 @@ class _ShiftsView extends StatelessWidget {
           try {
             final conflictingShift =
                 await getIt<ShiftsApi>().fetchShift(conflictingShiftId);
-            if (context.mounted) {
-              await _manageShift(context, conflictingShift, bloc);
-            }
+            await _manageShift(context, conflictingShift, bloc);
           } catch (openError) {
             final message = openError is AppFailure
                 ? openError.message
                 : 'تعذر فتح الوردية الأخرى. حدّث القائمة وحاول مرة أخرى.';
-            if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(message)),
-              );
-            }
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(message)),
+            );
           }
         }
       } else {
