@@ -184,9 +184,47 @@ class ShiftsBloc extends Bloc<ShiftsEvent, ShiftsState> {
     }
   }
 
-  void _onTabChanged(ShiftTabChanged event, Emitter<ShiftsState> emit) {
-    if (state is ShiftsLoaded) {
-      emit((state as ShiftsLoaded).copyWith(selectedTab: event.tab));
+  Future<void> _onTabChanged(
+    ShiftTabChanged event,
+    Emitter<ShiftsState> emit,
+  ) async {
+    final current = state;
+    if (current is! ShiftsLoaded) return;
+
+    if (event.tab != ShiftListTab.all) {
+      emit(current.copyWith(selectedTab: event.tab));
+      return;
+    }
+
+    // Opening "All shifts" always clears the status filter and reloads all statuses.
+    emit(current.copyWith(
+      selectedTab: ShiftListTab.all,
+      clearAllStatus: true,
+      loadingMore: true,
+    ));
+    try {
+      final result = await _repository.fetchShifts(page: 0, size: 50);
+      final refreshed = state;
+      if (refreshed is ShiftsLoaded) {
+        emit(refreshed.copyWith(
+          selectedTab: ShiftListTab.all,
+          allItems: result.items,
+          allPage: result.page,
+          allTotalPages: result.totalPages,
+          clearAllStatus: true,
+          loadingMore: false,
+        ));
+      }
+    } on AppFailure {
+      final refreshed = state;
+      if (refreshed is ShiftsLoaded) {
+        emit(refreshed.copyWith(loadingMore: false));
+      }
+    } catch (_) {
+      final refreshed = state;
+      if (refreshed is ShiftsLoaded) {
+        emit(refreshed.copyWith(loadingMore: false));
+      }
     }
   }
 
