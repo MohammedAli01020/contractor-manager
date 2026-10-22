@@ -26,7 +26,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(ApiException.class)
     public ResponseEntity<Object> handleApi(ApiException ex, WebRequest request) {
-        return build(ex.getStatus(), ex.getCode(), ex.getMessage(), request, null);
+        return build(ex.getStatus(), ex.getCode(), ex.getMessage(), request, null, ex.getDetails());
     }
 
     @ExceptionHandler(AccessDeniedException.class)
@@ -158,9 +158,16 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     private static ResponseEntity<Object> build(HttpStatus status, String code, String message,
                                                 WebRequest request, List<ApiError.FieldIssue> issues) {
+        return build(status, code, message, request, issues, null);
+    }
+
+    private static ResponseEntity<Object> build(HttpStatus status, String code, String message,
+                                                WebRequest request, List<ApiError.FieldIssue> issues,
+                                                java.util.Map<String, Object> details) {
         String path = request instanceof ServletWebRequest
                 ? ((ServletWebRequest) request).getRequest().getRequestURI()
                 : null;
-        return new ResponseEntity<Object>(new ApiError(status.value(), code, message, path, issues), status);
+        return new ResponseEntity<Object>(
+                new ApiError(status.value(), code, message, path, issues, details), status);
     }
 }
