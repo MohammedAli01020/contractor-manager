@@ -306,26 +306,140 @@ class _ShiftsView extends StatelessWidget {
       await showDialog<void>(
         context: context,
         builder: (dialogContext) => AlertDialog(
-          title: Text('سجل الوردية #$shiftId'),
+          titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+          contentPadding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('سجل الوردية #$shiftId'),
+              const SizedBox(height: 4),
+              Text(
+                items.isEmpty
+                    ? 'لا توجد تغييرات مسجلة'
+                    : '${items.length} سجل تغيير',
+                style: Theme.of(dialogContext).textTheme.bodySmall,
+              ),
+            ],
+          ),
           content: SizedBox(
             width: double.maxFinite,
+            height: MediaQuery.of(dialogContext).size.height * 0.62,
             child: items.isEmpty
-                ? const Text('لا توجد تغييرات مسجلة.')
+                ? const Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.history, size: 42),
+                        SizedBox(height: 12),
+                        Text('لا توجد تغييرات مسجلة على الوردية حتى الآن.'),
+                      ],
+                    ),
+                  )
                 : ListView.separated(
-                    shrinkWrap: true,
+                    padding: const EdgeInsets.symmetric(vertical: 8),
                     itemCount: items.length,
-                    separatorBuilder: (_, __) => const Divider(),
+                    separatorBuilder: (_, __) => const SizedBox(height: 10),
                     itemBuilder: (_, index) {
                       final item = items[index];
                       final field = (item['fieldName'] ?? item['action'] ?? 'تغيير').toString();
                       final oldValue = (item['oldValue'] ?? '—').toString();
                       final newValue = (item['newValue'] ?? '—').toString();
                       final user = (item['userName'] ?? 'مستخدم').toString();
-                      final time = (item['createdAt'] ?? '').toString().replaceFirst('T', ' ');
-                      return ListTile(
-                        dense: true,
-                        title: Text(field),
-                        subtitle: Text('قبل: $oldValue\nبعد: $newValue\nبواسطة: $user\n$time'),
+                      final rawTime = (item['createdAt'] ?? '').toString();
+                      final time = rawTime.isEmpty
+                          ? 'الوقت غير متاح'
+                          : rawTime.replaceFirst('T', ' ');
+                      return Card(
+                        margin: EdgeInsets.zero,
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Icon(Icons.edit_note, size: 22),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      field,
+                                      style: Theme.of(dialogContext)
+                                          .textTheme.titleSmall
+                                          ?.copyWith(fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(dialogContext)
+                                      .colorScheme.surfaceVariant
+                                      .withOpacity(0.45),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text('القيمة السابقة'),
+                                    const SizedBox(height: 4),
+                                    SelectableText(oldValue),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(dialogContext)
+                                      .colorScheme.primary
+                                      .withOpacity(0.08),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text('القيمة الجديدة'),
+                                    const SizedBox(height: 4),
+                                    SelectableText(
+                                      newValue,
+                                      style: const TextStyle(fontWeight: FontWeight.w600),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              const Divider(height: 1),
+                              const SizedBox(height: 8),
+                              Wrap(
+                                spacing: 12,
+                                runSpacing: 6,
+                                children: [
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.person_outline, size: 16),
+                                      const SizedBox(width: 4),
+                                      Text(user),
+                                    ],
+                                  ),
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.access_time, size: 16),
+                                      const SizedBox(width: 4),
+                                      Text(time),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
                       );
                     },
                   ),
