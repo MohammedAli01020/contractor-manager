@@ -160,7 +160,11 @@ class ShiftsBloc extends Bloc<ShiftsEvent, ShiftsState> {
       final results = await Future.wait<dynamic>([
         _repository.fetchRunningShifts(),
         _repository.fetchShifts(from: today, to: today, page: 0, size: 50),
-        _repository.fetchShifts(page: 0, size: 50),
+        _repository.fetchShifts(
+          page: 0,
+          size: 50,
+          status: previous is ShiftsLoaded ? previous.allStatus : null,
+        ),
       ]);
       emit(ShiftsLoaded(
         runningItems: results[0] as List<ShiftModel>,
