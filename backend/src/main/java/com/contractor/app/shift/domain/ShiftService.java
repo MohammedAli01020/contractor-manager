@@ -249,16 +249,56 @@ public class ShiftService {
         if (shift.getStatus() != ShiftStatus.CANCELLED) {
             throw ApiException.conflict("الوردية ليست ملغاة.");
         }
-        if (shift.getFinishedAt() == null) {
-            throw ApiException.conflict("هذه الوردية أُلغيت وهي شغالة ولا يمكن إعادة تفعيلها. سجّل وردية جديدة.");
-        }
         shift.requireVersion(version);
-        shift.setStatus(ShiftStatus.COMPLETED);
+
+        ShiftStatus restoredStatus;
+        if (shift.getFinishedAt() != null) {
+            // وردية كانت منتهية قبل إلغائها: أعدها منتهية مع الاحتفاظ بوقت الإنهاء والقيم المحفوظة.
+            restoredStatus = ShiftStatus.COMPLETED;
+        } else {
+            // وردية أُلغيت أثناء التشغيل: أعد حجز مواردها بنفس ترتيب الأقفال المستخدم عند البدء.
+            drivers.findByIdAndTenantIdForUpdate(shift.getDriverId(), tenantId)
+                    .orElseThrow(() -> ApiException.notFound("السائق أو العامل غير موجود."));
+            equipment.findByIdAndTenantIdForUpdate(shift.getEquipmentId(), tenantId)
+                    .orElseThrow(() -> ApiException.notFound("المعدة غير موجودة."));
+
+            Driver driver = requireDriver(tenantId, shift.getDriverId(), null);
+            Equipment item = requireEquipment(tenantId, shift.getEquipmentId(), null);
+
+            Shift driverConflict = shifts
+                    .findFirstByTenantIdAndDriverIdAndStatusOrderByIdAsc(
+                            tenantId, shift.getDriverId(), ShiftStatus.IN_PROGRESS)
+                    .orElse(null);
+            if (driverConflict != null) {
+                throw ApiException.activeShiftConflict(activeResourceConflict(
+                        "السائق " + driver.getName(), driverConflict, tenantId));
+            }
+
+            Shift equipmentConflict = shifts
+                    .findFirstByTenantIdAndEquipmentIdAndStatusOrderByIdAsc(
+                            tenantId, shift.getEquipmentId(), ShiftStatus.IN_PROGRESS)
+                    .orElse(null);
+            if (equipmentConflict != null) {
+                String equipmentName = item.getCode() == null ? "المعدة" : "المعدة " + item.getCode();
+                throw ApiException.activeShiftConflict(activeResourceConflict(
+                        equipmentName, equipmentConflict, tenantId));
+            }
+            restoredStatus = ShiftStatus.IN_PROGRESS;
+        }
+
+        shift.setStatus(restoredStatus);
         shift.setCancelReason(null);
         shifts.saveAndFlush(shift);
         audit.record(tenantId, AuditEntityType.SHIFT, shift.getId(), AuditAction.REINSTATED, "status",
-                ShiftStatus.CANCELLED.name(), ShiftStatus.COMPLETED.name());
+                ShiftStatus.CANCELLED.name(), restoredStatus.name());
         return get(tenantId, shift.getId());
+    }
+
+    private String activeResourceConflict(String resource, Shift conflictingShift, Long tenantId) {
+        String siteName = sites.findByIdAndTenantId(conflictingShift.getSiteId(), tenantId)
+                .map(Site::getName).orElse("موقع غير معروف");
+        return resource + " مشغول في الوردية رقم " + conflictingShift.getId()
+                + " بموقع " + siteName + ". أنهِ الوردية الأخرى أو اختر إجراءً آخر.";
     }
 
     // ------------------------------------------------------------------ helpers
