@@ -1,5 +1,6 @@
 package com.contractor.app.common.error;
 
+import java.util.Map;
 import org.springframework.http.HttpStatus;
 
 /** استثناء أعمال متوقع: رسالته عربية وتُعرض للمستخدم كما هي. */
@@ -7,11 +8,17 @@ public class ApiException extends RuntimeException {
 
     private final HttpStatus status;
     private final String code;
+    private final Map<String, Object> details;
 
     public ApiException(HttpStatus status, String code, String message) {
+        this(status, code, message, null);
+    }
+
+    public ApiException(HttpStatus status, String code, String message, Map<String, Object> details) {
         super(message);
         this.status = status;
         this.code = code;
+        this.details = details;
     }
 
     public HttpStatus getStatus() {
@@ -20,6 +27,10 @@ public class ApiException extends RuntimeException {
 
     public String getCode() {
         return code;
+    }
+
+    public Map<String, Object> getDetails() {
+        return details;
     }
 
     public static ApiException badRequest(String message) {
@@ -48,5 +59,9 @@ public class ApiException extends RuntimeException {
 
     public static ApiException activeShiftConflict(String message) {
         return new ApiException(HttpStatus.CONFLICT, "ACTIVE_SHIFT_CONFLICT", message);
+    }
+
+    public static ApiException activeShiftConflict(String message, Map<String, Object> details) {
+        return new ApiException(HttpStatus.CONFLICT, "ACTIVE_SHIFT_CONFLICT", message, details);
     }
 }
