@@ -105,6 +105,14 @@ class ShiftsApi {
     return response.data ?? <String, dynamic>{};
   }
 
+  Future<ShiftModel> fetchShift(int shiftId) async {
+    final response = await _dio.get<Map<String, dynamic>>('/shifts/$shiftId');
+    if (response.data == null) {
+      throw const AppFailure(FailureType.server, 'لم تصل بيانات الوردية المطلوبة.');
+    }
+    return ShiftModel.fromJson(response.data!);
+  }
+
   Future<ShiftModel> saveShift(Map<String, dynamic> payload, {int? id}) async {
     final response = id == null
         ? await _dio.post<Map<String, dynamic>>('/shifts', data: payload)
