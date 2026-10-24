@@ -152,9 +152,9 @@ class _SkeletonTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: borderColor),
       ),
-      child: const Column(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+        children: const [
           _SkeletonBlock(height: 22, width: 30, radius: 7),
           SizedBox(height: 12),
           _SkeletonBlock(height: 18, width: 54),
