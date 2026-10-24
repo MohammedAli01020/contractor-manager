@@ -130,7 +130,7 @@ class _DriverEditDialogState extends State<DriverEditDialog> {
         await getIt<Dio>().post('/drivers', data: payload);
       } else {
         await getIt<Dio>().put(
-          '/drivers/${_driver!['id']}',
+          '/drivers/' + _driver!['id'].toString(),
           data: payload,
         );
       }
