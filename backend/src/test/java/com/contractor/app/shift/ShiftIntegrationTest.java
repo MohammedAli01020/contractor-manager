@@ -61,6 +61,7 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
 
         assertThat(shift.path("status").asText()).isEqualTo("IN_PROGRESS");
         assertThat(shift.path("finishedAt").isNull()).isTrue();
+        assertThat(shift.path("startedAt").isNull()).isFalse();
         assertThat(shift.path("price").decimalValue()).isEqualByComparingTo("1200.00");
         assertThat(shift.path("driverWage").decimalValue()).isEqualByComparingTo("150.00");
         assertThat(shift.path("equipmentOperatingCost").decimalValue()).isEqualByComparingTo("500.00");
@@ -516,8 +517,13 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
         JsonNode cancelled = body(postJson("/api/v1/shifts/" + running.path("id").asLong() + "/cancel", cancel,
                 token).andExpect(status().isOk()));
 
+        // Simulate an old activation timestamp; reactivation must reset it without touching created_at.
+        jdbcTemplate.update("UPDATE shifts SET started_at = '2000-01-01 00:00:00.000000' WHERE id = ?",
+                running.path("id").asLong());
         JsonNode reinstated = body(postJson("/api/v1/shifts/" + running.path("id").asLong() + "/reinstate",
                 versionBody(cancelled.path("version").asLong()), token).andExpect(status().isOk()));
+        assertThat(reinstated.path("startedAt").asText()).doesNotStartWith("2000-01-01");
+        assertThat(reinstated.path("createdAt").asText()).isEqualTo(running.path("createdAt").asText());
         assertThat(reinstated.path("status").asText()).isEqualTo("IN_PROGRESS");
         assertThat(reinstated.path("finishedAt").isNull()).isTrue();
         assertThat(reinstated.path("cancelReason").isNull()).isTrue();
