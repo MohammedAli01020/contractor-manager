@@ -1,11 +1,38 @@
 import 'package:flutter/material.dart';
 
-/// Lightweight skeleton for initial data loading.
-///
-/// Static placeholders avoid expensive repeating animations on low-end devices.
+/// Compact loading indicator for screens that do not need list placeholders.
 class LoadingView extends StatelessWidget {
   const LoadingView({Key? key, this.label = 'جارٍ تحميل البيانات...'})
       : super(key: key);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Semantics(
+        label: label,
+        liveRegion: true,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const CircularProgressIndicator(),
+            const SizedBox(height: 12),
+            Text(label, style: Theme.of(context).textTheme.bodySmall),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Skeleton placeholders for list screens while their first request is pending.
+/// Static placeholders avoid expensive repeating animations on low-end devices.
+class SkeletonLoadingView extends StatelessWidget {
+  const SkeletonLoadingView({
+    Key? key,
+    this.label = 'جارٍ تحميل البيانات...',
+  }) : super(key: key);
 
   final String label;
 
@@ -17,14 +44,14 @@ class LoadingView extends StatelessWidget {
       label: label,
       liveRegion: true,
       child: ListView(
-        physics: const NeverScrollableScrollPhysics(),
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16),
         children: [
           Row(
-            children: [
-              const Expanded(child: _SkeletonBlock(height: 20, width: 150)),
-              const SizedBox(width: 12),
-              const _SkeletonBlock(height: 36, width: 92, radius: 12),
+            children: const [
+              Expanded(child: _SkeletonBlock(height: 20, width: 150)),
+              SizedBox(width: 12),
+              _SkeletonBlock(height: 36, width: 92, radius: 12),
             ],
           ),
           const SizedBox(height: 20),
@@ -88,7 +115,6 @@ class LoadingView extends StatelessWidget {
             ),
             const SizedBox(height: 12),
           ],
-          const SizedBox(height: 4),
           Center(
             child: Row(
               mainAxisSize: MainAxisSize.min,
