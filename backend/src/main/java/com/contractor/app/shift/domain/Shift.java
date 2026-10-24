@@ -25,6 +25,10 @@ public class Shift extends BaseTenantEntity {
     @Column(nullable = false, length = 20)
     private ShiftStatus status = ShiftStatus.IN_PROGRESS;
 
+    /** وقت آخر بدء فعلي للوردية (UTC)، ويُحدّث عند إعادة تفعيل وردية كانت جارية ثم أُلغيت. */
+    @Column(name = "started_at", nullable = false)
+    private LocalDateTime startedAt;
+
     /** وقت الضغط على "إنهاء" (UTC). يبقى بعد الإلغاء، وهو ما يسمح بإعادة تفعيل الوردية المنتهية. */
     @Column(name = "finished_at")
     private LocalDateTime finishedAt;
@@ -88,6 +92,14 @@ public class Shift extends BaseTenantEntity {
 
     public void setStatus(ShiftStatus status) {
         this.status = status;
+    }
+
+    public LocalDateTime getStartedAt() {
+        return startedAt;
+    }
+
+    public void setStartedAt(LocalDateTime startedAt) {
+        this.startedAt = startedAt;
     }
 
     public LocalDateTime getFinishedAt() {
