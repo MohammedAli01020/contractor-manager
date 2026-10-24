@@ -11,8 +11,6 @@ class LoadingView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final placeholderColor =
-        Theme.of(context).colorScheme.onSurface.withOpacity(0.07);
     final borderColor = Theme.of(context).dividerColor.withOpacity(0.55);
 
     return Semantics(
@@ -109,8 +107,6 @@ class LoadingView extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          // Keep the placeholder palette aligned with the active theme.
-          Container(height: 0, color: placeholderColor),
         ],
       ),
     );
