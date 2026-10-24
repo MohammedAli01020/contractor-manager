@@ -753,9 +753,12 @@ class _RunningSummaryState extends State<_RunningSummary> {
   Widget build(BuildContext context) {
     final items = widget.items;
     final oldCount = items.where((shift) {
-      final startedAt = shift.createdAt;
-      return shift.status == 'IN_PROGRESS' && startedAt != null &&
-          DateTime.now().difference(startedAt) >= const Duration(hours: 24);
+      final startedAt = shift.startedAt ?? shift.createdAt;
+      if (shift.status != 'IN_PROGRESS' || startedAt == null) return false;
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final startDay = DateTime(startedAt.year, startedAt.month, startedAt.day);
+      return today.difference(startDay).inDays >= 1;
     }).length;
     return Card(
       child: Padding(
@@ -872,13 +875,15 @@ class _ShiftCardState extends State<_ShiftCard> {
   void didUpdateWidget(covariant _ShiftCard oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.shift.status != widget.shift.status ||
+        oldWidget.shift.startedAt != widget.shift.startedAt ||
         oldWidget.shift.createdAt != widget.shift.createdAt) {
       _timer?.cancel();
       _startTimerIfRunning();
     }
   }
   void _startTimerIfRunning() {
-    if (widget.shift.status == 'IN_PROGRESS' && widget.shift.createdAt != null) {
+    if (widget.shift.status == 'IN_PROGRESS' &&
+        (widget.shift.startedAt ?? widget.shift.createdAt) != null) {
       _timer = Timer.periodic(const Duration(minutes: 1), (_) {
         if (mounted) setState(() {});
       });
@@ -895,12 +900,15 @@ class _ShiftCardState extends State<_ShiftCard> {
     final theme = Theme.of(context);
     final equipment = [shift.equipmentCode, shift.equipmentName]
         .where((value) => value.isNotEmpty).join(' - ');
-    final startedAt = shift.createdAt;
-    final age = startedAt == null ? Duration.zero : DateTime.now().difference(startedAt);
-    final isOverdue = shift.status == 'IN_PROGRESS' && !age.isNegative &&
-        age >= const Duration(hours: 24);
-    final isSeverelyOverdue = shift.status == 'IN_PROGRESS' && !age.isNegative &&
-        age >= const Duration(hours: 72);
+    final startedAt = shift.startedAt ?? shift.createdAt;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final startDay = startedAt == null
+        ? null
+        : DateTime(startedAt.year, startedAt.month, startedAt.day);
+    final daysRunning = startDay == null ? 0 : today.difference(startDay).inDays;
+    final isOverdue = shift.status == 'IN_PROGRESS' && daysRunning >= 1;
+    final isSeverelyOverdue = shift.status == 'IN_PROGRESS' && daysRunning >= 2;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -924,7 +932,7 @@ class _ShiftCardState extends State<_ShiftCard> {
                       isOverdue ? Colors.orange.shade800 : theme.colorScheme.primary),
                 const SizedBox(width: 6),
                 Expanded(child: Text(
-                  startedAt == null ? 'المدة: وقت البداية غير متاح' : 'المدة: ${_elapsed(startedAt)}',
+                  startedAt == null ? 'وقت البداية غير متاح' : _startedLabel(startedAt),
                   style: theme.textTheme.bodyMedium?.copyWith(
                     fontWeight: FontWeight.w600,
                     color: isSeverelyOverdue ? Colors.red.shade700 :
@@ -949,8 +957,8 @@ class _ShiftCardState extends State<_ShiftCard> {
                   const SizedBox(width: 8),
                   Expanded(child: Text(
                     isSeverelyOverdue
-                      ? 'تنبيه شديد: الوردية مستمرة منذ 3 أيام أو أكثر. راجع حالتها فورًا.'
-                      : 'تنبيه: الوردية مستمرة منذ 24 ساعة أو أكثر. تأكد من حالتها.',
+                      ? 'تنبيه شديد: الوردية مستمرة منذ يومين أو أكثر. راجع حالتها فورًا.'
+                      : 'تنبيه: الوردية بدأت في يوم سابق. تأكد من حالتها.',
                     style: TextStyle(
                       color: isSeverelyOverdue ? Colors.red.shade900 : Colors.orange.shade900,
                       fontWeight: FontWeight.w600,
@@ -993,15 +1001,15 @@ class _ShiftCardState extends State<_ShiftCard> {
       ),
     );
   }
-  String _elapsed(DateTime startedAt) {
-    final duration = DateTime.now().difference(startedAt);
-    if (duration.isNegative) return 'وقت غير متاح';
-    final days = duration.inDays;
-    final hours = duration.inHours % 24;
-    final minutes = duration.inMinutes % 60;
-    if (days > 0) return hours == 0 ? '${days} يوم' : '${days} يوم و${hours} ساعة';
-    if (duration.inHours > 0) return '${duration.inHours} ساعة و${minutes} دقيقة';
-    return '${duration.inMinutes} دقيقة';
+  String _startedLabel(DateTime startedAt) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final startDay = DateTime(startedAt.year, startedAt.month, startedAt.day);
+    final days = today.difference(startDay).inDays;
+    if (days < 0) return 'وقت البداية غير متاح';
+    if (days == 0) return 'بدأت اليوم';
+    if (days == 1) return 'بدأت أمس';
+    return 'مستمرة منذ $days أيام';
   }
   String _money(double value) => value.toStringAsFixed(2) + ' جنيه';
 }
