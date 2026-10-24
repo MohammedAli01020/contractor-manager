@@ -135,6 +135,7 @@ public class ShiftService {
 
         Shift shift = new Shift(tenantId, date, request.getShiftType(), request.getSiteId(), request.getDriverId(),
                 request.getEquipmentId());
+        shift.setStartedAt(LocalDateTime.now(ZoneOffset.UTC));
         shift.setNotes(Texts.blankToNull(request.getNotes()));
         // نسخ ثابتة وقت التسجيل: تغيير الأسعار لاحقًا لا يمس هذه الوردية
         shift.setDriverWage(request.getDriverWage() != null
@@ -286,6 +287,10 @@ public class ShiftService {
         }
 
         shift.setStatus(restoredStatus);
+        if (restoredStatus == ShiftStatus.IN_PROGRESS) {
+            // Start a fresh elapsed-time window only when a running shift is reactivated.
+            shift.setStartedAt(LocalDateTime.now(ZoneOffset.UTC));
+        }
         shift.setCancelReason(null);
         shifts.saveAndFlush(shift);
         audit.record(tenantId, AuditEntityType.SHIFT, shift.getId(), AuditAction.REINSTATED, "status",
