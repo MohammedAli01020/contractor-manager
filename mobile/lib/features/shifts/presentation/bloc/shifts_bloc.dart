@@ -62,6 +62,8 @@ class ShiftsLoaded extends ShiftsState {
     required this.selectedTab,
     required this.allPage,
     required this.allTotalPages,
+    required this.todayTotalCount,
+    required this.allTotalCount,
     required this.allStatus,
     this.loadingMore = false,
   });
@@ -72,6 +74,8 @@ class ShiftsLoaded extends ShiftsState {
   final ShiftListTab selectedTab;
   final int allPage;
   final int allTotalPages;
+  final int todayTotalCount;
+  final int allTotalCount;
   final String? allStatus;
   final bool loadingMore;
 
@@ -95,6 +99,8 @@ class ShiftsLoaded extends ShiftsState {
     ShiftListTab? selectedTab,
     int? allPage,
     int? allTotalPages,
+    int? todayTotalCount,
+    int? allTotalCount,
     String? allStatus,
     bool clearAllStatus = false,
     bool? loadingMore,
@@ -106,6 +112,8 @@ class ShiftsLoaded extends ShiftsState {
       selectedTab: selectedTab ?? this.selectedTab,
       allPage: allPage ?? this.allPage,
       allTotalPages: allTotalPages ?? this.allTotalPages,
+      todayTotalCount: todayTotalCount ?? this.todayTotalCount,
+      allTotalCount: allTotalCount ?? this.allTotalCount,
       allStatus: clearAllStatus ? null : (allStatus ?? this.allStatus),
       loadingMore: loadingMore ?? this.loadingMore,
     );
@@ -119,6 +127,8 @@ class ShiftsLoaded extends ShiftsState {
         selectedTab,
         allPage,
         allTotalPages,
+        todayTotalCount,
+        allTotalCount,
         allStatus,
         loadingMore,
       ];
@@ -175,6 +185,8 @@ class ShiftsBloc extends Bloc<ShiftsEvent, ShiftsState> {
             : ShiftListTab.running,
         allPage: (results[2] as ShiftPage).page,
         allTotalPages: (results[2] as ShiftPage).totalPages,
+        todayTotalCount: (results[1] as ShiftPage).totalElements,
+        allTotalCount: (results[2] as ShiftPage).totalElements,
         allStatus: previous is ShiftsLoaded ? previous.allStatus : null,
       ));
     } on AppFailure catch (failure) {
@@ -211,6 +223,7 @@ class ShiftsBloc extends Bloc<ShiftsEvent, ShiftsState> {
           allItems: result.items,
           allPage: result.page,
           allTotalPages: result.totalPages,
+          allTotalCount: result.totalElements,
           clearAllStatus: true,
           loadingMore: false,
         ));
@@ -252,6 +265,7 @@ class ShiftsBloc extends Bloc<ShiftsEvent, ShiftsState> {
           allItems: [...refreshed.allItems, ...result.items],
           allPage: result.page,
           allTotalPages: result.totalPages,
+          allTotalCount: result.totalElements,
           loadingMore: false,
         ));
       }
@@ -289,6 +303,7 @@ class ShiftsBloc extends Bloc<ShiftsEvent, ShiftsState> {
           allItems: result.items,
           allPage: result.page,
           allTotalPages: result.totalPages,
+          allTotalCount: result.totalElements,
           allStatus: event.status,
           clearAllStatus: event.status == null,
           loadingMore: false,

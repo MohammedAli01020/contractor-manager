@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -68,7 +70,7 @@ class _ShiftsView extends StatelessWidget {
                   runSpacing: 4,
                   children: [
                     _TabChip(
-                      label: 'الجارية الآن',
+                      label: 'الجارية الآن (${state.runningItems.length})',
                       icon: Icons.play_circle_outline,
                       selected: state.selectedTab == ShiftListTab.running,
                       onTap: () => bloc.add(
@@ -76,7 +78,7 @@ class _ShiftsView extends StatelessWidget {
                       ),
                     ),
                     _TabChip(
-                      label: 'ورديات اليوم',
+                      label: 'ورديات اليوم (${state.todayTotalCount})',
                       icon: Icons.today_outlined,
                       selected: state.selectedTab == ShiftListTab.today,
                       onTap: () => bloc.add(
@@ -84,7 +86,7 @@ class _ShiftsView extends StatelessWidget {
                       ),
                     ),
                     _TabChip(
-                      label: 'كل الورديات',
+                      label: 'كل الورديات (${state.allTotalCount})',
                       icon: Icons.history,
                       selected: state.selectedTab == ShiftListTab.all,
                       onTap: () =>
@@ -191,13 +193,8 @@ class _ShiftsView extends StatelessWidget {
                               );
                             }
                             final shift = state.visibleItems[index];
-                            final isPreviousDayRunning =
-                                state.selectedTab == ShiftListTab.running &&
-                                shift.status == 'IN_PROGRESS' &&
-                                _isBeforeToday(shift.shiftDate);
                             return _ShiftCard(
                               shift: shift,
-                              previousDayRunning: isPreviousDayRunning,
                               onManage: () => _manageShift(context, shift, bloc),
                             );
                           },
@@ -588,14 +585,6 @@ class _ShiftsView extends StatelessWidget {
     }
   }
 
-  bool _isBeforeToday(String value) {
-    if (value.length < 10) return false;
-    final date = DateTime.tryParse(value.substring(0, 10));
-    if (date == null) return false;
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    return date.isBefore(today);
-  }
 }
 
 class _CancelShiftDialog extends StatefulWidget {
@@ -671,18 +660,34 @@ class _TabChip extends StatelessWidget {
   }
 }
 
-class _RunningSummary extends StatelessWidget {
+class _RunningSummary extends StatefulWidget {
   const _RunningSummary({required this.items});
-
   final List<ShiftModel> items;
+  @override
+  State<_RunningSummary> createState() => _RunningSummaryState();
+}
 
+class _RunningSummaryState extends State<_RunningSummary> {
+  Timer? _timer;
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
   @override
   Widget build(BuildContext context) {
+    final items = widget.items;
     final oldCount = items.where((shift) {
-      final date = DateTime.tryParse(shift.shiftDate);
-      if (date == null) return false;
-      final now = DateTime.now();
-      return date.isBefore(DateTime(now.year, now.month, now.day));
+      final startedAt = shift.createdAt;
+      return shift.status == 'IN_PROGRESS' && startedAt != null &&
+          DateTime.now().difference(startedAt) >= const Duration(hours: 24);
     }).length;
     return Card(
       child: Padding(
@@ -697,7 +702,7 @@ class _RunningSummary extends StatelessWidget {
             if (oldCount > 0) ...[
               const SizedBox(width: 8),
               Tooltip(
-                message: 'هناك ورديات بدأت في يوم سابق',
+                message: 'هناك $oldCount وردية مستمرة منذ 24 ساعة أو أكثر',
                 child: Icon(Icons.warning_amber_rounded, color: Colors.orange.shade800),
               ),
               Text(oldCount.toString(), style: TextStyle(color: Colors.orange.shade900, fontWeight: FontWeight.bold)),
@@ -729,24 +734,54 @@ class _SummaryNumber extends StatelessWidget {
   }
 }
 
-class _ShiftCard extends StatelessWidget {
-  const _ShiftCard({
-    required this.shift,
-    required this.onManage,
-    this.previousDayRunning = false,
-  });
-
+class _ShiftCard extends StatefulWidget {
+  const _ShiftCard({required this.shift, required this.onManage});
   final ShiftModel shift;
   final VoidCallback onManage;
-  final bool previousDayRunning;
+  @override
+  State<_ShiftCard> createState() => _ShiftCardState();
+}
 
+class _ShiftCardState extends State<_ShiftCard> {
+  Timer? _timer;
+  @override
+  void initState() {
+    super.initState();
+    _startTimerIfRunning();
+  }
+  @override
+  void didUpdateWidget(covariant _ShiftCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.shift.status != widget.shift.status ||
+        oldWidget.shift.createdAt != widget.shift.createdAt) {
+      _timer?.cancel();
+      _startTimerIfRunning();
+    }
+  }
+  void _startTimerIfRunning() {
+    if (widget.shift.status == 'IN_PROGRESS' && widget.shift.createdAt != null) {
+      _timer = Timer.periodic(const Duration(minutes: 1), (_) {
+        if (mounted) setState(() {});
+      });
+    }
+  }
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
   @override
   Widget build(BuildContext context) {
+    final shift = widget.shift;
     final theme = Theme.of(context);
-    final equipment = [
-      shift.equipmentCode,
-      shift.equipmentName,
-    ].where((value) => value.isNotEmpty).join(' - ');
+    final equipment = [shift.equipmentCode, shift.equipmentName]
+        .where((value) => value.isNotEmpty).join(' - ');
+    final startedAt = shift.createdAt;
+    final age = startedAt == null ? Duration.zero : DateTime.now().difference(startedAt);
+    final isOverdue = shift.status == 'IN_PROGRESS' && !age.isNegative &&
+        age >= const Duration(hours: 24);
+    final isSeverelyOverdue = shift.status == 'IN_PROGRESS' && !age.isNegative &&
+        age >= const Duration(hours: 72);
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -755,79 +790,72 @@ class _ShiftCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                Expanded(
-                  child: Text(
-                    'وردية #${shift.id} · ${shift.shiftTypeLabel}',
-                    style: theme.textTheme.titleMedium
-                        ?.copyWith(fontWeight: FontWeight.bold),
-                  ),
-                ),
+                Expanded(child: Text(
+                  'وردية #${shift.id} · ${shift.shiftTypeLabel}',
+                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                )),
                 Chip(label: Text(shift.statusLabel)),
               ],
             ),
-            if (shift.status == 'IN_PROGRESS' && shift.createdAt != null) ...[
+            if (shift.status == 'IN_PROGRESS') ...[
               const SizedBox(height: 6),
-              Row(
-                children: [
-                  Icon(Icons.timer_outlined, size: 18, color: theme.colorScheme.primary),
-                  const SizedBox(width: 6),
-                  Text(
-                    'المدة: ${_elapsed(shift.createdAt!)}',
-                    style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+              Row(children: [
+                Icon(Icons.timer_outlined, size: 18,
+                  color: isSeverelyOverdue ? Colors.red.shade700 :
+                      isOverdue ? Colors.orange.shade800 : theme.colorScheme.primary),
+                const SizedBox(width: 6),
+                Expanded(child: Text(
+                  startedAt == null ? 'المدة: وقت البداية غير متاح' : 'المدة: ${_elapsed(startedAt)}',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: isSeverelyOverdue ? Colors.red.shade700 :
+                        isOverdue ? Colors.orange.shade900 : null,
                   ),
-                ],
-              ),
+                )),
+              ]),
             ],
-            if (previousDayRunning) ...[
-              const SizedBox(height: 4),
+            if (isOverdue) ...[
+              const SizedBox(height: 6),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 decoration: BoxDecoration(
-                  color: Colors.orange.shade100,
+                  color: isSeverelyOverdue ? Colors.red.shade100 : Colors.orange.shade100,
                   borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: isSeverelyOverdue ? Colors.red.shade300 : Colors.orange.shade300),
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.warning_amber_rounded,
-                        size: 18, color: Colors.orange.shade900),
-                    const SizedBox(width: 6),
-                    Text(
-                      'مستمرة من يوم سابق',
-                      style: TextStyle(color: Colors.orange.shade900),
+                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Icon(Icons.warning_amber_rounded,
+                    color: isSeverelyOverdue ? Colors.red.shade900 : Colors.orange.shade900),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(
+                    isSeverelyOverdue
+                      ? 'تنبيه شديد: الوردية مستمرة منذ 3 أيام أو أكثر. راجع حالتها فورًا.'
+                      : 'تنبيه: الوردية مستمرة منذ 24 ساعة أو أكثر. تأكد من حالتها.',
+                    style: TextStyle(
+                      color: isSeverelyOverdue ? Colors.red.shade900 : Colors.orange.shade900,
+                      fontWeight: FontWeight.w600,
                     ),
-                  ],
-                ),
+                  )),
+                ]),
               ),
             ],
             const SizedBox(height: 8),
-            _InfoLine(
-              icon: Icons.calendar_today_outlined,
-              text: shift.shiftDate,
-            ),
+            _InfoLine(icon: Icons.calendar_today_outlined, text: shift.shiftDate),
             _InfoLine(icon: Icons.location_on_outlined, text: shift.siteName),
             _InfoLine(icon: Icons.person_outline, text: shift.driverName),
             _InfoLine(icon: Icons.construction_outlined, text: equipment),
             const Divider(height: 24),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('قيمة الوردية'),
-                Text(_money(shift.price), style: theme.textTheme.bodyMedium),
-              ],
-            ),
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+              const Text('قيمة الوردية'),
+              Text(_money(shift.price), style: theme.textTheme.bodyMedium),
+            ]),
             const SizedBox(height: 4),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('بعد أجر السائق'),
-                Text(
-                  _money(shift.priceAfterWage),
-                  style: theme.textTheme.titleMedium
-                      ?.copyWith(fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+              const Text('بعد أجر السائق'),
+              Text(_money(shift.priceAfterWage),
+                style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+            ]),
             if (shift.notes.isNotEmpty) ...[
               const SizedBox(height: 8),
               Text('ملاحظات: ${shift.notes}'),
@@ -836,7 +864,7 @@ class _ShiftCard extends StatelessWidget {
             Align(
               alignment: AlignmentDirectional.centerEnd,
               child: OutlinedButton.icon(
-                onPressed: onManage,
+                onPressed: widget.onManage,
                 icon: const Icon(Icons.more_horiz),
                 label: const Text('إجراءات الوردية'),
               ),
@@ -846,18 +874,16 @@ class _ShiftCard extends StatelessWidget {
       ),
     );
   }
-
   String _elapsed(DateTime startedAt) {
     final duration = DateTime.now().difference(startedAt);
     if (duration.isNegative) return 'وقت غير متاح';
     final days = duration.inDays;
     final hours = duration.inHours % 24;
     final minutes = duration.inMinutes % 60;
-    if (days > 0) return '${days} يوم و${hours} ساعة';
+    if (days > 0) return hours == 0 ? '${days} يوم' : '${days} يوم و${hours} ساعة';
     if (duration.inHours > 0) return '${duration.inHours} ساعة و${minutes} دقيقة';
     return '${duration.inMinutes} دقيقة';
   }
-
   String _money(double value) => value.toStringAsFixed(2) + ' جنيه';
 }
 

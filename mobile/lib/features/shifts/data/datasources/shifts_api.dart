@@ -8,11 +8,13 @@ class ShiftPage {
     required this.items,
     required this.page,
     required this.totalPages,
+    required this.totalElements,
   });
 
   final List<ShiftModel> items;
   final int page;
   final int totalPages;
+  final int totalElements;
 
   bool get hasMore => page + 1 < totalPages;
 }
@@ -63,6 +65,7 @@ class ShiftsApi {
       items: items.map(_parseShift).toList(),
       page: _intValue(data['page'], page),
       totalPages: _intValue(data['totalPages'], 1),
+      totalElements: _intValue(data['totalElements'], items.length),
     );
   }
 
