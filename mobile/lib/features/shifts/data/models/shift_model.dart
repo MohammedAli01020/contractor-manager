@@ -79,10 +79,13 @@ class ShiftModel {
     final raw = value.toString().trim();
     if (raw.isEmpty) return null;
 
-    // The backend stores LocalDateTime values in UTC but serializes them without a zone suffix.
-    // Treat zone-less API timestamps as UTC; preserve explicit offsets when present.
+    // Backend LocalDateTime values are stored in UTC and serialized without a zone suffix.
+    // Treat zone-less timestamps as UTC, while preserving explicit offsets.
     final hasZone = raw.endsWith('Z') ||
-        RegExp(r'[+-]\\d{2}:\\d{2}
+        RegExp(r'[+-]\\d{2}:\\d{2}').hasMatch(raw);
+    final normalized = hasZone ? raw : '${raw}Z';
+    return DateTime.tryParse(normalized)?.toLocal();
+  }
 
   static int _intValue(dynamic value) {
     if (value is int) return value;
