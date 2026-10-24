@@ -16,6 +16,7 @@ class ShiftModel {
     this.driverId,
     this.equipmentId,
     this.version,
+    this.createdAt,
     this.cancelReason = '',
     this.equipmentOperatingCost = 0.0,
   });
@@ -39,6 +40,7 @@ class ShiftModel {
       driverId: _nullableInt(json['driverId']),
       equipmentId: _nullableInt(json['equipmentId']),
       version: _nullableInt(json['version']),
+      createdAt: _dateTimeValue(json['createdAt']),
       cancelReason: _stringValue(json['cancelReason'], ''),
     );
   }
@@ -60,12 +62,18 @@ class ShiftModel {
   final int? driverId;
   final int? equipmentId;
   final int? version;
+  final DateTime? createdAt;
   final String cancelReason;
 
   static int? _nullableInt(dynamic value) {
     if (value is int) return value;
     if (value is num) return value.toInt();
     return int.tryParse(value?.toString() ?? '');
+  }
+
+  static DateTime? _dateTimeValue(dynamic value) {
+    if (value == null) return null;
+    return DateTime.tryParse(value.toString())?.toLocal();
   }
 
   static int _intValue(dynamic value) {
