@@ -95,6 +95,11 @@ class _ShiftsView extends StatelessWidget {
               ),
               if (state.selectedTab == ShiftListTab.running)
                 Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+                  child: _RunningSummary(items: state.runningItems),
+                ),
+              if (state.selectedTab == ShiftListTab.running)
+                Padding(
                   padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
                   child: SizedBox(
                     width: double.infinity,
@@ -666,6 +671,64 @@ class _TabChip extends StatelessWidget {
   }
 }
 
+class _RunningSummary extends StatelessWidget {
+  const _RunningSummary({required this.items});
+
+  final List<ShiftModel> items;
+
+  @override
+  Widget build(BuildContext context) {
+    final oldCount = items.where((shift) {
+      final date = DateTime.tryParse(shift.shiftDate);
+      if (date == null) return false;
+      final now = DateTime.now();
+      return date.isBefore(DateTime(now.year, now.month, now.day));
+    }).length;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(
+          children: [
+            Expanded(child: _SummaryNumber(label: 'ورديات جارية', value: items.length.toString(), icon: Icons.play_circle_outline)),
+            const SizedBox(width: 8),
+            Expanded(child: _SummaryNumber(label: 'سائقون مشغولون', value: items.map((s) => s.driverId).whereType<int>().toSet().length.toString(), icon: Icons.person_outline)),
+            const SizedBox(width: 8),
+            Expanded(child: _SummaryNumber(label: 'معدات مشغولة', value: items.map((s) => s.equipmentId).whereType<int>().toSet().length.toString(), icon: Icons.construction_outlined)),
+            if (oldCount > 0) ...[
+              const SizedBox(width: 8),
+              Tooltip(
+                message: 'هناك ورديات بدأت في يوم سابق',
+                child: Icon(Icons.warning_amber_rounded, color: Colors.orange.shade800),
+              ),
+              Text(oldCount.toString(), style: TextStyle(color: Colors.orange.shade900, fontWeight: FontWeight.bold)),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SummaryNumber extends StatelessWidget {
+  const _SummaryNumber({required this.label, required this.value, required this.icon});
+
+  final String label;
+  final String value;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Icon(icon, size: 18, color: Theme.of(context).colorScheme.primary),
+        const SizedBox(height: 3),
+        Text(value, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+        Text(label, textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodySmall),
+      ],
+    );
+  }
+}
+
 class _ShiftCard extends StatelessWidget {
   const _ShiftCard({
     required this.shift,
@@ -702,6 +765,19 @@ class _ShiftCard extends StatelessWidget {
                 Chip(label: Text(shift.statusLabel)),
               ],
             ),
+            if (shift.status == 'IN_PROGRESS' && shift.createdAt != null) ...[
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Icon(Icons.timer_outlined, size: 18, color: theme.colorScheme.primary),
+                  const SizedBox(width: 6),
+                  Text(
+                    'المدة: ${_elapsed(shift.createdAt!)}',
+                    style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+            ],
             if (previousDayRunning) ...[
               const SizedBox(height: 4),
               Container(
@@ -769,6 +845,17 @@ class _ShiftCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  String _elapsed(DateTime startedAt) {
+    final duration = DateTime.now().difference(startedAt);
+    if (duration.isNegative) return 'وقت غير متاح';
+    final days = duration.inDays;
+    final hours = duration.inHours % 24;
+    final minutes = duration.inMinutes % 60;
+    if (days > 0) return '${days} يوم و${hours} ساعة';
+    if (duration.inHours > 0) return '${duration.inHours} ساعة و${minutes} دقيقة';
+    return '${duration.inMinutes} دقيقة';
   }
 
   String _money(double value) => value.toStringAsFixed(2) + ' جنيه';
