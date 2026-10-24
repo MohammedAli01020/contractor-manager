@@ -64,38 +64,51 @@ class _ShiftsView extends StatelessWidget {
           return Column(
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 4,
-                  children: [
-                    _TabChip(
-                      label: 'الجارية',
-                      count: state.runningItems.length,
-                      icon: Icons.play_circle_outline,
-                      selected: state.selectedTab == ShiftListTab.running,
-                      onTap: () => bloc.add(
-                        const ShiftTabChanged(ShiftListTab.running),
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF0F2F4),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _TabChip(
+                          label: 'الجارية',
+                          count: state.runningItems.length,
+                          icon: Icons.play_circle_outline,
+                          selected: state.selectedTab == ShiftListTab.running,
+                          onTap: () => bloc.add(
+                            const ShiftTabChanged(ShiftListTab.running),
+                          ),
+                        ),
                       ),
-                    ),
-                    _TabChip(
-                      label: 'ورديات اليوم',
-                      count: state.todayTotalCount,
-                      icon: Icons.today_outlined,
-                      selected: state.selectedTab == ShiftListTab.today,
-                      onTap: () => bloc.add(
-                        const ShiftTabChanged(ShiftListTab.today),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: _TabChip(
+                          label: 'ورديات اليوم',
+                          count: state.todayTotalCount,
+                          icon: Icons.today_outlined,
+                          selected: state.selectedTab == ShiftListTab.today,
+                          onTap: () => bloc.add(
+                            const ShiftTabChanged(ShiftListTab.today),
+                          ),
+                        ),
                       ),
-                    ),
-                    _TabChip(
-                      label: 'كل الورديات',
-                      count: state.allTotalCount,
-                      icon: Icons.history,
-                      selected: state.selectedTab == ShiftListTab.all,
-                      onTap: () =>
-                          bloc.add(const ShiftTabChanged(ShiftListTab.all)),
-                    ),
-                  ],
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: _TabChip(
+                          label: 'كل الورديات',
+                          count: state.allTotalCount,
+                          icon: Icons.history,
+                          selected: state.selectedTab == ShiftListTab.all,
+                          onTap: () =>
+                              bloc.add(const ShiftTabChanged(ShiftListTab.all)),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
               if (state.selectedTab == ShiftListTab.running)
