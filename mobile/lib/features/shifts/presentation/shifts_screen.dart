@@ -70,7 +70,8 @@ class _ShiftsView extends StatelessWidget {
                   runSpacing: 4,
                   children: [
                     _TabChip(
-                      label: 'الجارية الآن (${state.runningItems.length})',
+                      label: 'الجارية',
+                      count: state.runningItems.length,
                       icon: Icons.play_circle_outline,
                       selected: state.selectedTab == ShiftListTab.running,
                       onTap: () => bloc.add(
@@ -78,7 +79,8 @@ class _ShiftsView extends StatelessWidget {
                       ),
                     ),
                     _TabChip(
-                      label: 'ورديات اليوم (${state.todayTotalCount})',
+                      label: 'ورديات اليوم',
+                      count: state.todayTotalCount,
                       icon: Icons.today_outlined,
                       selected: state.selectedTab == ShiftListTab.today,
                       onTap: () => bloc.add(
@@ -86,7 +88,8 @@ class _ShiftsView extends StatelessWidget {
                       ),
                     ),
                     _TabChip(
-                      label: 'كل الورديات (${state.allTotalCount})',
+                      label: 'كل الورديات',
+                      count: state.allTotalCount,
                       icon: Icons.history,
                       selected: state.selectedTab == ShiftListTab.all,
                       onTap: () =>
