@@ -12,6 +12,7 @@ import com.contractor.app.shift.domain.ShiftType;
 import com.contractor.app.shift.infra.ShiftRepository;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
