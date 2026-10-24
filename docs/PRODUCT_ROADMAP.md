@@ -1,0 +1,188 @@
+# Contractor Manager — Product Roadmap & Decisions
+
+**Repository:** `MohammedAli01020/contractor-manager`  
+**Planning branch:** `fix/active-shift-concurrency`  
+**Status:** Planning document. Proposed features below are not implemented unless explicitly marked as existing.  
+**Purpose:** Keep product decisions, unresolved questions, and implementation order in one version-controlled document.
+
+---
+
+## 1. Rules for all future work
+
+1. Inspect the current code, migrations, tests, and branch before proposing edits; do not assume a feature is absent without checking.
+2. Preserve existing business rules and data. Do not remove functionality without discussion and explicit approval.
+3. Never edit a Flyway migration that may already have been applied. Add a new migration instead.
+4. Preserve tenant isolation in API/service logic and database relationships.
+5. Avoid destructive Git/Docker commands and do not discard local changes.
+6. Before coding, explain the intended behavior, affected files, schema/API impact, and tests. Submit a reviewable patch before merging.
+7. Do not merge to `main`, push to another branch, or perform a release without explicit approval.
+8. Mark each roadmap item as **Not started / In progress / Implemented / Tested** only after checking the actual repository and test evidence.
+
+## 2. Current repository baseline — verified from the planning branch
+
+The branch currently contains a working foundation for:
+- Flutter Android client and Spring Boot 2.7.18 / Java 11 backend, MySQL, Docker Compose and Flyway.
+- Tenant registration, username/password login, access JWT and rotating refresh tokens, logout, `/auth/me`, and change-password endpoint.
+- Refresh-token hashes stored rather than raw refresh tokens; refresh tokens are tenant/user-bound in the database.
+- Tenant-scoped drivers, equipment, sites and shifts; shift records snapshot prices/wages/operating costs.
+- Backend checks shift resource ownership through tenant-scoped queries and composite database foreign keys in the inspected migrations.
+- Flutter version in `mobile/pubspec.yaml` is currently `0.1.0+1`; current Dart constraint is `>=2.18.0 <3.0.0`.
+- The current `users` table has globally unique `username`, nullable `phone`, no email column in the inspected migration, and the only existing role is `ADMIN`.
+- The current login request accepts `username` and `password`. Tenant registration accepts company name, full name, username, password, and optional phone.
+- `drivers` has its own optional contact phone and is currently a separate record from `users`. There is no `DRIVER` role in the inspected role enum.
+
+This baseline is not a claim that every endpoint or tenant-isolation case has been exhaustively audited. Recheck relevant code and tests before each implementation phase.
+
+## 3. Product and technical decisions agreed in discussion
+
+### 3.1 Driver account is optional
+- A contractor can create and use a driver record without creating a login account.
+- Later, the contractor may initiate account activation for an existing driver; do not create a duplicate driver record.
+- A driver account uses a separate `DRIVER` role and least-privilege permissions. The backend—not just the Flutter UI—must enforce access to that driver's own permitted information.
+- Driver account access is read-only initially: own shifts/history and any specifically approved earnings/advances/payment information. No ability to edit shifts, rates, advances, or company records.
+- Decide before implementation whether one driver identity can be linked to more than one tenant. If supported, separate the global login identity from tenant-specific driver records/links. Do not solve this by copying a password/account into each tenant.
+
+### 3.2 Login identifier: proposed target
+- The preferred user experience is phone number + password, with a stable internal `userId`; the phone is not a primary key.
+- Normalize phone numbers on the backend to a canonical international representation, e.g. `+201012345678`. Accept reasonable Egyptian input formats and Arabic/English digits; Egypt is the initial default country.
+- Use a phone-number library such as Google libphonenumber for numbering-plan validation and normalization. This does **not** prove that the number is active or owned by the user.
+- Do not require the company code at every login by default. Authenticate the account, then determine authorized tenant membership; select a company only if the account has more than one authorized membership.
+- Do not implement the login migration until the current globally unique username model and existing accounts have a safe migration plan.
+- Phone number uniqueness should apply to the login identity after normalization, not blindly to driver contact phones.
+
+### 3.3 Email and password recovery: proposed target
+- Require an email address for a contractor/admin account and verify ownership before treating it as a trusted recovery channel.
+- Email is optional on a driver record that has no login account.
+- For a driver login account, require a verified email for recovery in the first release, or agree on a secure assisted recovery alternative if the driver has no email.
+- Initially use a secure, single-use, expiring email recovery link rather than paid SMS OTP.
+- Add rate limits, generic responses that do not reveal whether an account exists, token invalidation, and a documented refresh-session revocation policy.
+- Phone ownership verification via SMS OTP is a future capability, potentially for activation, phone changes, or sensitive actions—not every login.
+- Email delivery provider and costs remain undecided.
+
+### 3.4 App updates and early APK distribution
+- Initial Android distribution will be an APK shared through Google Drive; this is a temporary distribution approach, not a permanent update infrastructure.
+- Backend should expose update metadata: latest version/build, minimum supported version/build, optional vs mandatory policy, release notes, and download URL.
+- Flutter checks update metadata through the existing REST/Dio connection when opening the app and at an appropriate resume/check interval.
+- Optional update: inform the user and allow “Later”.
+- Mandatory update: block normal use when below the minimum supported version and provide the update action.
+- The backend must also reject obsolete client versions for sensitive/incompatible APIs where required; hiding the UI alone is not a security control.
+- Test the actual Google Drive link on Android: it must lead to a usable APK download rather than an inaccessible preview page.
+- Keep the Android application ID/package name and signing key stable so updates install over the existing app. Test upgrade from the previous APK and ensure local data is preserved.
+- APK installation still requires Android's user confirmation and any required permission to install from that source; do not promise silent installation.
+- In-app update messages do not require WebSocket. Push notifications when the app is closed can be added later with Firebase Cloud Messaging (FCM), if needed.
+
+### 3.5 Subscriptions and payment
+- Keep subscription entitlement logic separate from any payment-provider integration.
+- For the first paid pilot, a manually reviewed renewal flow is acceptable to avoid premature integration complexity:
+  1. Contractor selects a plan and creates a payment request in the app.
+  2. The request records tenant, plan, amount, period, status, and a unique reference.
+  3. The app can open a prepared WhatsApp message containing the reference and payment details; WhatsApp is only a notification channel, not proof of payment.
+  4. Platform admin verifies actual receipt in the bank/wallet/provider account. A screenshot alone is not proof.
+  5. Platform admin confirms/rejects the request; the system records who acted, when, and the reason.
+  6. Subscription start/end dates and entitlement status are calculated and audited by the backend.
+- A stable company reference code can help support and payment matching, but it is not a credential and grants no access.
+- Later, evaluate an Egyptian payment gateway (for example Paymob/Fawry) after checking business eligibility, supported methods, fees, settlement, refunds, and recurring-payment support. Use sandbox first.
+- Activate paid access automatically only from a trusted provider confirmation/webhook, not a client redirect or uploaded receipt.
+- Whether recurring auto-renewal is required remains undecided; manual renewal is the recommended first pilot.
+- Define what the app does when a subscription expires: read-only grace period, restricted access, or full block. Do not delete tenant data on expiry.
+
+### 3.6 Financial, purchases and inventory principles
+- Preserve the agreed equipment net result formula:
+  **Equipment net = shift revenue − driver wages attributable to those shifts − recognized equipment expenses.**
+- Driver wage is deducted once from equipment net and appears as a driver payable; it must not be deducted a second time from the driver's balance.
+- Separate purchase classification, accounting treatment, and destination/beneficiary. A single invoice may contain stock items, direct equipment expenses, and general company items.
+- Buying stock is not the same as consuming it. Recognize stock cost according to the chosen inventory policy when issued/consumed, and avoid charging it again.
+- Posted financial/inventory transactions should not be silently deleted or edited. Use audited reversal/correction/cancellation flows.
+- Every financial movement needs tenant, reference, status, timestamp, actor, and an audit trail.
+- Do not implement purchasing/inventory before agreeing on valuation (weighted average/FIFO), warehouses, negative-stock policy, supplier payment behavior, and cancellation rules.
+
+## 4. Step-by-step delivery plan
+
+### Phase 0 — Stabilize and verify the existing core
+**Goal:** establish a reliable base before adding new modules.
+- Review the current branch, local changes, API contracts, Flyway migrations, and test coverage.
+- Finish and test shift lifecycle (create, list/filter, update, cancel/reinstate where supported), concurrency, driver/equipment availability, optimistic locking/version conflicts, and tenant isolation.
+- Run backend tests and Flutter analyze/tests; record actual outcomes.
+- Resolve defects before expanding financial scope.
+**Exit criteria:** agreed shift workflows pass tests; no known tenant-crossing access; no unreviewed changes are lost.
+
+### Phase 1 — Driver/equipment master data and shift usability
+- Complete driver/equipment management and clear unavailable/inactive states with reasons and current shift context where applicable.
+- Confirm rates/defaults are copied into each shift as historical snapshots.
+- Improve date selection and driver/equipment selection UX without breaking the current Flutter/Dart compatibility.
+**Exit criteria:** contractor can manage master data and run the agreed shift workflow reliably.
+
+### Phase 2 — Financial foundation and driver ledger
+- Define and test the exact accounting rules first.
+- Implement driver ledger movements: shift wages, advances, approved deductions, bonuses/allowances, actual payments, opening balance, adjustments, reversals.
+- Implement equipment operating expense entries and equipment statements.
+- Separate operational profit from cash flow and supplier liabilities.
+**Exit criteria:** sample cases reconcile, including the no-double-deduction rule.
+
+### Phase 3 — Purchases, suppliers and inventory
+- Design suppliers, purchase invoices and invoice lines, payment status, stock items/units, warehouses (if required), stock movements and issue-to-equipment flows.
+- Decide stock valuation, negative stock, invoice posting and reversal policies before migrations.
+- Support mixed invoices with different treatment per line.
+- Add idempotent posting and tests against duplicate invoice/stock/expense entries.
+**Exit criteria:** inventory quantities and financial ledgers reconcile for purchase, issue, return, cancellation and retry cases.
+
+### Phase 4 — Reports and exports
+- Equipment, driver and supplier statements; daily/monthly/custom date ranges; opening balance, movements, totals, closing balance.
+- PDF/Excel exports after the underlying ledgers are stable.
+- Restrict each report to authorized tenant and role.
+**Exit criteria:** report totals match ledger totals for test datasets.
+
+### Phase 5 — Authentication redesign and optional driver accounts
+- Design the identity and tenant-membership model before changing schema.
+- Decide whether a driver can belong to multiple tenants; define account linking, invitation/activation, phone ownership verification, and recovery for users without email.
+- Add email field/verification and secure password recovery.
+- Plan safe migration from globally unique usernames to normalized unique login phones, including duplicate/missing phone handling and existing users.
+- Add DRIVER role and backend-enforced read-only endpoints; ensure driver can only see their permitted records.
+- Add tests for tenant isolation, role escalation, account linking, duplicate phone formats, disabled accounts, and revoked sessions.
+**Exit criteria:** old accounts have a safe migration path; no driver can access another driver's or tenant's data.
+
+### Phase 6 — Version/update policy and Google Drive APK pilot
+- Define app version/build scheme and compatibility policy.
+- Add backend update metadata and endpoint, plus Flutter optional/mandatory update UX.
+- Publish a signed APK to Drive and verify the download flow on real Android devices.
+- Test optional deferral, mandatory blocking, minimum-version API enforcement, upgrade install, signing continuity and local-data retention.
+- Document a rollback/release checklist and who can publish a release.
+**Exit criteria:** update behavior works end-to-end from a prior installed APK, not just in a mocked response.
+
+### Phase 7 — Subscription management and manual-payment pilot
+- Define plans, prices, trial (if any), billing periods, grace period, expiry behavior and platform-admin role.
+- Add subscription/payment-request states and audit trail.
+- Implement contractor request flow and admin confirmation/rejection.
+- Test duplicate requests, wrong amount, expired subscriptions, refunds/cancellations and repeated confirmation.
+**Exit criteria:** paid access changes only through a trusted, audited server-side action.
+
+### Phase 8 — Payment gateway and push notifications (later)
+- Research provider eligibility and fees; implement sandbox integration and verify webhooks/signatures/idempotency.
+- Automate subscription activation only after trusted confirmation.
+- Add FCM only if external push is needed while app is closed. WebSocket is not required for ordinary update checks or payment status polling.
+
+## 5. Decisions to settle in focused discussions
+
+Do not guess these choices during implementation. Discuss and record them here before the related phase:
+1. Can a driver account link to more than one contractor/tenant?
+2. What secure activation/recovery route is available for a driver without verified email?
+3. Should login be phone-only, or should username remain as a temporary migration fallback?
+4. What is the policy when a subscription expires (grace/read-only/block)?
+5. Which plans, prices, and billing periods will be offered in the pilot?
+6. Which inventory valuation method, warehouse model, and negative-stock policy will be used?
+7. Should purchases by tenant admin be posted directly while employee purchases require approval? The current proposal is yes, with later configurable approval rules.
+8. Which email provider and sender domain will be used?
+9. What is the release approval and APK signing-key backup procedure?
+
+## 6. Working agreement
+
+For each phase:
+1. Discuss requirements and edge cases.
+2. Inspect relevant code and migrations on the current branch.
+3. Propose files, API/schema changes, and tests.
+4. Get approval before implementing.
+5. Produce a reviewable patch and run relevant tests.
+6. Review the diff and test evidence before any merge/release.
+7. Update this document only when a decision is actually agreed or implementation status is verified.
+
+**Important:** This roadmap records intent and verified baseline observations. It does not claim that proposed features have been implemented.
