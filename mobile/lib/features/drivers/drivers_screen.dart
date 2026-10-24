@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/di/injector.dart';
+import 'driver_edit_dialog.dart';
 
 class DriversScreen extends StatefulWidget {
   const DriversScreen({Key? key}) : super(key: key);
@@ -30,6 +31,7 @@ class _DriversScreenState extends State<DriversScreen> {
   }
 
   Future<void> _load() async {
+    if (!mounted) return;
     setState(() {
       _loading = true;
       _error = null;
@@ -74,144 +76,20 @@ class _DriversScreenState extends State<DriversScreen> {
   String _value(dynamic value) => value == null ? '—' : value.toString();
 
   Future<void> _edit([Map<String, dynamic>? driver]) async {
-    final formKey = GlobalKey<FormState>();
-    final name = TextEditingController(text: _valueFor(driver, 'name'));
-    final phone = TextEditingController(text: _valueFor(driver, 'phone', empty: true));
-    final nationalId = TextEditingController(text: _valueFor(driver, 'nationalId', empty: true));
-    final morning = TextEditingController(text: _valueFor(driver, 'morningRate', fallback: '0'));
-    final evening = TextEditingController(text: _valueFor(driver, 'eveningRate', fallback: '0'));
-    final night = TextEditingController(text: _valueFor(driver, 'nightRate', fallback: '0'));
-    final notes = TextEditingController(text: _valueFor(driver, 'notes', empty: true));
-    String workerType = _valueFor(driver, 'workerType', fallback: 'DRIVER');
-    String availability = _valueFor(driver, 'availability', fallback: 'AVAILABLE');
-    bool active = driver == null ? true : driver['active'] != false;
-    String? unavailableReason = _valueFor(driver, 'unavailableReason', empty: true);
-    final reason = TextEditingController(text: unavailableReason ?? '');
-    bool saving = false;
-
-    await showDialog<void>(
+    final saved = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: Text(driver == null ? 'إضافة سائق أو عامل' : 'تعديل البيانات'),
-          content: SizedBox(
-            width: 440,
-            child: SingleChildScrollView(
-              child: Form(
-                key: formKey,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    TextFormField(
-                      controller: name,
-                      decoration: const InputDecoration(labelText: 'الاسم *'),
-                      validator: (v) => v == null || v.trim().isEmpty ? 'الاسم مطلوب' : null,
-                    ),
-                    TextFormField(controller: phone, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'الهاتف')),
-                    TextFormField(controller: nationalId, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'الرقم القومي')),
-                    const SizedBox(height: 8),
-                    DropdownButtonFormField<String>(
-                      value: workerType,
-                      decoration: const InputDecoration(labelText: 'نوع الشخص'),
-                      items: const <DropdownMenuItem<String>>[
-                        DropdownMenuItem(value: 'DRIVER', child: Text('سائق')),
-                        DropdownMenuItem(value: 'WORKER', child: Text('عامل')),
-                      ],
-                      onChanged: (v) => setDialogState(() => workerType = v ?? 'DRIVER'),
-                    ),
-                    TextFormField(controller: morning, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'أجر الوردية الصباحية *'), validator: _numberValidator),
-                    TextFormField(controller: evening, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'أجر الوردية المسائية *'), validator: _numberValidator),
-                    TextFormField(controller: night, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'أجر الوردية الليلية *'), validator: _numberValidator),
-                    DropdownButtonFormField<String>(
-                      value: availability,
-                      decoration: const InputDecoration(labelText: 'التوافر'),
-                      items: const <DropdownMenuItem<String>>[
-                        DropdownMenuItem(value: 'AVAILABLE', child: Text('متاح')),
-                        DropdownMenuItem(value: 'UNAVAILABLE', child: Text('غير متاح')),
-                      ],
-                      onChanged: (v) => setDialogState(() => availability = v ?? 'AVAILABLE'),
-                    ),
-                    if (availability == 'UNAVAILABLE')
-                      TextFormField(controller: reason, decoration: const InputDecoration(labelText: 'سبب عدم التوافر')),
-                    TextFormField(controller: notes, maxLines: 2, decoration: const InputDecoration(labelText: 'ملاحظات')),
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('الحساب نشط'),
-                      value: active,
-                      onChanged: (v) => setDialogState(() => active = v),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          actions: <Widget>[
-            TextButton(onPressed: saving ? null : () => Navigator.of(dialogContext).pop(), child: const Text('إلغاء')),
-            ElevatedButton(
-              onPressed: saving ? null : () async {
-                if (!formKey.currentState!.validate()) return;
-                setDialogState(() => saving = true);
-                final payload = <String, dynamic>{
-                  'name': name.text.trim(),
-                  'phone': phone.text.trim().isEmpty ? null : phone.text.trim(),
-                  'nationalId': nationalId.text.trim().isEmpty ? null : nationalId.text.trim(),
-                  'workerType': workerType,
-                  'morningRate': double.parse(morning.text.trim()),
-                  'eveningRate': double.parse(evening.text.trim()),
-                  'nightRate': double.parse(night.text.trim()),
-                  'availability': availability,
-                  'unavailableReason': availability == 'UNAVAILABLE' && reason.text.trim().isNotEmpty ? reason.text.trim() : null,
-                  'notes': notes.text.trim().isEmpty ? null : notes.text.trim(),
-                  'active': active,
-                  if (driver != null) 'version': driver['version'],
-                };
-                try {
-                  if (driver == null) {
-                    await getIt<Dio>().post('/drivers', data: payload);
-                  } else {
-                    await getIt<Dio>().put('/drivers/' + driver['id'].toString(), data: payload);
-                  }
-                  if (mounted) Navigator.of(dialogContext).pop();
-                  await _load();
-                  if (mounted) ScaffoldMessenger.of(this.context).showSnackBar(
-                    SnackBar(content: Text(driver == null ? 'تمت إضافة البيانات' : 'تم حفظ التعديلات')),
-                  );
-                } on DioError catch (e) {
-                  setDialogState(() => saving = false);
-                  final msg = _message(e);
-                  if (mounted) ScaffoldMessenger.of(this.context).showSnackBar(SnackBar(content: Text(msg)));
-                } catch (e) {
-                  setDialogState(() => saving = false);
-                  if (mounted) ScaffoldMessenger.of(this.context).showSnackBar(SnackBar(content: Text('تعذر الحفظ: ' + e.toString())));
-                }
-              },
-              child: Text(saving ? 'جارٍ الحفظ...' : 'حفظ'),
-            ),
-          ],
-        ),
+      builder: (_) => DriverEditDialog(driver: driver),
+    );
+    if (saved != true || !mounted) return;
+
+    await _load();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(driver == null ? 'تمت إضافة البيانات' : 'تم حفظ التعديلات'),
       ),
     );
-    name.dispose();
-    phone.dispose();
-    nationalId.dispose();
-    morning.dispose();
-    evening.dispose();
-    night.dispose();
-    notes.dispose();
-    reason.dispose();
-  }
-
-  String _valueFor(Map<String, dynamic>? item, String key, {String? fallback, bool empty = false}) {
-    if (item == null || item[key] == null) return empty ? '' : (fallback ?? '');
-    return item[key].toString();
-  }
-
-  String? _numberValidator(String? value) {
-    if (value == null || value.trim().isEmpty) return 'القيمة مطلوبة';
-    final number = double.tryParse(value.trim());
-    if (number == null || number < 0) return 'اكتب رقمًا صحيحًا غير سالب';
-    return null;
   }
 
   Future<void> _deactivate(Map<String, dynamic> driver) async {
