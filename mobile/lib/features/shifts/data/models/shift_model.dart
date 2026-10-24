@@ -17,6 +17,7 @@ class ShiftModel {
     this.equipmentId,
     this.version,
     this.createdAt,
+    this.startedAt,
     this.cancelReason = '',
     this.equipmentOperatingCost = 0.0,
   });
@@ -41,6 +42,7 @@ class ShiftModel {
       equipmentId: _nullableInt(json['equipmentId']),
       version: _nullableInt(json['version']),
       createdAt: _dateTimeValue(json['createdAt']),
+      startedAt: _dateTimeValue(json['startedAt']),
       cancelReason: _stringValue(json['cancelReason'], ''),
     );
   }
@@ -63,6 +65,7 @@ class ShiftModel {
   final int? equipmentId;
   final int? version;
   final DateTime? createdAt;
+  final DateTime? startedAt;
   final String cancelReason;
 
   static int? _nullableInt(dynamic value) {
