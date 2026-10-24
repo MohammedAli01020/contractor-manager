@@ -691,23 +691,74 @@ class _RunningSummaryState extends State<_RunningSummary> {
     }).length;
     return Card(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        child: Row(
-          children: [
-            Expanded(child: _SummaryNumber(label: 'ورديات جارية', value: items.length.toString(), icon: Icons.play_circle_outline)),
-            const SizedBox(width: 8),
-            Expanded(child: _SummaryNumber(label: 'سائقون مشغولون', value: items.map((s) => s.driverId).whereType<int>().toSet().length.toString(), icon: Icons.person_outline)),
-            const SizedBox(width: 8),
-            Expanded(child: _SummaryNumber(label: 'معدات مشغولة', value: items.map((s) => s.equipmentId).whereType<int>().toSet().length.toString(), icon: Icons.construction_outlined)),
-            if (oldCount > 0) ...[
-              const SizedBox(width: 8),
-              Tooltip(
-                message: 'هناك $oldCount وردية مستمرة منذ 24 ساعة أو أكثر',
-                child: Icon(Icons.warning_amber_rounded, color: Colors.orange.shade800),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final columns = constraints.maxWidth < 340 ? 2 : 3;
+            final spacing = 12.0;
+            final metricWidth =
+                (constraints.maxWidth - (spacing * (columns - 1))) / columns;
+            final metrics = [
+              _SummaryNumber(
+                label: 'ورديات جارية',
+                value: items.length.toString(),
+                icon: Icons.play_circle_outline,
               ),
-              Text(oldCount.toString(), style: TextStyle(color: Colors.orange.shade900, fontWeight: FontWeight.bold)),
-            ],
-          ],
+              _SummaryNumber(
+                label: 'سائقون مشغولون',
+                value: items
+                    .map((shift) => shift.driverId)
+                    .whereType<int>()
+                    .toSet()
+                    .length
+                    .toString(),
+                icon: Icons.person_outline,
+              ),
+              _SummaryNumber(
+                label: 'معدات مشغولة',
+                value: items
+                    .map((shift) => shift.equipmentId)
+                    .whereType<int>()
+                    .toSet()
+                    .length
+                    .toString(),
+                icon: Icons.construction_outlined,
+              ),
+            ];
+
+            return Wrap(
+              spacing: spacing,
+              runSpacing: 12,
+              alignment: WrapAlignment.spaceBetween,
+              children: [
+                for (final metric in metrics)
+                  SizedBox(width: metricWidth, child: metric),
+                if (oldCount > 0)
+                  SizedBox(
+                    width: constraints.maxWidth,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.warning_amber_rounded,
+                          color: Colors.orange.shade800,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'هناك $oldCount وردية مستمرة منذ 24 ساعة أو أكثر',
+                            style: TextStyle(
+                              color: Colors.orange.shade900,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            );
+          },
         ),
       ),
     );
