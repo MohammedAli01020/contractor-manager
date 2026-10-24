@@ -18,12 +18,12 @@ void main() {
     await tester.tap(find.text('إعادة المحاولة'));
     expect(taps, 1);
   });
-  testWidgets('LoadingView shows a labelled skeleton loading state',
+  testWidgets('SkeletonLoadingView shows a labelled loading state',
       (tester) async {
     await tester.pumpWidget(
       const MaterialApp(
         home: Scaffold(
-          body: LoadingView(label: 'جارٍ تحميل الورديات...'),
+          body: SkeletonLoadingView(label: 'جارٍ تحميل الورديات...'),
         ),
       ),
     );
