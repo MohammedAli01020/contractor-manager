@@ -66,7 +66,8 @@ public class ShiftController {
 
     @GetMapping("/defaults")
     @Operation(summary = "الأجر والسعر وتكلفة التشغيل المقترحة لسائق ومعدة ونوع وردية (لتعبئة النموذج)")
-    public ShiftDefaultsResponse defaults(@RequestParam Long driverId, @RequestParam Long equipmentId,
+    public ShiftDefaultsResponse defaults(@RequestParam(required = false) Long driverId,
+                                          @RequestParam(required = false) Long equipmentId,
                                           @RequestParam ShiftType shiftType) {
         return service.defaults(CurrentUser.tenantId(), driverId, equipmentId, shiftType);
     }
@@ -76,6 +77,12 @@ public class ShiftController {
         return service.get(CurrentUser.tenantId(), id);
     }
 
+    @GetMapping("/{id}/history")
+    @Operation(summary = "سجل تعديلات الوردية (الأحدث أولًا)")
+    public List<AuditResponse> history(@PathVariable Long id) {
+        service.get(CurrentUser.tenantId(), id);
+        return auditService.history(CurrentUser.tenantId(), AuditEntityType.SHIFT, id);
+    }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
@@ -103,7 +110,7 @@ public class ShiftController {
     }
 
     @PostMapping("/{id}/reinstate")
-    @Operation(summary = "إعادة تفعيل وردية ملغاة كانت منتهية (الملغاة وهي شغالة لا تعود)")
+    @Operation(summary = "إعادة تفعيل وردية ملغاة: المنتهية تعود منتهية، والتي أُلغيت أثناء التشغيل تعود شغالة إذا كان السائق والمعدة متاحين")
     public ShiftResponse reinstate(@PathVariable Long id, @Valid @RequestBody ShiftVersionRequest request) {
         return service.reinstate(CurrentUser.tenantId(), id, request.getVersion());
     }

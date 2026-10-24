@@ -1,4 +1,5 @@
 import 'package:contractor_mobile/core/widgets/error_view.dart';
+import 'package:contractor_mobile/core/widgets/loading_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -17,4 +18,18 @@ void main() {
     await tester.tap(find.text('إعادة المحاولة'));
     expect(taps, 1);
   });
+  testWidgets('SkeletonLoadingView shows a labelled loading state',
+      (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: SkeletonLoadingView(label: 'جارٍ تحميل الورديات...'),
+        ),
+      ),
+    );
+
+    expect(find.text('جارٍ تحميل الورديات...'), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+  });
+
 }

@@ -33,6 +33,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.Arrays;
+import java.util.TreeSet;
 import java.util.stream.Collectors;
 import javax.persistence.criteria.Predicate;
 import org.springframework.beans.factory.annotation.Value;
@@ -97,12 +99,17 @@ public class ShiftService {
     /** القيم التي سيقترحها النموذج قبل الحفظ. */
     @Transactional(readOnly = true)
     public ShiftDefaultsResponse defaults(Long tenantId, Long driverId, Long equipmentId, ShiftType type) {
-        Driver driver = drivers.findByIdAndTenantId(driverId, tenantId)
+        if (driverId == null && equipmentId == null) {
+            throw ApiException.badRequest("اختار سائقًا أو معدة لحساب القيم الافتراضية.");
+        }
+        Driver driver = driverId == null ? null : drivers.findByIdAndTenantId(driverId, tenantId)
                 .orElseThrow(() -> ApiException.notFound("السائق أو العامل غير موجود."));
-        Equipment item = equipment.findByIdAndTenantId(equipmentId, tenantId)
+        Equipment item = equipmentId == null ? null : equipment.findByIdAndTenantId(equipmentId, tenantId)
                 .orElseThrow(() -> ApiException.notFound("المعدة غير موجودة."));
-        return new ShiftDefaultsResponse(Money.scale(rateFor(driver, type)),
-                Money.scale(item.getDefaultShiftPrice()), Money.scale(item.getOperatingCostPerShift()));
+        return new ShiftDefaultsResponse(
+                driver == null ? null : Money.scale(rateFor(driver, type)),
+                item == null ? null : Money.scale(item.getDefaultShiftPrice()),
+                item == null ? null : Money.scale(item.getOperatingCostPerShift()));
     }
 
     // ------------------------------------------------------------------ commands
@@ -112,12 +119,23 @@ public class ShiftService {
     public ShiftResponse start(Long tenantId, ShiftRequest request) {
         LocalDate date = request.getShiftDate() == null ? today() : request.getShiftDate();
         assertNotFuture(date);
-        requireSite(tenantId, request.getSiteId(), null);
+        // Serialize starts for the same driver/equipment across concurrent requests and instances.
+        drivers.findByIdAndTenantIdForUpdate(request.getDriverId(), tenantId)
+                .orElseThrow(() -> ApiException.notFound("السائق أو العامل غير موجود."));
+        equipment.findByIdAndTenantIdForUpdate(request.getEquipmentId(), tenantId)
+                .orElseThrow(() -> ApiException.notFound("المعدة غير موجودة."));
+
         Driver driver = requireDriver(tenantId, request.getDriverId(), null);
         Equipment item = requireEquipment(tenantId, request.getEquipmentId(), null);
+        // Do non-locking validation reads only after the resource locks are held. This avoids
+        // establishing a MySQL REPEATABLE READ snapshot before waiting for a competing start.
+        requireSite(tenantId, request.getSiteId(), null);
+        assertDriverNotRunning(tenantId, request.getDriverId());
+        assertEquipmentNotRunning(tenantId, request.getEquipmentId());
 
         Shift shift = new Shift(tenantId, date, request.getShiftType(), request.getSiteId(), request.getDriverId(),
                 request.getEquipmentId());
+        shift.setStartedAt(LocalDateTime.now(ZoneOffset.UTC));
         shift.setNotes(Texts.blankToNull(request.getNotes()));
         // نسخ ثابتة وقت التسجيل: تغيير الأسعار لاحقًا لا يمس هذه الوردية
         shift.setDriverWage(request.getDriverWage() != null
@@ -138,7 +156,7 @@ public class ShiftService {
 
     @Transactional
     public ShiftResponse update(Long tenantId, Long id, ShiftRequest request) {
-        Shift shift = find(tenantId, id);
+        Shift shift = findForUpdate(tenantId, id);
         if (shift.getStatus() == ShiftStatus.CANCELLED) {
             throw ApiException.conflict("لا يمكن تعديل وردية ملغاة. أعد تفعيلها أولًا.");
         }
@@ -147,6 +165,7 @@ public class ShiftService {
             throw ApiException.badRequest("تاريخ الوردية مطلوب عند التعديل.");
         }
         assertNotFuture(request.getShiftDate());
+        lockAndValidateActiveShiftUpdate(tenantId, shift, request);
         requireSite(tenantId, request.getSiteId(), shift.getSiteId());
         Driver driver = requireDriver(tenantId, request.getDriverId(), shift.getDriverId());
         Equipment item = requireEquipment(tenantId, request.getEquipmentId(), shift.getEquipmentId());
@@ -196,7 +215,7 @@ public class ShiftService {
     /** إنهاء: يغيّر المؤشر فقط، ووقت الضغط ومن ضغط يُسجَّلان. */
     @Transactional
     public ShiftResponse finish(Long tenantId, Long id, Long version) {
-        Shift shift = find(tenantId, id);
+        Shift shift = findForUpdate(tenantId, id);
         if (shift.getStatus() != ShiftStatus.IN_PROGRESS) {
             throw ApiException.conflict("الوردية ليست شغالة.");
         }
@@ -211,7 +230,7 @@ public class ShiftService {
 
     @Transactional
     public ShiftResponse cancel(Long tenantId, Long id, ShiftCancelRequest request) {
-        Shift shift = find(tenantId, id);
+        Shift shift = findForUpdate(tenantId, id);
         if (shift.getStatus() == ShiftStatus.CANCELLED) {
             throw ApiException.conflict("الوردية ملغاة بالفعل.");
         }
@@ -227,26 +246,123 @@ public class ShiftService {
 
     @Transactional
     public ShiftResponse reinstate(Long tenantId, Long id, Long version) {
-        Shift shift = find(tenantId, id);
+        Shift shift = findForUpdate(tenantId, id);
         if (shift.getStatus() != ShiftStatus.CANCELLED) {
             throw ApiException.conflict("الوردية ليست ملغاة.");
         }
-        if (shift.getFinishedAt() == null) {
-            throw ApiException.conflict("هذه الوردية أُلغيت وهي شغالة ولا يمكن إعادة تفعيلها. سجّل وردية جديدة.");
-        }
         shift.requireVersion(version);
-        shift.setStatus(ShiftStatus.COMPLETED);
+
+        ShiftStatus restoredStatus;
+        if (shift.getFinishedAt() != null) {
+            // وردية كانت منتهية قبل إلغائها: أعدها منتهية مع الاحتفاظ بوقت الإنهاء والقيم المحفوظة.
+            restoredStatus = ShiftStatus.COMPLETED;
+        } else {
+            // وردية أُلغيت أثناء التشغيل: أعد حجز مواردها بنفس ترتيب الأقفال المستخدم عند البدء.
+            drivers.findByIdAndTenantIdForUpdate(shift.getDriverId(), tenantId)
+                    .orElseThrow(() -> ApiException.notFound("السائق أو العامل غير موجود."));
+            equipment.findByIdAndTenantIdForUpdate(shift.getEquipmentId(), tenantId)
+                    .orElseThrow(() -> ApiException.notFound("المعدة غير موجودة."));
+
+            Driver driver = requireDriver(tenantId, shift.getDriverId(), null);
+            Equipment item = requireEquipment(tenantId, shift.getEquipmentId(), null);
+
+            Shift driverConflict = shifts
+                    .findFirstByTenantIdAndDriverIdAndStatusOrderByIdAsc(
+                            tenantId, shift.getDriverId(), ShiftStatus.IN_PROGRESS)
+                    .orElse(null);
+            if (driverConflict != null) {
+                throw activeResourceConflict(
+                        "السائق " + driver.getName(), driverConflict, tenantId);
+            }
+
+            Shift equipmentConflict = shifts
+                    .findFirstByTenantIdAndEquipmentIdAndStatusOrderByIdAsc(
+                            tenantId, shift.getEquipmentId(), ShiftStatus.IN_PROGRESS)
+                    .orElse(null);
+            if (equipmentConflict != null) {
+                String equipmentName = item.getCode() == null ? "المعدة" : "المعدة " + item.getCode();
+                throw activeResourceConflict(equipmentName, equipmentConflict, tenantId);
+            }
+            restoredStatus = ShiftStatus.IN_PROGRESS;
+        }
+
+        shift.setStatus(restoredStatus);
+        if (restoredStatus == ShiftStatus.IN_PROGRESS) {
+            // Start a fresh elapsed-time window only when a running shift is reactivated.
+            shift.setStartedAt(LocalDateTime.now(ZoneOffset.UTC));
+        }
         shift.setCancelReason(null);
         shifts.saveAndFlush(shift);
         audit.record(tenantId, AuditEntityType.SHIFT, shift.getId(), AuditAction.REINSTATED, "status",
-                ShiftStatus.CANCELLED.name(), ShiftStatus.COMPLETED.name());
+                ShiftStatus.CANCELLED.name(), restoredStatus.name());
         return get(tenantId, shift.getId());
+    }
+
+    private ApiException activeResourceConflict(String resource, Shift conflictingShift, Long tenantId) {
+        String siteName = sites.findByIdAndTenantId(conflictingShift.getSiteId(), tenantId)
+                .map(Site::getName).orElse("موقع غير معروف");
+        String message = resource + " مشغول في الوردية رقم " + conflictingShift.getId()
+                + " بموقع " + siteName + ". أنهِ الوردية الأخرى أو اختر إجراءً آخر.";
+        java.util.Map<String, Object> details = new java.util.HashMap<String, Object>();
+        details.put("conflictingShiftId", conflictingShift.getId());
+        details.put("resourceName", resource);
+        details.put("siteName", siteName);
+        return ApiException.activeShiftConflict(message, details);
     }
 
     // ------------------------------------------------------------------ helpers
 
     private Shift find(Long tenantId, Long id) {
         return shifts.findByIdAndTenantId(id, tenantId).orElseThrow(() -> ApiException.notFound(NOT_FOUND));
+    }
+
+    /** Lock the shift row before a state-changing command to serialize finish/cancel/reinstate/update. */
+    private Shift findForUpdate(Long tenantId, Long id) {
+        return shifts.findByIdAndTenantIdForUpdate(id, tenantId)
+                .orElseThrow(() -> ApiException.notFound(NOT_FOUND));
+    }
+
+    private void assertDriverNotRunning(Long tenantId, Long driverId) {
+        if (shifts.existsByTenantIdAndDriverIdAndStatus(tenantId, driverId, ShiftStatus.IN_PROGRESS)) {
+            throw ApiException.activeShiftConflict("السائق أو العامل لديه وردية نشطة بالفعل.");
+        }
+    }
+
+    private void assertEquipmentNotRunning(Long tenantId, Long equipmentId) {
+        if (shifts.existsByTenantIdAndEquipmentIdAndStatus(tenantId, equipmentId, ShiftStatus.IN_PROGRESS)) {
+            throw ApiException.activeShiftConflict("المعدة مستخدمة في وردية نشطة بالفعل.");
+        }
+    }
+
+    /**
+     * If an active shift changes its assigned resources, reserve affected rows in a stable order.
+     * The generated-column unique indexes remain the final protection against races.
+     */
+    private void lockAndValidateActiveShiftUpdate(Long tenantId, Shift shift, ShiftRequest request) {
+        if (shift.getStatus() != ShiftStatus.IN_PROGRESS) {
+            return;
+        }
+
+        Set<Long> driverIds = new TreeSet<>(Arrays.asList(shift.getDriverId(), request.getDriverId()));
+        Set<Long> equipmentIds = new TreeSet<>(Arrays.asList(shift.getEquipmentId(), request.getEquipmentId()));
+
+        for (Long driverId : driverIds) {
+            drivers.findByIdAndTenantIdForUpdate(driverId, tenantId)
+                    .orElseThrow(() -> ApiException.notFound("السائق أو العامل غير موجود."));
+        }
+        for (Long equipmentId : equipmentIds) {
+            equipment.findByIdAndTenantIdForUpdate(equipmentId, tenantId)
+                    .orElseThrow(() -> ApiException.notFound("المعدة غير موجودة."));
+        }
+
+        if (shifts.existsByTenantIdAndDriverIdAndStatusAndIdNot(
+                tenantId, request.getDriverId(), ShiftStatus.IN_PROGRESS, shift.getId())) {
+            throw ApiException.activeShiftConflict("السائق أو العامل لديه وردية نشطة بالفعل.");
+        }
+        if (shifts.existsByTenantIdAndEquipmentIdAndStatusAndIdNot(
+                tenantId, request.getEquipmentId(), ShiftStatus.IN_PROGRESS, shift.getId())) {
+            throw ApiException.activeShiftConflict("المعدة مستخدمة في وردية نشطة بالفعل.");
+        }
     }
 
     private LocalDate today() {

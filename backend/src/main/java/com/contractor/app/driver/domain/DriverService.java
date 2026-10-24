@@ -69,7 +69,8 @@ public class DriverService {
 
     @Transactional
     public DriverResponse update(Long tenantId, Long id, DriverRequest request) {
-        Driver driver = find(tenantId, id);
+        Driver driver = drivers.findByIdAndTenantIdForUpdate(id, tenantId)
+                .orElseThrow(() -> ApiException.notFound(NOT_FOUND));
         driver.requireVersion(request.getVersion());
 
         boolean becomingUnavailable = request.getAvailability() == DriverAvailability.UNAVAILABLE
@@ -112,7 +113,8 @@ public class DriverService {
 
     @Transactional
     public void deactivate(Long tenantId, Long id) {
-        Driver driver = find(tenantId, id);
+        Driver driver = drivers.findByIdAndTenantIdForUpdate(id, tenantId)
+                .orElseThrow(() -> ApiException.notFound(NOT_FOUND));
         if (!driver.isActive()) {
             return;
         }

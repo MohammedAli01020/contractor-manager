@@ -4,6 +4,7 @@ import com.contractor.app.common.domain.BaseTenantEntity;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import javax.persistence.Column;
 import javax.persistence.Entity;
 import javax.persistence.EnumType;
@@ -24,6 +25,10 @@ public class Shift extends BaseTenantEntity {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private ShiftStatus status = ShiftStatus.IN_PROGRESS;
+
+    /** وقت آخر بدء فعلي للوردية (UTC)، ويُحدّث عند إعادة تفعيل وردية كانت جارية ثم أُلغيت. */
+    @Column(name = "started_at", nullable = false)
+    private LocalDateTime startedAt;
 
     /** وقت الضغط على "إنهاء" (UTC). يبقى بعد الإلغاء، وهو ما يسمح بإعادة تفعيل الوردية المنتهية. */
     @Column(name = "finished_at")
@@ -61,6 +66,7 @@ public class Shift extends BaseTenantEntity {
         super(tenantId);
         this.shiftDate = shiftDate;
         this.shiftType = shiftType;
+        this.startedAt = LocalDateTime.now(ZoneOffset.UTC);
         this.siteId = siteId;
         this.driverId = driverId;
         this.equipmentId = equipmentId;
@@ -88,6 +94,14 @@ public class Shift extends BaseTenantEntity {
 
     public void setStatus(ShiftStatus status) {
         this.status = status;
+    }
+
+    public LocalDateTime getStartedAt() {
+        return startedAt;
+    }
+
+    public void setStartedAt(LocalDateTime startedAt) {
+        this.startedAt = startedAt;
     }
 
     public LocalDateTime getFinishedAt() {

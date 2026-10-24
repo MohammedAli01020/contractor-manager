@@ -5,6 +5,7 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -25,7 +26,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(ApiException.class)
     public ResponseEntity<Object> handleApi(ApiException ex, WebRequest request) {
-        return build(ex.getStatus(), ex.getCode(), ex.getMessage(), request, null);
+        return build(ex.getStatus(), ex.getCode(), ex.getMessage(), request, null, ex.getDetails());
     }
 
     @ExceptionHandler(AccessDeniedException.class)
@@ -36,21 +37,87 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
     public ResponseEntity<Object> handleOptimisticLock(ObjectOptimisticLockingFailureException ex,
                                                        WebRequest request) {
-        return build(HttpStatus.CONFLICT, "CONFLICT",
+        return build(HttpStatus.CONFLICT, "CONCURRENT_UPDATE",
                 "تم تعديل هذا السجل بواسطة مستخدم آخر. أعد التحميل ثم حاول مجددًا.", request, null);
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<Object> handleDataIntegrity(DataIntegrityViolationException ex, WebRequest request) {
-        log.warn("Data integrity violation: {}", ex.getMostSpecificCause().getMessage());
-        return build(HttpStatus.CONFLICT, "CONFLICT", "تعذّر الحفظ بسبب تعارض في البيانات.", request, null);
+        String triggerError = findActiveShiftTriggerError(ex);
+        if (triggerError != null) {
+            String message = "ACTIVE_SHIFT_DRIVER_RUNNING".equals(triggerError)
+                    ? "لا يمكن تغيير حالة السائق أو تعطيله أثناء وجود وردية نشطة."
+                    : "لا يمكن تغيير حالة المعدة أو تعطيلها أثناء وجود وردية نشطة.";
+            return build(HttpStatus.CONFLICT, "ACTIVE_SHIFT_CONFLICT", message, request, null);
+        }
+
+        String causeMessage = ex.getMostSpecificCause() == null
+                ? ""
+                : String.valueOf(ex.getMostSpecificCause().getMessage());
+        log.warn("Data integrity violation: {}", causeMessage);
+
+        // Keep these names in sync with V6__prevent_duplicate_active_shifts.sql.
+        if (causeMessage.contains("uq_shifts_one_active_driver")
+                || causeMessage.contains("uq_shifts_one_active_equipment")) {
+            return build(HttpStatus.CONFLICT, "ACTIVE_SHIFT_CONFLICT",
+                    "السائق أو المعدة مستخدم بالفعل في وردية نشطة.", request, null);
+        }
+
+        // Map only known business uniqueness constraints. Unknown integrity failures may
+        // indicate a schema, foreign-key, CHECK, or data problem and must not masquerade
+        // as an ordinary business conflict.
+        if (causeMessage.contains("uq_equipment_tenant_code")
+                || causeMessage.contains("uq_sites_tenant_name")
+                || causeMessage.contains("uq_equipment_types_tenant_name")) {
+            return build(HttpStatus.CONFLICT, "CONFLICT",
+                    "القيمة مستخدمة بالفعل داخل هذا المقاول.", request, null);
+        }
+
+        log.error("Unclassified database integrity violation", ex);
+        return build(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR",
+                "حدث خطأ في حفظ البيانات. راجع سجل الخادم لمعرفة التفاصيل.", request, null);
+    }
+
+    @ExceptionHandler(PessimisticLockingFailureException.class)
+    public ResponseEntity<Object> handlePessimisticLock(PessimisticLockingFailureException ex,
+                                                        WebRequest request) {
+        log.warn("Pessimistic lock could not be acquired: {}", ex.getClass().getSimpleName());
+        return build(HttpStatus.CONFLICT, "LOCK_TIMEOUT",
+                "هناك عملية أخرى تعدّل هذه البيانات الآن. انتظر قليلًا ثم حاول مجددًا.", request, null);
     }
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Object> handleUnexpected(Exception ex, WebRequest request) {
+        String triggerError = findActiveShiftTriggerError(ex);
+        if (triggerError != null) {
+            String message = "ACTIVE_SHIFT_DRIVER_RUNNING".equals(triggerError)
+                    ? "لا يمكن تغيير حالة السائق أو تعطيله أثناء وجود وردية نشطة."
+                    : "لا يمكن تغيير حالة المعدة أو تعطيلها أثناء وجود وردية نشطة.";
+            return build(HttpStatus.CONFLICT, "ACTIVE_SHIFT_CONFLICT", message, request, null);
+        }
+
         log.error("Unexpected error", ex);
         return build(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR",
                 "حدث خطأ غير متوقع في الخادم. حاول لاحقًا.", request, null);
+    }
+
+    private static String findActiveShiftTriggerError(Throwable ex) {
+        java.util.Set<Throwable> visited =
+                java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<Throwable, Boolean>());
+        Throwable current = ex;
+        while (current != null && visited.add(current)) {
+            String message = current.getMessage();
+            if (message != null) {
+                if (message.contains("ACTIVE_SHIFT_DRIVER_RUNNING")) {
+                    return "ACTIVE_SHIFT_DRIVER_RUNNING";
+                }
+                if (message.contains("ACTIVE_SHIFT_EQUIPMENT_RUNNING")) {
+                    return "ACTIVE_SHIFT_EQUIPMENT_RUNNING";
+                }
+            }
+            current = current.getCause();
+        }
+        return null;
     }
 
     @Override
@@ -91,9 +158,16 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     private static ResponseEntity<Object> build(HttpStatus status, String code, String message,
                                                 WebRequest request, List<ApiError.FieldIssue> issues) {
+        return build(status, code, message, request, issues, null);
+    }
+
+    private static ResponseEntity<Object> build(HttpStatus status, String code, String message,
+                                                WebRequest request, List<ApiError.FieldIssue> issues,
+                                                java.util.Map<String, Object> details) {
         String path = request instanceof ServletWebRequest
                 ? ((ServletWebRequest) request).getRequest().getRequestURI()
                 : null;
-        return new ResponseEntity<Object>(new ApiError(status.value(), code, message, path, issues), status);
+        return new ResponseEntity<Object>(
+                new ApiError(status.value(), code, message, path, issues, details), status);
     }
 }

@@ -1,3 +1,4 @@
+
 services:
   db:
     image: mysql:8.0
@@ -11,13 +12,17 @@ services:
       MYSQL_DATABASE: ${MYSQL_DATABASE:?Set MYSQL_DATABASE in .env}
       MYSQL_USER: ${MYSQL_USER:?Set MYSQL_USER in .env}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}
+
     command:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
       - --default-time-zone=+00:00
+      - --log-bin-trust-function-creators=ON
+
     volumes:
       - db_data:/var/lib/mysql
-    # لا يوجد ports هنا عمدًا: قاعدة البيانات غير مكشوفة خارج شبكة Docker.
+
+    # لا يوجد ports إضافية؛ قاعدة البيانات غير مكشوفة خارج شبكة Docker.
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
       interval: 10s
@@ -32,6 +37,7 @@ services:
     depends_on:
       db:
         condition: service_healthy
+
     environment:
       DB_URL: jdbc:mysql://db:3306/${MYSQL_DATABASE}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&characterEncoding=UTF-8
       DB_USERNAME: ${MYSQL_USER}
@@ -39,6 +45,7 @@ services:
       APP_JWT_SECRET: ${APP_JWT_SECRET:?Set APP_JWT_SECRET in .env}
       APP_REGISTRATION_ENABLED: ${APP_REGISTRATION_ENABLED:-true}
       SWAGGER_ENABLED: ${SWAGGER_ENABLED:-true}
+
     ports:
       - "${API_PORT:-8080}:8080"
 

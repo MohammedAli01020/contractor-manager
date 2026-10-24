@@ -11,6 +11,7 @@ public class ShiftResponse {
     private final LocalDate shiftDate;
     private final String shiftType;
     private final String status;
+    private final LocalDateTime startedAt;
     private final LocalDateTime finishedAt;
     private final Long siteId;
     private final String siteName;
@@ -34,6 +35,7 @@ public class ShiftResponse {
         this.shiftDate = s.getShiftDate();
         this.shiftType = s.getShiftType().name();
         this.status = s.getStatus().name();
+        this.startedAt = s.getStartedAt();
         this.finishedAt = s.getFinishedAt();
         this.siteId = s.getSiteId();
         this.siteName = siteName;
@@ -68,6 +70,10 @@ public class ShiftResponse {
 
     public String getStatus() {
         return status;
+    }
+
+    public LocalDateTime getStartedAt() {
+        return startedAt;
     }
 
     public LocalDateTime getFinishedAt() {
