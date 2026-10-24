@@ -12,6 +12,8 @@ import com.contractor.app.shift.domain.ShiftType;
 import com.contractor.app.shift.infra.ShiftRepository;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -523,7 +525,10 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
         JsonNode reinstated = body(postJson("/api/v1/shifts/" + running.path("id").asLong() + "/reinstate",
                 versionBody(cancelled.path("version").asLong()), token).andExpect(status().isOk()));
         assertThat(reinstated.path("startedAt").asText()).doesNotStartWith("2000-01-01");
-        assertThat(reinstated.path("createdAt").asText()).isEqualTo(running.path("createdAt").asText());
+        // MySQL DATETIME(6) stores microsecond precision, while the initial in-memory
+        // response may contain nanoseconds. Compare both timestamps at database precision.
+        assertThat(LocalDateTime.parse(reinstated.path("createdAt").asText()).truncatedTo(ChronoUnit.MICROS))
+                .isEqualTo(LocalDateTime.parse(running.path("createdAt").asText()).truncatedTo(ChronoUnit.MICROS));
         assertThat(reinstated.path("status").asText()).isEqualTo("IN_PROGRESS");
         assertThat(reinstated.path("finishedAt").isNull()).isTrue();
         assertThat(reinstated.path("cancelReason").isNull()).isTrue();
