@@ -81,56 +81,8 @@ class ShiftModel {
 
     // Backend LocalDateTime values are stored in UTC and serialized without a zone suffix.
     // Treat zone-less timestamps as UTC, while preserving explicit offsets.
-    final hasZone = raw.endsWith('Z') ||
-        RegExp(r'[+-]\d{2}:\d{2}').hasMatch(raw);
-    final normalized = hasZone ? raw : '${raw}Z';
-    return DateTime.tryParse(normalized)?.toLocal();
-  }
-
-  static int _intValue(dynamic value) {
-    if (value is int) return value;
-    if (value is num) return value.toInt();
-    return int.tryParse(value?.toString() ?? '') ?? 0;
-  }
-
-  static double _numberValue(dynamic value) {
-    if (value is num) return value.toDouble();
-    return double.tryParse(value?.toString() ?? '') ?? 0;
-  }
-
-  static String _stringValue(dynamic value, String fallback) {
-    if (value == null) return fallback;
-    final result = value.toString().trim();
-    return result.isEmpty ? fallback : result;
-  }
-
-  String get shiftTypeLabel {
-    switch (shiftType) {
-      case 'MORNING':
-        return 'صباحية';
-      case 'EVENING':
-        return 'مسائية';
-      case 'NIGHT':
-        return 'ليلية';
-      default:
-        return shiftType;
-    }
-  }
-
-  String get statusLabel {
-    switch (status) {
-      case 'IN_PROGRESS':
-        return 'جارية';
-      case 'COMPLETED':
-        return 'منتهية';
-      case 'CANCELLED':
-        return 'ملغاة';
-      default:
-        return status;
-    }
-  }
-}
-).hasMatch(raw);
+    final hasZone =
+        raw.endsWith('Z') || RegExp(r'[+-]\d{2}:\d{2}').hasMatch(raw);
     final normalized = hasZone ? raw : '${raw}Z';
     return DateTime.tryParse(normalized)?.toLocal();
   }
