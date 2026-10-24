@@ -47,7 +47,7 @@ class _ShiftsView extends StatelessWidget {
       body: BlocBuilder<ShiftsBloc, ShiftsState>(
         builder: (context, state) {
           if (state is ShiftsInitial || state is ShiftsLoading) {
-            return const Center(child: LoadingView());
+            return const LoadingView(label: 'جارٍ تحميل الورديات...');
           }
           if (state is ShiftsFailed) {
             return _MessageView(
