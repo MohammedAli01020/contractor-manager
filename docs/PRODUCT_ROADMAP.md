@@ -40,20 +40,21 @@ This baseline is not a claim that every endpoint or tenant-isolation case has be
 - Later, the contractor may initiate account activation for an existing driver; do not create a duplicate driver record.
 - A driver account uses a separate `DRIVER` role and least-privilege permissions. The backend—not just the Flutter UI—must enforce access to that driver's own permitted information.
 - Driver account access is read-only initially: own shifts/history and any specifically approved earnings/advances/payment information. No ability to edit shifts, rates, advances, or company records.
-- Decide before implementation whether one driver identity can be linked to more than one tenant. If supported, separate the global login identity from tenant-specific driver records/links. Do not solve this by copying a password/account into each tenant.
+- Multi-tenant driver identity/linking is deferred until a real product need is established. Do not build multi-tenant memberships in the first release without revisiting the identity model and migration implications. Keep driver records tenant-scoped and separate from login identities; do not duplicate a login/password per tenant.
 
 ### 3.2 Login identifier: proposed target
 - The preferred user experience is phone number + password, with a stable internal `userId`; the phone is not a primary key.
 - Normalize phone numbers on the backend to a canonical international representation, e.g. `+201012345678`. Accept reasonable Egyptian input formats and Arabic/English digits; Egypt is the initial default country.
 - Use a phone-number library such as Google libphonenumber for numbering-plan validation and normalization. This does **not** prove that the number is active or owned by the user.
-- Do not require the company code at every login by default. Authenticate the account, then determine authorized tenant membership; select a company only if the account has more than one authorized membership.
+- Do not require the company code at every login by default. The backend determines the company/tenant associated with the authenticated user. A company reference code, if used for support or invitations, is not a credential and grants no access.
 - Do not implement the login migration until the current globally unique username model and existing accounts have a safe migration plan.
-- Phone number uniqueness should apply to the login identity after normalization, not blindly to driver contact phones.
+- For the first release, the login phone number should be unique globally after normalization. This applies to login identities, not blindly to driver contact phones.
+- A user's internal ID remains stable. Changing a phone used for login must be a separate secure flow; changing a driver's contact phone must not silently change login credentials.
+- The first release assumes one login user belongs to one tenant. Revisit this before implementation if multi-company access becomes necessary.
 
 ### 3.3 Email and password recovery: proposed target
-- Require an email address for a contractor/admin account and verify ownership before treating it as a trusted recovery channel.
-- Email is optional on a driver record that has no login account.
-- For a driver login account, require a verified email for recovery in the first release, or agree on a secure assisted recovery alternative if the driver has no email.
+- Require an email address for every account that can log in (including a driver login account); a driver record without a login account does not need an email.
+- Verify email ownership before treating it as a trusted recovery channel. Email should be globally unique for login/recovery in the first release to keep account recovery unambiguous; revisit if a more flexible identity model is needed.
 - Initially use a secure, single-use, expiring email recovery link rather than paid SMS OTP.
 - Add rate limits, generic responses that do not reveal whether an account exists, token invalidation, and a documented refresh-session revocation policy.
 - Phone ownership verification via SMS OTP is a future capability, potentially for activation, phone changes, or sensitive actions—not every login.
@@ -71,20 +72,38 @@ This baseline is not a claim that every endpoint or tenant-isolation case has be
 - APK installation still requires Android's user confirmation and any required permission to install from that source; do not promise silent installation.
 - In-app update messages do not require WebSocket. Push notifications when the app is closed can be added later with Firebase Cloud Messaging (FCM), if needed.
 
-### 3.5 Subscriptions and payment
-- Keep subscription entitlement logic separate from any payment-provider integration.
-- For the first paid pilot, a manually reviewed renewal flow is acceptable to avoid premature integration complexity:
-  1. Contractor selects a plan and creates a payment request in the app.
-  2. The request records tenant, plan, amount, period, status, and a unique reference.
-  3. The app can open a prepared WhatsApp message containing the reference and payment details; WhatsApp is only a notification channel, not proof of payment.
-  4. Platform admin verifies actual receipt in the bank/wallet/provider account. A screenshot alone is not proof.
-  5. Platform admin confirms/rejects the request; the system records who acted, when, and the reason.
-  6. Subscription start/end dates and entitlement status are calculated and audited by the backend.
-- A stable company reference code can help support and payment matching, but it is not a credential and grants no access.
+### 3.5 Subscriptions, expiry and manual payment
+
+#### Launch decisions
+- Launch with **one plan at a fixed price and monthly billing only**. The actual price and usage limits have not been decided.
+- Design the subscription model so annual plans and plans based on company size can be added later without rebuilding the subscription system. Do not implement all future plans at launch.
+- Keep the concepts of **Plan**, **Billing Period**, **Subscription**, and **Payment Request** separate:
+  - **Plan:** included features and usage limits, potentially based on users/equipment.
+  - **Billing period:** monthly at launch; annual may be added later.
+  - **Subscription:** tenant's selected plan, start/end dates, status, and entitlement.
+  - **Payment request:** amount, reference, period/plan requested, status, review outcome, and audit history.
+- Grace period: **3 days after subscription expiry**.
+- Early renewal: add the new period to the current subscription end date so the customer does not lose remaining paid days. Define and test month-end/date arithmetic before implementation.
+- After the grace period, block operational actions server-side while still allowing login and access to renewal, payment, and support screens. Preserve tenant data; do not delete it because a subscription expired.
+- The exact rule for a payment request submitted before expiry/grace end but still awaiting admin review is unresolved. Define a fair, bounded policy before implementation; do not create an indefinite automatic extension.
+- Monthly date calculation remains undecided: fixed 30-day periods vs calendar-month periods. Decide this before implementing billing dates.
+
+#### Manual payment flow for the first paid pilot
+1. Contractor selects the available plan/period and creates a payment request in the app.
+2. The system records tenant, plan, amount, period, status, a unique reference (e.g. `PAY-1042`), and timestamps.
+3. The app opens a prepared WhatsApp message containing the request reference and payment details. The contractor manually attaches and sends the receipt image in WhatsApp; the app does not automatically send the image.
+4. Do not upload/store receipt images on the application server in the first release. WhatsApp is a communication channel, not proof of payment.
+5. A Platform Admin reviews the request and verifies actual receipt in the bank/wallet/provider account. A screenshot alone is not sufficient proof.
+6. Platform Admin confirms or rejects the request. Record the actor, time, outcome, and rejection reason where applicable.
+7. Backend activates/extends the subscription only after confirmation, records the resulting dates, and prevents duplicate processing of the same request.
+8. Keep payment requests, payment verification, and subscription entitlements separate. Use server-side authorization and an audit trail for all decisions.
+
+- Proposed request states include pending payment, awaiting review, activated/accepted, rejected, and cancelled; finalize exact transitions and names during design.
+- WhatsApp is the only planned receipt-notification channel for the first release, but the architecture should allow an alternative channel later.
+- No WhatsApp Business API or payment gateway is required for the first release.
 - Later, evaluate an Egyptian payment gateway (for example Paymob/Fawry) after checking business eligibility, supported methods, fees, settlement, refunds, and recurring-payment support. Use sandbox first.
 - Activate paid access automatically only from a trusted provider confirmation/webhook, not a client redirect or uploaded receipt.
 - Whether recurring auto-renewal is required remains undecided; manual renewal is the recommended first pilot.
-- Define what the app does when a subscription expires: read-only grace period, restricted access, or full block. Do not delete tenant data on expiry.
 
 ### 3.6 Financial, purchases and inventory principles
 - Preserve the agreed equipment net result formula:
@@ -134,7 +153,8 @@ This baseline is not a claim that every endpoint or tenant-isolation case has be
 
 ### Phase 5 — Authentication redesign and optional driver accounts
 - Design the identity and tenant-membership model before changing schema.
-- Decide whether a driver can belong to multiple tenants; define account linking, invitation/activation, phone ownership verification, and recovery for users without email.
+- Multi-tenant driver identity/linking is deferred until a real need appears; revisit the model and migration impact before supporting it.
+- Define account activation, phone ownership verification, and recovery for users without email if the requirements change.
 - Add email field/verification and secure password recovery.
 - Plan safe migration from globally unique usernames to normalized unique login phones, including duplicate/missing phone handling and existing users.
 - Add DRIVER role and backend-enforced read-only endpoints; ensure driver can only see their permitted records.
@@ -150,11 +170,13 @@ This baseline is not a claim that every endpoint or tenant-isolation case has be
 **Exit criteria:** update behavior works end-to-end from a prior installed APK, not just in a mocked response.
 
 ### Phase 7 — Subscription management and manual-payment pilot
-- Define plans, prices, trial (if any), billing periods, grace period, expiry behavior and platform-admin role.
-- Add subscription/payment-request states and audit trail.
-- Implement contractor request flow and admin confirmation/rejection.
-- Test duplicate requests, wrong amount, expired subscriptions, refunds/cancellations and repeated confirmation.
-**Exit criteria:** paid access changes only through a trusted, audited server-side action.
+- Implement the agreed launch scope: one fixed-price plan, monthly billing, 3-day grace period, early-renewal extension, and manual payment review.
+- Design subscription data to support future annual billing and company-size-based plans without implementing those plans at launch.
+- Decide the monthly date arithmetic, exact plan usage limits, final price, and policy for payment requests awaiting review near expiry.
+- Add subscription/payment-request states and audit trail, with server-side entitlement enforcement.
+- Implement contractor request flow and Platform Admin confirmation/rejection.
+- Test duplicate requests, wrong amount, expired subscriptions, early renewal, grace-period boundaries, delayed review, cancellations/refunds, and repeated confirmation.
+**Exit criteria:** paid access changes only through a trusted, audited server-side action; expired tenants retain data and can still reach renewal/support.
 
 ### Phase 8 — Payment gateway and push notifications (later)
 - Research provider eligibility and fees; implement sandbox integration and verify webhooks/signatures/idempotency.
@@ -164,15 +186,16 @@ This baseline is not a claim that every endpoint or tenant-isolation case has be
 ## 5. Decisions to settle in focused discussions
 
 Do not guess these choices during implementation. Discuss and record them here before the related phase:
-1. Can a driver account link to more than one contractor/tenant?
-2. What secure activation/recovery route is available for a driver without verified email?
-3. Should login be phone-only, or should username remain as a temporary migration fallback?
-4. What is the policy when a subscription expires (grace/read-only/block)?
-5. Which plans, prices, and billing periods will be offered in the pilot?
+1. What secure activation/recovery route is available if a driver login account cannot use verified email?
+2. Should username remain as a temporary login fallback during migration to phone login?
+3. What is the precise policy when a payment request is submitted before expiry/grace end but admin review is delayed?
+4. Should monthly billing use fixed 30-day periods or calendar-month periods?
+5. What final price and usage limits will apply to the initial fixed-price plan?
 6. Which inventory valuation method, warehouse model, and negative-stock policy will be used?
 7. Should purchases by tenant admin be posted directly while employee purchases require approval? The current proposal is yes, with later configurable approval rules.
 8. Which email provider and sender domain will be used?
 9. What is the release approval and APK signing-key backup procedure?
+10. Is annual billing or company-size-based pricing needed at launch, or should both remain future options? The current decision is to defer both.
 
 ## 6. Working agreement
 
