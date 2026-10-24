@@ -172,7 +172,7 @@ class _DriversScreenState extends State<DriversScreen> {
                   } else {
                     await getIt<Dio>().put('/drivers/' + driver['id'].toString(), data: payload);
                   }
-                  if (dialogContext.mounted) Navigator.of(dialogContext).pop();
+                  if (mounted) Navigator.of(dialogContext).pop();
                   await _load();
                   if (mounted) ScaffoldMessenger.of(this.context).showSnackBar(
                     SnackBar(content: Text(driver == null ? 'تمت إضافة البيانات' : 'تم حفظ التعديلات')),
@@ -180,10 +180,10 @@ class _DriversScreenState extends State<DriversScreen> {
                 } on DioError catch (e) {
                   setDialogState(() => saving = false);
                   final msg = _message(e);
-                  if (dialogContext.mounted) ScaffoldMessenger.of(dialogContext).showSnackBar(SnackBar(content: Text(msg)));
+                  if (mounted) ScaffoldMessenger.of(this.context).showSnackBar(SnackBar(content: Text(msg)));
                 } catch (e) {
                   setDialogState(() => saving = false);
-                  if (dialogContext.mounted) ScaffoldMessenger.of(dialogContext).showSnackBar(SnackBar(content: Text('تعذر الحفظ: ' + e.toString())));
+                  if (mounted) ScaffoldMessenger.of(this.context).showSnackBar(SnackBar(content: Text('تعذر الحفظ: ' + e.toString())));
                 }
               },
               child: Text(saving ? 'جارٍ الحفظ...' : 'حفظ'),
