@@ -7,6 +7,7 @@ import '../../../core/error/app_failure.dart';
 import '../../../core/widgets/loading_view.dart';
 import '../data/datasources/shifts_api.dart';
 import 'shift_editor_screen.dart';
+import 'bulk_finish_shifts_screen.dart';
 import '../data/models/shift_model.dart';
 import 'bloc/shifts_bloc.dart';
 
@@ -92,6 +93,25 @@ class _ShiftsView extends StatelessWidget {
                   ],
                 ),
               ),
+              if (state.selectedTab == ShiftListTab.running)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () async {
+                        await Navigator.of(context).push<void>(
+                          MaterialPageRoute(
+                            builder: (_) => const BulkFinishShiftsScreen(),
+                          ),
+                        );
+                        bloc.add(const ShiftsRequested());
+                      },
+                      icon: const Icon(Icons.playlist_add_check),
+                      label: const Text('مراجعة وإنهاء عدة ورديات'),
+                    ),
+                  ),
+                ),
               if (state.selectedTab == ShiftListTab.all)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
