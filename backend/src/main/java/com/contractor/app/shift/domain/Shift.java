@@ -4,6 +4,7 @@ import com.contractor.app.common.domain.BaseTenantEntity;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import javax.persistence.Column;
 import javax.persistence.Entity;
 import javax.persistence.EnumType;
@@ -65,6 +66,7 @@ public class Shift extends BaseTenantEntity {
         super(tenantId);
         this.shiftDate = shiftDate;
         this.shiftType = shiftType;
+        this.startedAt = LocalDateTime.now(ZoneOffset.UTC);
         this.siteId = siteId;
         this.driverId = driverId;
         this.equipmentId = equipmentId;
