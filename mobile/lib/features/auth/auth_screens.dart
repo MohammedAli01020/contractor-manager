@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../core/di/injector.dart';
 import '../../core/widgets/loading_view.dart';
 import '../shifts/presentation/shifts_screen.dart';
+import '../drivers/drivers_screen.dart';
 import 'auth_bloc.dart';
 
 class AuthGate extends StatelessWidget {
@@ -199,6 +200,19 @@ class HomeScreen extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text('رقم حساب الشركة: ' + user.tenantId.toString()),
                 ],
+              ),
+            ),
+          ),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.people_alt_outlined),
+              title: const Text('السائقون والعمال'),
+              subtitle: const Text('إضافة وتعديل الأفراد والأجور والتوافر'),
+              trailing: const Icon(Icons.chevron_left),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const DriversScreen(),
+                ),
               ),
             ),
           ),
