@@ -153,6 +153,16 @@ This baseline is not a claim that every endpoint or tenant-isolation case has be
 - نموذج الأدوار المستهدف مبدئيًا: `PLATFORM_OWNER` لإدارة المنصة وإنشاء الشركات؛ `ADMIN` لإدارة شركته ضمن حدود الـTenant؛ `OPERATOR` للعمليات المصرح بها؛ `VIEWER` للقراءة والتقارير؛ و`DRIVER` اختياري لاحقًا وفق متطلبات حساب السائق الواردة أعلاه. تُراجع الأدوار الحالية واختبارات الصلاحيات قبل أي migration أو تغيير في JWT.
 - **حالة القرار:** المتطلبات أعلاه معتمدة مبدئيًا للتصميم؛ الأدوار النهائية وتفاصيل كل صلاحية يجب توثيقها قبل التنفيذ.
 
+
+
+### 3.12 Platform Owner, first tenant-admin activation, and web dashboard — agreed
+- The Platform Owner alone creates tenant companies and their first `ADMIN` account in the current product model. A tenant `ADMIN` cannot create tenants or access another tenant.
+- The first tenant `ADMIN` sets their own password using a secure, temporary, single-use activation link; do not send a preset password.
+- Keep the one-purpose activation page as static HTML/CSS/JavaScript served by Spring Boot for now. This keeps the page and API same-origin when deployed together and avoids a separate frontend hosting service.
+- Build the full Platform Owner dashboard later with Next.js. It calls the existing Spring Boot REST API; authorization, tenant isolation, token validation, and business rules remain enforced by the backend.
+- Develop locally on the laptop first. Do not pay for a separate frontend host until production deployment needs are clear.
+- **Implementation status:** work exists on `feature/platform-owner-activation`, but it is not accepted/tested until the actual Maven/MySQL integration suite and security review pass. See [Platform Owner and activation progress](platform-owner-activation.md).
+
 ### 3.11 Phase status and execution documents
 The roadmap below is the only source of truth for phase order and overall status. Detailed files explain scope and acceptance criteria; they must not create a competing roadmap. Status describes phase-level acceptance, not whether some related code already exists.
 
@@ -167,6 +177,7 @@ The roadmap below is the only source of truth for phase order and overall status
 | 6 — Version/update policy and APK pilot | Not started | Tracked in this roadmap until a detailed plan is needed |
 | 7 — Subscription management and manual-payment pilot | Not started | Tracked in this roadmap until a detailed plan is needed |
 | 8 — Payment gateway and push notifications | Not started | Tracked in this roadmap until a detailed plan is needed |
+| 9 — Platform Owner and first tenant-admin activation; Next.js dashboard | In progress — implementation on feature branch; not verified/tested yet | [Platform Owner and activation](platform-owner-activation.md) |
 
 **How to update status:** change a phase status only after inspecting the current branch and recording evidence. "Implemented" means the scoped changes exist; "Tested" additionally requires actual test results. A file existing, a task being discussed, or a test merely being present is not evidence that a phase passed. Record the next action/blocker in the phase plan or the relevant roadmap phase section.
 
