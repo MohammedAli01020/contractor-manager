@@ -177,7 +177,7 @@ The roadmap below is the only source of truth for phase order and overall status
 | 6 — Version/update policy and APK pilot | Not started | Tracked in this roadmap until a detailed plan is needed |
 | 7 — Subscription management and manual-payment pilot | Not started | Tracked in this roadmap until a detailed plan is needed |
 | 8 — Payment gateway and push notifications | Not started | Tracked in this roadmap until a detailed plan is needed |
-| 9 — Platform Owner and first tenant-admin activation; Next.js dashboard | In progress — implementation on feature branch; not verified/tested yet | [Platform Owner and activation](platform-owner-activation.md) |
+| 9 — Platform Owner and first tenant-admin activation; Next.js dashboard | In progress — focused security integration tests passed (4/4 reported on 2026-10-25); full backend suite rerun pending | [Platform Owner and activation](platform-owner-activation.md) |
 
 **How to update status:** change a phase status only after inspecting the current branch and recording evidence. "Implemented" means the scoped changes exist; "Tested" additionally requires actual test results. A file existing, a task being discussed, or a test merely being present is not evidence that a phase passed. Record the next action/blocker in the phase plan or the relevant roadmap phase section.
 
