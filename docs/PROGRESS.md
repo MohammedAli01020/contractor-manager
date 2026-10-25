@@ -12,27 +12,30 @@
 
 ## Current status
 
-**In progress:** Security verification for the Platform Owner and tenant-admin activation flow.
+**In progress:** Targeted security verification for the Platform Owner and tenant-admin activation flow passed; the full backend suite must now be rerun after these test additions.
 
 ### Confirmed completed
 
 - Platform Owner feature implementation exists on the working branch.
 - Platform Owner authentication and tenant-admin activation behavior have been reviewed in the security configuration, JWT filter, service, and integration-test code.
-- The backend test suite was last run successfully on 2026-10-25:
-  - Command: `mvn test` (from `D:\\contractor-manager\\backend`)
-  - Result: **92 tests, 0 failures, 0 errors, 0 skipped; BUILD SUCCESS**.
-- The latest confirmed application-code commit is `ec03cbf`, which standardizes error responses for `ResponseStatusException` and updates activation integration-test expectations.
-- The activation feature document still needs its verification status updated only after the remaining checks are run and their results are recorded.
+- Previously, the full backend suite passed on 2026-10-25: `mvn test`, **92 tests, 0 failures, 0 errors, 0 skipped; BUILD SUCCESS**. This run predates the additional security tests below.
+- On 2026-10-25, the user ran the focused command `mvn "-Dtest=PlatformOwnerActivationIntegrationTest" test` from `D:\\contractor-manager\\backend`.
+- **Reported focused result:** 4 tests, 0 failures, 0 errors, 0 skipped; **BUILD SUCCESS**; total time about 2 minutes 10 seconds. This is user-provided test evidence, not independently run by the assistant.
+- The focused test class now covers disabled Platform Owner access using an already-issued JWT, refresh rejection for an inactive tenant admin, and concurrent activation attempts consuming the same token. The class reports 4 tests total.
+- The latest confirmed application-code commit before the new security-test commit was `ec03cbf`, which standardizes error responses for `ResponseStatusException` and updates activation integration-test expectations. The additional test commit is `c9f69aab983b245537d28bb1fe0136ec892bcf88`.
+- **Next verification required:** run the full `mvn test` suite after the added security tests and record its actual output before claiming the whole backend suite is green.
 
-### Not yet verified / next security tests
+### Security-test status and remaining gaps
 
-These are gaps in test evidence, **not confirmed implementation defects**:
+The first three security checks below are now covered by the focused integration-test class and passed in the user's reported local run on 2026-10-25 (4 tests, no failures/errors). Do not rerun this focused class unnecessarily unless code affecting these paths changes or a failure requires diagnosis.
 
-1. Verify that a Platform Owner disabled after obtaining a JWT is denied on subsequent protected requests.
-2. Verify that a tenant admin cannot use refresh-token flow before account activation.
-3. Verify that concurrent attempts to consume the same activation token cannot both succeed.
-4. Consider a concurrent bootstrap test to complement the existing sequential single-use bootstrap test.
-5. Review relevant authorization and validation edge cases and add tests where needed.
+1. **Passed (focused test):** a Platform Owner disabled after obtaining a JWT is denied on subsequent protected requests.
+2. **Passed (focused test):** a tenant admin cannot use refresh-token flow before account activation.
+3. **Passed (focused test):** concurrent attempts to consume the same activation token cannot both succeed.
+4. **Still to consider:** a concurrent bootstrap test to complement the existing sequential single-use bootstrap test.
+5. **Still to do:** run the full backend suite after these test additions; review remaining authorization and validation edge cases as relevant.
+
+These are test-coverage tracking items, not claims of confirmed implementation defects.
 
 ## Agreed bootstrap direction
 
@@ -46,15 +49,15 @@ These are gaps in test evidence, **not confirmed implementation defects**:
 
 Follow this order. The first two steps are backend/security work; the Next.js dashboard comes after the bootstrap workflow is safe.
 
-1. **Refresh repository state and close the security-test gaps.** From Windows CMD:
+1. **Security test progress — focused checks passed; verify the full suite next.** The user has already run `mvn "-Dtest=PlatformOwnerActivationIntegrationTest" test` on 2026-10-25: **4 tests, 0 failures, 0 errors, 0 skipped; BUILD SUCCESS**. Do not ask them to rerun this same focused command without a relevant code change. Next run only:
    ```bat
    cd /d D:\\contractor-manager
    git status -sb
    git log -1 --oneline
    cd /d D:\\contractor-manager\\backend
-   mvn "-Dtest=PlatformOwnerActivationIntegrationTest" test
+   mvn test
    ```
-   Add/adjust focused tests for disabling a Platform Owner after JWT issuance, tenant-admin refresh before activation, and concurrent activation-token consumption. Consider a concurrent bootstrap test. Do not claim new results until the commands have actually run.
+   Record the full-suite result. A concurrent bootstrap test remains a possible follow-up, not a reason to repeat the three already-passing focused checks.
 2. **Implement a standalone Platform Owner bootstrap CLI.** It must create the initial owner and exit without starting the API web server. Reuse `PlatformBootstrapService`; do not duplicate validation, password hashing, transaction, singleton guard lock, or the one-owner rule. Do not put passwords in source control, command-line arguments, or logs. Keep the current `PlatformOwnerBootstrapRunner` until the CLI is tested; then decide whether to remove it or limit it to controlled development use.
 3. **Test the CLI and startup safety.** Cover first creation, repeated invocation, invalid/missing credentials, password hashing, concurrent attempts, a non-zero exit on failure, clean process exit, and normal API startup without owner creation. Run the targeted tests and then `mvn test`; record only observed results.
 4. **Run the local backend and MySQL.** Use the repository's documented setup. Create the first Platform Owner through the CLI, then verify login at `POST /api/v1/platform/auth/login` and the protected tenant-creation endpoint. Use local/test credentials only.
