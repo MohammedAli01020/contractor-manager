@@ -1,11 +1,13 @@
 package com.contractor.app.platform;
 
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;\nimport static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.contractor.app.AbstractIntegrationTest;
 import com.contractor.app.platform.domain.PlatformOwner;
 import com.contractor.app.platform.infra.PlatformOwnerRepository;
+import com.fasterxml.jackson.databind.JsonNode;
 import java.util.HashMap;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -23,27 +25,36 @@ class PlatformOwnerActivationIntegrationTest extends AbstractIntegrationTest {
         String ownerUsername = uniqueName("platform_");
         owners.saveAndFlush(new PlatformOwner(ownerUsername, "Platform Owner", encoder.encode("StrongOwnerPass123")));
 
-        Map<String,Object> login = new HashMap<>();
-        login.put("username", ownerUsername); login.put("password", "StrongOwnerPass123");
-        MvcResult ownerLogin = mockMvc.perform(post("/api/v1/platform/auth/login").contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(login))).andExpect(status().isOk()).andReturn();
+        Map<String, Object> login = new HashMap<>();
+        login.put("username", ownerUsername);
+        login.put("password", "StrongOwnerPass123");
+        MvcResult ownerLogin = mockMvc.perform(post("/api/v1/platform/auth/login")
+                .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(login)))
+                .andExpect(status().isOk()).andReturn();
         String ownerToken = objectMapper.readTree(ownerLogin.getResponse().getContentAsString()).path("accessToken").asText();
 
-        Map<String,Object> create = new HashMap<>();
         String adminUsername = uniqueName("admin_");
-        create.put("tenantName", "Activation tenant"); create.put("adminFullName", "First Admin");
-        create.put("adminUsername", adminUsername); create.put("adminPhone", "");
-        MvcResult created = mockMvc.perform(post("/api/v1/platform/tenants").header("Authorization", "Bearer " + ownerToken)
-                .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(create)))
+        Map<String, Object> create = new HashMap<>();
+        create.put("tenantName", "Activation tenant");
+        create.put("adminFullName", "First Admin");
+        create.put("adminUsername", adminUsername);
+        create.put("adminPhone", "");
+        MvcResult created = mockMvc.perform(post("/api/v1/platform/tenants")
+                .header("Authorization", "Bearer " + ownerToken).contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(create)))
                 .andExpect(status().isCreated()).andReturn();
-        com.fasterxml.jackson.databind.JsonNode createdBody = objectMapper.readTree(created.getResponse().getContentAsString());
+        JsonNode createdBody = objectMapper.readTree(created.getResponse().getContentAsString());
         String activationToken = createdBody.path("activationToken").asText();
 
-        Map<String,Object> adminLogin = new HashMap<>(); adminLogin.put("username", adminUsername); adminLogin.put("password", "StrongAdminPass123");
+        Map<String, Object> adminLogin = new HashMap<>();
+        adminLogin.put("username", adminUsername);
+        adminLogin.put("password", "StrongAdminPass123");
         mockMvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(adminLogin))).andExpect(status().isForbidden());
 
-        Map<String,Object> activate = new HashMap<>(); activate.put("token", activationToken); activate.put("password", "StrongAdminPass123");
+        Map<String, Object> activate = new HashMap<>();
+        activate.put("token", activationToken);
+        activate.put("password", "StrongAdminPass123");
         mockMvc.perform(post("/api/v1/platform/admin-activation").contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(activate))).andExpect(status().isNoContent());
         mockMvc.perform(post("/api/v1/platform/admin-activation").contentType(MediaType.APPLICATION_JSON)
@@ -57,14 +68,5 @@ class PlatformOwnerActivationIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(status().isForbidden());
         mockMvc.perform(get("/api/v1/auth/me").header("Authorization", "Bearer " + ownerToken))
                 .andExpect(status().isUnauthorized());
-    }
-
-    private org.springframework.test.web.servlet.ResultActions mockResult(MvcResult result) {
-        return new org.springframework.test.web.servlet.ResultActions() {
-            @Override public org.springframework.test.web.servlet.MvcResult andReturn() { return result; }
-            @Override public org.springframework.test.web.servlet.ResultActions andExpect(org.springframework.test.web.servlet.ResultMatcher matcher) throws Exception { matcher.match(result); return this; }
-            @Override public org.springframework.test.web.servlet.ResultActions andDo(org.springframework.test.web.servlet.ResultHandler handler) throws Exception { handler.handle(result); return this; }
-            @Override public org.springframework.test.web.servlet.ResultActions andReturnResult() { return this; }
-        };
     }
 }
