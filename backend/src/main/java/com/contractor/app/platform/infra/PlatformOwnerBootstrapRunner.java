@@ -22,7 +22,7 @@ public class PlatformOwnerBootstrapRunner implements ApplicationRunner {
     }
     @Override
     public void run(ApplicationArguments args) {
-        if (username.trim().isEmpty() || fullName.trim().isEmpty() || password.isEmpty())
+        if (username.isBlank() || fullName.isBlank() || password.isBlank())
             throw new IllegalStateException("Set PLATFORM_OWNER_USERNAME, PLATFORM_OWNER_FULL_NAME and PLATFORM_OWNER_PASSWORD for one-time bootstrap");
         bootstrap.createInitialOwner(username, fullName, password);
     }

@@ -22,7 +22,7 @@ public class PlatformBootstrapService {
         String normalized = User.normalizeUsername(username);
         if (!normalized.matches("^[a-z0-9._@-]{3,60}$")) throw new IllegalArgumentException("Invalid platform owner username");
         if (fullName == null || fullName.trim().isEmpty() || fullName.trim().length() > 150) throw new IllegalArgumentException("Invalid platform owner full name");
-        if (password == null || password.length() < 12 || password.length() > 100) throw new IllegalArgumentException("Bootstrap password must be 12-100 characters");
+        if (password == null || password.isBlank() || password.length() < 12 || password.length() > 100) throw new IllegalArgumentException("Bootstrap password must be 12-100 non-blank characters");
         owners.saveAndFlush(new PlatformOwner(normalized, fullName.trim(), encoder.encode(password)));
     }
 }
