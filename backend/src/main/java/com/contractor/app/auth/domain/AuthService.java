@@ -47,7 +47,7 @@ public class AuthService {
 
     public AuthService(TenantRepository tenants, UserRepository users, RefreshTokenRepository refreshTokens,
                        PasswordEncoder encoder, JwtService jwt, AuditService audit,
-                       @Value("${app.registration.enabled:true}") boolean registrationEnabled,
+                       @Value("${app.registration.enabled:false}") boolean registrationEnabled,
                        @Value("${app.jwt.refresh-token-days:30}") long refreshTokenDays) {
         this.tenants = tenants;
         this.users = users;
