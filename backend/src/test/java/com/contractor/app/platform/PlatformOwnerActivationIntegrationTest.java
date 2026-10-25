@@ -6,11 +6,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.contractor.app.AbstractIntegrationTest;
 import com.contractor.app.platform.domain.PlatformOwner;
+import com.contractor.app.platform.domain.PlatformBootstrapService;
 import com.contractor.app.platform.infra.PlatformOwnerRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.HashMap;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -18,10 +20,15 @@ import org.springframework.test.web.servlet.MvcResult;
 
 class PlatformOwnerActivationIntegrationTest extends AbstractIntegrationTest {
     @Autowired private PlatformOwnerRepository owners;
+    @Autowired private PlatformBootstrapService bootstrap;
     @Autowired private PasswordEncoder encoder;
 
     @Test
     void ownerCreatesTenantAdminActivationIsOneTimeAndTokensStaySeparated() throws Exception {
+        String bootstrapUsername = uniqueName("bootstrap_");
+        bootstrap.createInitialOwner(bootstrapUsername, "Bootstrap Owner", "BootstrapStrongPass123");
+        assertThrows(IllegalStateException.class, () -> bootstrap.createInitialOwner(bootstrapUsername, "Second Owner", "BootstrapStrongPass123"));
+
         String ownerUsername = uniqueName("platform_");
         owners.saveAndFlush(new PlatformOwner(ownerUsername, "Platform Owner", encoder.encode("StrongOwnerPass123")));
 
