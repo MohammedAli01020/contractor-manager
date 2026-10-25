@@ -1,12 +1,14 @@
 package com.contractor.app.platform.api.dto;
 
+import com.contractor.app.common.validation.ValidationRules;
 import javax.validation.constraints.NotBlank;
+import javax.validation.constraints.Pattern;
 import javax.validation.constraints.Size;
 
 public class CreateTenantRequest {
     @NotBlank @Size(max=150) private String tenantName;
     @NotBlank @Size(max=150) private String adminFullName;
-    @NotBlank @Size(min=3,max=60) private String adminUsername;
+    @NotBlank @Pattern(regexp=ValidationRules.USERNAME_REGEX, message=ValidationRules.USERNAME_MESSAGE) private String adminUsername;
     @Size(max=30) private String adminPhone;
     public String getTenantName(){return tenantName;}
     public void setTenantName(String value){tenantName=value;}
