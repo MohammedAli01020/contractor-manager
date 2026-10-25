@@ -1,6 +1,7 @@
 package com.contractor.app.user.api.dto;
 
 import com.contractor.app.common.validation.ValidationRules;
+import com.contractor.app.user.domain.Role;
 import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.Pattern;
 import javax.validation.constraints.Size;
@@ -21,6 +22,9 @@ public class CreateUserRequest {
 
     @Size(max = 30, message = "رقم الهاتف يجب ألا يتجاوز 30 حرفًا")
     private String phone;
+
+    // Defaults to OPERATOR in the service when omitted; ADMIN cannot be granted through this endpoint.
+    private Role role;
 
     public String getFullName() {
         return fullName;
@@ -45,6 +49,10 @@ public class CreateUserRequest {
     public void setPassword(String password) {
         this.password = password;
     }
+
+    public Role getRole() { return role; }
+
+    public void setRole(Role role) { this.role = role; }
 
     public String getPhone() {
         return phone;
