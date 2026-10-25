@@ -17,6 +17,7 @@ import com.contractor.app.user.infra.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.core.env.StandardEnvironment;
 
 class RegistrationDisabledByDefaultTest {
 
@@ -31,10 +32,29 @@ class RegistrationDisabledByDefaultTest {
         when(encoder.encode(anyString())).thenReturn("test-hash");
 
         AuthService service = new AuthService(
-                tenants, users, refreshTokens, encoder, jwt, audit, false, 30L);
+                tenants, users, refreshTokens, encoder, jwt, audit, false, 30L, new StandardEnvironment());
 
         assertThatThrownBy(() -> service.registerTenant(mock(RegisterTenantRequest.class)))
                 .isInstanceOf(ApiException.class)
                 .satisfies(error -> assertThat(((ApiException) error).getStatus()).isEqualTo(HttpStatus.FORBIDDEN));
     }
+
+    @Test
+    void explicitlyEnablingRegistrationDoesNotOpenItOutsideTestProfile() {
+        TenantRepository tenants = mock(TenantRepository.class);
+        UserRepository users = mock(UserRepository.class);
+        RefreshTokenRepository refreshTokens = mock(RefreshTokenRepository.class);
+        PasswordEncoder encoder = mock(PasswordEncoder.class);
+        JwtService jwt = mock(JwtService.class);
+        AuditService audit = mock(AuditService.class);
+        when(encoder.encode(anyString())).thenReturn("test-hash");
+
+        AuthService service = new AuthService(
+                tenants, users, refreshTokens, encoder, jwt, audit, true, 30L, new StandardEnvironment());
+
+        assertThatThrownBy(() -> service.registerTenant(mock(RegisterTenantRequest.class)))
+                .isInstanceOf(ApiException.class)
+                .satisfies(error -> assertThat(((ApiException) error).getStatus()).isEqualTo(HttpStatus.FORBIDDEN));
+    }
+
 }
