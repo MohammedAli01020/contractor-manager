@@ -57,6 +57,29 @@ class RoleAuthorizationIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void viewerAndOperatorCannotWriteDriversEquipmentTypesOrShifts() throws Exception {
+        for (String token : new String[] {viewerToken, operatorToken}) {
+            postJson("/api/v1/drivers", Map.of(), token).andExpect(status().isForbidden());
+            putJson("/api/v1/drivers/1", Map.of(), token).andExpect(status().isForbidden());
+            deleteJson("/api/v1/drivers/1", token).andExpect(status().isForbidden());
+
+            postJson("/api/v1/equipment", Map.of(), token).andExpect(status().isForbidden());
+            putJson("/api/v1/equipment/1", Map.of(), token).andExpect(status().isForbidden());
+            deleteJson("/api/v1/equipment/1", token).andExpect(status().isForbidden());
+
+            postJson("/api/v1/equipment-types", Map.of(), token).andExpect(status().isForbidden());
+            putJson("/api/v1/equipment-types/1", Map.of(), token).andExpect(status().isForbidden());
+            deleteJson("/api/v1/equipment-types/1", token).andExpect(status().isForbidden());
+
+            postJson("/api/v1/shifts", Map.of(), token).andExpect(status().isForbidden());
+            putJson("/api/v1/shifts/1", Map.of(), token).andExpect(status().isForbidden());
+            postJson("/api/v1/shifts/1/finish", Map.of(), token).andExpect(status().isForbidden());
+            postJson("/api/v1/shifts/1/cancel", Map.of(), token).andExpect(status().isForbidden());
+            postJson("/api/v1/shifts/1/reinstate", Map.of(), token).andExpect(status().isForbidden());
+        }
+    }
+
+    @Test
     void adminCanManageMasterDataAndCannotGrantAdminThroughUserCreation() throws Exception {
         postJson("/api/v1/sites", Map.of("name", "Admin Site"), adminToken)
                 .andExpect(status().isCreated());
