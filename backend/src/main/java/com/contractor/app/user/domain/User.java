@@ -45,6 +45,9 @@ public class User {
     @Column(nullable = false)
     private boolean active = true;
 
+    @Column(name = "password_activated", nullable = false)
+    private boolean passwordActivated = true;
+
     @Version
     @Column(nullable = false)
     private Long version;
@@ -126,6 +129,14 @@ public class User {
 
     public boolean isActive() {
         return active;
+    }
+
+    public boolean isPasswordActivated() {
+        return passwordActivated;
+    }
+
+    public void setPasswordActivated(boolean passwordActivated) {
+        this.passwordActivated = passwordActivated;
     }
 
     public void setActive(boolean active) {

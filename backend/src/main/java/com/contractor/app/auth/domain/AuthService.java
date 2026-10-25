@@ -91,7 +91,7 @@ public class AuthService {
         User user = found.get();
         Tenant tenant = tenants.findById(user.getTenantId())
                 .orElseThrow(() -> ApiException.unauthorized(INVALID_CREDENTIALS));
-        if (!user.isActive() || tenant.getStatus() != TenantStatus.ACTIVE) {
+        if (!user.isActive() || !user.isPasswordActivated() || tenant.getStatus() != TenantStatus.ACTIVE) {
             throw ApiException.forbidden("الحساب معطّل. تواصل مع مسؤول النظام.");
         }
         return issueTokens(user);
@@ -117,7 +117,7 @@ public class AuthService {
                 .orElseThrow(() -> ApiException.unauthorized(INVALID_SESSION));
         boolean tenantActive = tenants.findById(user.getTenantId())
                 .map(t -> t.getStatus() == TenantStatus.ACTIVE).orElse(false);
-        if (!user.isActive() || !tenantActive) {
+        if (!user.isActive() || !user.isPasswordActivated() || !tenantActive) {
             throw ApiException.unauthorized(INVALID_SESSION);
         }
         token.setRevoked(true);
