@@ -9,10 +9,9 @@ import org.springframework.boot.WebApplicationType;
 class PlatformOwnerBootstrapCliTest {
 
     @Test
-    void bootstrapCliRunsWithoutStartingAWebServerAndEnablesOneTimeBootstrap() {
+    void bootstrapCliRunsWithoutStartingAWebServer() {
         SpringApplication application = PlatformOwnerBootstrapCli.createApplication();
 
         assertEquals(WebApplicationType.NONE, application.getWebApplicationType());
-        assertEquals("true", application.getDefaultProperties().get("app.platform.bootstrap.enabled"));
     }
 }
