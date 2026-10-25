@@ -1,6 +1,6 @@
 package com.contractor.app.platform;
 
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;\nimport static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.contractor.app.AbstractIntegrationTest;
@@ -27,7 +27,7 @@ class PlatformOwnerActivationIntegrationTest extends AbstractIntegrationTest {
         login.put("username", ownerUsername); login.put("password", "StrongOwnerPass123");
         MvcResult ownerLogin = mockMvc.perform(post("/api/v1/platform/auth/login").contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(login))).andExpect(status().isOk()).andReturn();
-        String ownerToken = body(mockResult(ownerLogin)).path("accessToken").asText();
+        String ownerToken = objectMapper.readTree(ownerLogin.getResponse().getContentAsString()).path("accessToken").asText();
 
         Map<String,Object> create = new HashMap<>();
         String adminUsername = uniqueName("admin_");
@@ -55,7 +55,7 @@ class PlatformOwnerActivationIntegrationTest extends AbstractIntegrationTest {
         mockMvc.perform(post("/api/v1/platform/tenants").header("Authorization", "Bearer " + tenantToken)
                 .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(create)))
                 .andExpect(status().isForbidden());
-        mockMvc.perform(post("/api/v1/auth/me").header("Authorization", "Bearer " + ownerToken))
+        mockMvc.perform(get("/api/v1/auth/me").header("Authorization", "Bearer " + ownerToken))
                 .andExpect(status().isUnauthorized());
     }
 
