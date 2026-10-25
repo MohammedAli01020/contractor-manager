@@ -1,0 +1,109 @@
+name: Backend CI
+
+on:
+  push:
+    branches:
+      - feature/platform-owner-activation
+  pull_request:
+    branches:
+      - feature/platform-owner-activation
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend-tests:
+    name: Backend Maven Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 11
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '11'
+          cache: maven
+          cache-dependency-path: backend/pom.xml
+
+      - name: Run backend tests
+        id: backend-tests
+        run: mvn -B -ntp test
+
+      - name: Write test summary
+        if: always()
+        env:
+          TEST_OUTCOME: ${{ steps.backend-tests.outcome }}
+        run: |
+          python3 - <<'PY'
+          import glob
+          import os
+          import sys
+          import xml.etree.ElementTree as ET
+
+          files = glob.glob("target/surefire-reports/TEST-*.xml")
+          summary = os.environ["GITHUB_STEP_SUMMARY"]
+
+          with open(summary, "a", encoding="utf-8") as out:
+              out.write("# Backend test results\n\n")
+              out.write(
+                  f"- Maven test step: **{os.environ['TEST_OUTCOME']}**\n"
+              )
+              out.write(
+                  f"- Commit: `{os.environ.get('GITHUB_SHA', 'unknown')}`\n"
+              )
+
+              if not files:
+                  out.write(
+                      "- Surefire reports: **not generated**; "
+                      "inspect the job logs.\n"
+                  )
+                  sys.exit(0)
+
+              totals = {
+                  "tests": 0,
+                  "failures": 0,
+                  "errors": 0,
+                  "skipped": 0,
+              }
+
+              for path in files:
+                  root = ET.parse(path).getroot()
+                  for key in totals:
+                      totals[key] += int(root.attrib.get(key, 0))
+
+              out.write("\n## Surefire totals\n\n")
+              out.write("| Metric | Count |\n")
+              out.write("|---|---:|\n")
+              for key, value in totals.items():
+                  out.write(f"| {key.capitalize()} | {value} |\n")
+
+              passed = (
+                  totals["tests"]
+                  - totals["failures"]
+                  - totals["errors"]
+                  - totals["skipped"]
+              )
+              out.write(f"| Passed (calculated) | {passed} |\n")
+          PY
+
+      - name: Upload Maven test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-surefire-reports
+          path: backend/target/surefire-reports/
+          if-no-files-found: warn
+          retention-days: 14
