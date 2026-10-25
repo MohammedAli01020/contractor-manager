@@ -16,6 +16,7 @@ class RoleAuthorizationIntegrationTest extends AbstractIntegrationTest {
     private String adminToken;
     private String operatorToken;
     private String viewerToken;
+    private long viewerId;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -23,7 +24,7 @@ class RoleAuthorizationIntegrationTest extends AbstractIntegrationTest {
         adminToken = owner.path("accessToken").asText();
 
         String operatorName = uniqueName("operator");
-        JsonNode operator = body(postJson("/api/v1/users", userBody(operatorName), adminToken)
+        body(postJson("/api/v1/users", userBody(operatorName), adminToken)
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.role").value("OPERATOR")));
         operatorToken = login(operatorName).path("accessToken").asText();
@@ -31,9 +32,10 @@ class RoleAuthorizationIntegrationTest extends AbstractIntegrationTest {
         String viewerName = uniqueName("viewer");
         Map<String, Object> viewerRequest = userBody(viewerName);
         viewerRequest.put("role", "VIEWER");
-        body(postJson("/api/v1/users", viewerRequest, adminToken)
+        JsonNode viewer = body(postJson("/api/v1/users", viewerRequest, adminToken)
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.role").value("VIEWER")));
+        viewerId = viewer.path("id").asLong();
         viewerToken = login(viewerName).path("accessToken").asText();
     }
 
@@ -42,7 +44,7 @@ class RoleAuthorizationIntegrationTest extends AbstractIntegrationTest {
         getJson("/api/v1/sites", viewerToken).andExpect(status().isOk());
         postJson("/api/v1/sites", Map.of("name", "Viewer Must Not Create"), viewerToken)
                 .andExpect(status().isForbidden());
-        putJson("/api/v1/users/1", Map.of("fullName", "Forbidden", "active", true), viewerToken)
+        putJson("/api/v1/users/" + viewerId, Map.of("fullName", "Forbidden", "active", true), viewerToken)
                 .andExpect(status().isForbidden());
     }
 
