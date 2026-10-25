@@ -13,46 +13,39 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @Configuration
 @EnableMethodSecurity
 public class SecurityConfig {
-
     private final JwtService jwtService;
     private final AuthenticatedUserLoader userLoader;
+    private final PlatformOwnerLoader ownerLoader;
     private final RestAuthenticationEntryPoint entryPoint;
     private final RestAccessDeniedHandler accessDeniedHandler;
 
     public SecurityConfig(JwtService jwtService, AuthenticatedUserLoader userLoader,
-                          RestAuthenticationEntryPoint entryPoint, RestAccessDeniedHandler accessDeniedHandler) {
+                          PlatformOwnerLoader ownerLoader, RestAuthenticationEntryPoint entryPoint,
+                          RestAccessDeniedHandler accessDeniedHandler) {
         this.jwtService = jwtService;
         this.userLoader = userLoader;
+        this.ownerLoader = ownerLoader;
         this.entryPoint = entryPoint;
         this.accessDeniedHandler = accessDeniedHandler;
     }
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        http
-                .csrf().disable() // API بلا جلسات ولا كوكيز، فلا حاجة لـ CSRF
+        http.csrf().disable()
                 .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS)
-                .and()
-                .exceptionHandling()
-                .authenticationEntryPoint(entryPoint)
-                .accessDeniedHandler(accessDeniedHandler)
-                .and()
-                .authorizeRequests()
-                .antMatchers("/api/v1/health",
-                        "/api/v1/auth/register-tenant",
-                        "/api/v1/auth/login",
-                        "/api/v1/auth/refresh",
-                        "/api/v1/auth/logout").permitAll()
+                .and().exceptionHandling().authenticationEntryPoint(entryPoint).accessDeniedHandler(accessDeniedHandler)
+                .and().authorizeRequests()
+                .antMatchers("/api/v1/health", "/api/v1/auth/register-tenant", "/api/v1/auth/login",
+                        "/api/v1/auth/refresh", "/api/v1/auth/logout",
+                        "/api/v1/platform/auth/login", "/api/v1/platform/admin-activation").permitAll()
                 .antMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
+                .antMatchers("/api/v1/platform/**").hasRole("PLATFORM_OWNER")
                 .anyRequest().authenticated()
-                .and()
-                .addFilterBefore(new JwtAuthenticationFilter(jwtService, userLoader),
+                .and().addFilterBefore(new JwtAuthenticationFilter(jwtService, userLoader, ownerLoader),
                         UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
 
     @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
-    }
+    public PasswordEncoder passwordEncoder() { return new BCryptPasswordEncoder(); }
 }
