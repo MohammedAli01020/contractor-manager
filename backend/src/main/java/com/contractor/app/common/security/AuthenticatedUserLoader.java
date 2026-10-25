@@ -27,6 +27,7 @@ public class AuthenticatedUserLoader {
     public Optional<AuthenticatedUser> load(Long userId, Long tenantId) {
         return users.findByIdAndTenantId(userId, tenantId)
                 .filter(User::isActive)
+                .filter(User::isPasswordActivated)
                 .filter(u -> tenants.findById(u.getTenantId())
                         .map(t -> t.getStatus() == TenantStatus.ACTIVE)
                         .orElse(false))
