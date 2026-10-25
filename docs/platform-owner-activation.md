@@ -31,14 +31,24 @@ The following implementation files/features are present on this branch, but pres
 
 ## Initial Platform Owner bootstrap
 
-The bootstrap runner is disabled unless `app.platform.bootstrap.enabled=true`. Run it only during a controlled administrative deployment with the following environment variables set in the server/container environment (do not place the password in shell command arguments or logs):
+### Current implementation (existing; not the target workflow)
+The current branch contains `PlatformOwnerBootstrapRunner`, a Spring Boot `ApplicationRunner` enabled only when `app.platform.bootstrap.enabled=true`. It reads `PLATFORM_OWNER_USERNAME`, `PLATFORM_OWNER_FULL_NAME`, and `PLATFORM_OWNER_PASSWORD`, then calls `PlatformBootstrapService.createInitialOwner(...)`. The service validates input, hashes the password, locks the database-backed singleton guard, and rejects creation if an owner already exists.
 
-- `PLATFORM_OWNER_USERNAME`
-- `PLATFORM_OWNER_FULL_NAME`
-- `PLATFORM_OWNER_PASSWORD` (at least 12 characters)
+Because this is an application startup runner, leaving the flag enabled can cause a later application startup to fail once an owner already exists. Do not leave the flag enabled for normal operation. This is existing behavior; it is not a CLI implementation.
 
-Start the application once with `--app.platform.bootstrap.enabled=true`. The process will create the initial owner and fail if an owner already exists. The database-backed singleton guard serializes concurrent bootstrap attempts. After successful creation, restart normally without the bootstrap flag and remove the bootstrap secrets from the environment. Never expose this flag as a public HTTP endpoint.
+### Agreed target: a dedicated administrative CLI command
+The preferred long-term operator workflow is a separate command for creating the initial Platform Owner, which runs the bootstrap task and exits without starting the public API web server.
 
+- Reuse `PlatformBootstrapService`; do not duplicate validation, hashing, transaction, or guard-locking logic.
+- Do not merely swap `ApplicationRunner` for `CommandLineRunner`: both execute during Spring Boot startup and do not alone create an independent CLI workflow.
+- Do not put passwords in source control, command-line arguments, or logs. Prefer a secure interactive prompt or an appropriate deployment secret source.
+- Reject repeated creation when an owner already exists; keep the database guard and transaction protection.
+- Return a clear success/failure result and a non-zero process exit on failure.
+- Test concurrent attempts, invalid/missing credentials, password hashing, repeated invocation, clean process exit, and normal API startup with bootstrap disabled.
+- Keep the existing Runner until the CLI path is implemented and tested. Then decide whether to remove it or restrict it to explicitly controlled local/development use. Avoid undocumented duplicate production paths.
+- Keep all work on `feature/platform-owner-activation`; do not merge into `main` without explicit approval.
+
+**Decision status:** The CLI direction is agreed. The CLI implementation and its tests are **not yet implemented or verified**.
 ## Platform API
 
 - `POST /api/v1/platform/auth/login` — owner login; returns a short-lived access token, without a refresh token.
