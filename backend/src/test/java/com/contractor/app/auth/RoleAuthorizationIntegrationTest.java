@@ -104,6 +104,45 @@ class RoleAuthorizationIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void operatorCanStartAndFinishShifts() throws Exception {
+        long siteId = body(postJson("/api/v1/sites", Map.of("name", "Operator Shift Site"), adminToken)
+                .andExpect(status().isCreated())).path("id").asLong();
+
+        Map<String, Object> driver = Map.of(
+                "name", "Operator Shift Driver",
+                "workerType", "DRIVER",
+                "morningRate", 150,
+                "eveningRate", 175,
+                "nightRate", 200);
+        long driverId = body(postJson("/api/v1/drivers", driver, adminToken)
+                .andExpect(status().isCreated())).path("id").asLong();
+
+        long typeId = body(postJson("/api/v1/equipment-types", Map.of("name", "Operator Shift Type"), adminToken)
+                .andExpect(status().isCreated())).path("id").asLong();
+        Map<String, Object> equipment = Map.of(
+                "code", "OP-SHIFT-TEST",
+                "equipmentTypeId", typeId,
+                "operatingCostPerShift", 500,
+                "defaultShiftPrice", 1200);
+        long equipmentId = body(postJson("/api/v1/equipment", equipment, adminToken)
+                .andExpect(status().isCreated())).path("id").asLong();
+
+        Map<String, Object> shift = Map.of(
+                "shiftType", "MORNING",
+                "siteId", siteId,
+                "driverId", driverId,
+                "equipmentId", equipmentId);
+        JsonNode started = body(postJson("/api/v1/shifts", shift, operatorToken)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.status").value("IN_PROGRESS")));
+
+        postJson("/api/v1/shifts/" + started.path("id").asLong() + "/finish",
+                Map.of("version", started.path("version").asLong()), operatorToken)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("COMPLETED"));
+    }
+
+    @Test
     void adminCanManageMasterDataAndCannotGrantAdminThroughUserCreation() throws Exception {
         postJson("/api/v1/sites", Map.of("name", "Admin Site"), adminToken)
                 .andExpect(status().isCreated());
