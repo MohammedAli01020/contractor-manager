@@ -44,7 +44,8 @@ class PlatformOwnerActivationIntegrationTest extends AbstractIntegrationTest {
                 .content(objectMapper.writeValueAsString(create)))
                 .andExpect(status().isCreated()).andReturn();
         JsonNode createdBody = objectMapper.readTree(created.getResponse().getContentAsString());
-        String activationToken = createdBody.path("activationToken").asText();
+        String activationUrl = createdBody.path("activationUrl").asText();
+        String activationToken = activationUrl.substring(activationUrl.indexOf("token=") + 6);
 
         Map<String, Object> adminLogin = new HashMap<>();
         adminLogin.put("username", adminUsername);
