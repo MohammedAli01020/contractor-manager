@@ -44,7 +44,7 @@ app:
     access-token-minutes: 15
     refresh-token-days: 30
   registration:
-    enabled: ${APP_REGISTRATION_ENABLED:true}
+    enabled: ${APP_REGISTRATION_ENABLED:false}
   # المنطقة الزمنية لحساب "اليوم" (لرفض الورديات بتاريخ مستقبلي). التخزين نفسه بتوقيت UTC.
   business-timezone: Africa/Cairo
 
