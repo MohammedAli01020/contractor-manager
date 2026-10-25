@@ -1,0 +1,29 @@
+:root {
+  font-family: Tahoma, Arial, sans-serif;
+  color: #172033;
+  background: #f3f6fb;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; }
+.page-shell { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 28px 16px; }
+.activation-card { width: min(100%, 440px); padding: 34px; background: #fff; border: 1px solid #e2e8f0; border-radius: 20px; box-shadow: 0 18px 55px rgba(20, 35, 65, .08); }
+.brand-mark { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 14px; background: #173f75; color: #fff; font-weight: 800; letter-spacing: .5px; }
+.eyebrow { margin: 16px 0 8px; color: #52647c; font-size: .85rem; }
+h1 { margin: 0; font-size: 1.7rem; line-height: 1.5; }
+.intro { margin: 8px 0 26px; color: #5b6678; line-height: 1.8; }
+label { display: block; margin: 18px 0 8px; font-weight: 700; font-size: .95rem; }
+input { display: block; width: 100%; padding: 13px 14px; border: 1px solid #cbd5e1; border-radius: 10px; background: #fff; color: #172033; font: inherit; direction: ltr; text-align: left; }
+input:focus { outline: 3px solid #c7dcfa; border-color: #326bb2; }
+.hint { margin: 7px 0 0; color: #66758a; font-size: .82rem; line-height: 1.6; }
+button { width: 100%; margin-top: 24px; padding: 14px 18px; border: 0; border-radius: 10px; background: #173f75; color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
+button:hover { background: #102f59; }
+button:disabled { opacity: .65; cursor: wait; }
+.status { margin: 0 0 18px; padding: 13px 14px; border-radius: 10px; line-height: 1.8; }
+.status.error { color: #8d2020; background: #fff0f0; border: 1px solid #f4caca; }
+.status.success { color: #17603a; background: #edfbf2; border: 1px solid #c7efd5; }
+.security-note { margin: 24px 0 0; color: #6a7687; font-size: .82rem; line-height: 1.8; }
+footer { margin-top: 20px; color: #78869a; font-size: .8rem; }
+[hidden] { display: none !important; }
+@media (max-width: 480px) { .activation-card { padding: 25px 20px; border-radius: 16px; } h1 { font-size: 1.45rem; } }
