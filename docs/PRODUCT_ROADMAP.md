@@ -1,9 +1,11 @@
 # Contractor Manager — Product Roadmap & Decisions
 
 **Repository:** `MohammedAli01020/contractor-manager`  
-**Planning branch:** `fix/active-shift-concurrency`  
+**Branch policy:** branch-independent roadmap; verify status against the branch under review.  
 **Status:** Planning document. Proposed features below are not implemented unless explicitly marked as existing.  
-**Purpose:** Keep product decisions, unresolved questions, and implementation order in one version-controlled document.
+**Purpose:** Keep product decisions, unresolved questions, phase order, and verified phase status in one version-controlled source of truth.
+
+**Document roles:** This file owns the product-wide roadmap and decisions. Detailed implementation checklists live under [`docs/phases/`](phases/); the root `README.md` is for setup and running the app.
 
 ---
 
@@ -115,9 +117,64 @@ This baseline is not a claim that every endpoint or tenant-isolation case has be
 - Every financial movement needs tenant, reference, status, timestamp, actor, and an audit trail.
 - Do not implement purchasing/inventory before agreeing on valuation (weighted average/FIFO), warehouses, negative-stock policy, supplier payment behavior, and cancellation rules.
 
+### 3.7 إنشاء الشركات وإدارة الحسابات — قرار معتمد
+- **صاحب النظام (Platform Owner):** هو الوحيد الذي ينشئ الشركات (Tenants) في المرحلة الحالية، ويُنشئ أو يحدد حساب المدير الأول للشركة، ويتحكم في تفعيل الشركة أو إيقافها.
+- **مدير الشركة (ADMIN):** يستطيع إنشاء وإدارة المستخدمين داخل Tenant الخاص بشركته فقط، ولا يملك صلاحية إنشاء شركة جديدة أو الوصول إلى بيانات الشركات الأخرى.
+- **أدوار الموظفين:** يجب فصل دور المدير عن أدوار الموظفين؛ لا يجوز منح كل مستخدم جديد دور `ADMIN` تلقائيًا. تُحدد صلاحيات كل دور قبل تنفيذه.
+- **التسجيل الذاتي للشركات مغلق حاليًا.** إنشاء Tenant يجب أن يكون محميًا بصلاحية صاحب النظام، وليس متاحًا لزائر أو لمدير شركة.
+- **مستقبلًا:** يمكن لصاحب النظام فتح التسجيل الذاتي عبر إعداد مركزي قابل للتحكم، بعد تجهيز مسار تسجيل مضبوط واختبارات الصلاحيات وعزل البيانات ومنع إساءة الاستخدام. فتحه مستقبلًا لا يمنح مديري الشركات صلاحية إنشاء الشركات.
+- **متطلبات التنفيذ:** فصل إنشاء Tenant عن إنشاء مستخدم داخل Tenant؛ عدم الوثوق بأي `tenantId` يرسله العميل لتحديد نطاق الصلاحيات؛ إضافة صلاحية واضحة لصاحب النظام؛ مراجعة أدوار المستخدمين؛ واختبار منع مدير الشركة من إنشاء Tenant أو الوصول إلى Tenant آخر، واختبار رفض التسجيل العام عندما يكون مغلقًا.
+- **حالة القرار:** معتمد من صاحب المنتج. **حالة التنفيذ البرمجي:** لم يُنفذ بهذا التوثيق وحده، ويجب تحديثها فقط بعد تعديل الكود وتشغيل الاختبارات والتحقق من النتائج.
+
+
+### 3.8 دفتر السائقين والإقفال الشهري — قرار معتمد
+- يجب أن يكون لكل سائق كشف حركات مالي واضح يدعم الرصيد الافتتاحي، أجور الورديات المكتملة، السلف، الخصومات المعتمدة، المكافآت/البدلات، المدفوعات الفعلية، التسويات والتصحيحات المعتمدة.
+- الرصيد الختامي للسائق في الفترة يصبح رصيده الافتتاحي للفترة التالية، من دون إعادة إنشاء أو تكرار الحركات الأصلية. يجب أن يوضح الكشف هل الرصيد مستحق للسائق أم مديونية عليه وفق اصطلاح إشارة ثابت وواضح.
+- لا تُعدّل الحركات المالية المرحلة بصمت ولا تُحذف نهائيًا؛ تستخدم عمليات تصحيح/عكس موثقة مع المستخدم والوقت والسبب.
+- الإقفال الشهري يسجل الفترة، حالة الإقفال، المستخدم المعتمد، وقت الاعتماد، أرقام/أرصدة الإقفال، وأي إعادة فتح مع سبب وصلاحية خاصة. يجب أن تكون عملية الإقفال والترحيل آمنة من التكرار عند إعادة الطلب أو انقطاع الاتصال.
+- لا يجوز إقفال فترة مع وجود تعارضات أو بيانات غير مكتملة غير معتمدة؛ يعرض النظام استثناءات واضحة للمراجعة قبل الاعتماد.
+- **حالة القرار:** معتمد على مستوى متطلبات المنتج. **حالة التنفيذ:** لم يُنفذ بعد؛ يُعاد التحقق قبل بدء المرحلة المالية.
+
+### 3.9 حسابات المعدات والملكية وتسوية الملاك — قرار معتمد
+- يدعم النموذج المعدات المملوكة للشركة والمعدات المملوكة لطرف/شريك آخر، من دون إنشاء مسارين منفصلين لتسجيل الورديات والمصروفات. نوع الملكية وبيانات المالك/الشريك وطريقة التسوية تُسجل عند الحاجة.
+- القاعدة التشغيلية المتفق عليها: **صافي تشغيل المعدة = قيمة الورديات المكتملة المستحقة للمعدة − أجور السائقين المرتبطة بهذه الورديات − مصروفات المعدة المعترف بها**.
+- أجرة السائق تُخصم مرة واحدة فقط من نتيجة تشغيل المعدة، وتظهر كمستحق في دفتر السائق؛ لا تُخصم مرة ثانية من رصيد السائق.
+- يجب فصل نتيجة التشغيل عن التدفقات النقدية وعن حساب مستحقات المالك/الشريك. مستحق المالك يتحدد وفق عقد/طريقة التسوية الفعلية ولا يُفترض تلقائيًا أنه يساوي صافي التشغيل.
+- مصروف المعدة يؤثر على الفترة التي يخصها وفق السياسة المعتمدة سواء دُفع فورًا أو بقي مستحقًا. حالة السداد مستقلة: غير مدفوع، مدفوع جزئيًا، مدفوع بالكامل. سداد مصروف سابق لا يُسجل كمصروف جديد في فترة السداد.
+- المصروف يمكن ربطه بمعدة مباشرة أو بورديّة محددة. يجب منع احتساب المصروف نفسه مرتين، خصوصًا عند صرف مخزون للمعدة مستقبلًا.
+- تُحفظ أسعار الوردية وأجور السائق وتكلفة التشغيل الموجودة كقيم تاريخية للوردية؛ لا تُحذف الحقول الحالية `defaultShiftPrice` أو `operatingCostPerShift` أو ما يقابلها في الـAPI. المصروفات الفعلية تُسجل منفصلة عن تكلفة التشغيل التقديرية لتجنب الخصم المزدوج.
+- **حالة القرار:** معتمد على مستوى متطلبات المنتج. **حالة التنفيذ:** لم يُنفذ بعد؛ لا تُعد هذه البنود دليلًا على وجود وظائفها في الكود.
+
+### 3.10 تصنيفات المصروفات وصلاحيات المستخدمين — قرار معتمد مبدئيًا
+- تصنيفات مصروفات المعدات قابلة للإضافة والتعديل والتفعيل/التعطيل من المستخدم المخوّل. تعطيل أو إعادة تسمية تصنيف لا يغيّر الوصف التاريخي للمعاملات القديمة؛ لا يُسمح بحذف تصنيف مرتبط بحركات مالية.
+- يبدأ النظام بتصنيفات شائعة مثل السولار/الديزل، الزيوت والشحوم، الصيانة، قطع الغيار، وتصنيف مخصص، مع السماح بتوسعتها دون تعديل الكود لكل تصنيف جديد.
+- يجب فرض الصلاحيات في الـBackend، وليس فقط بإخفاء الأزرار في Flutter. التعديلات المالية والإقفالات والتصحيحات تتطلب صلاحيات محددة وسجل تدقيق.
+- يجب التمييز بين **Platform Owner** الذي يدير إنشاء الشركات على مستوى المنصة، وبين مدير الشركة والمستخدمين داخل الـTenant. لا نستخدم اسم `OWNER` دون حسم نطاقه لتجنب الخلط بين مالك المنصة ومالك الشركة/المعدة.
+- نموذج الأدوار المستهدف مبدئيًا: `PLATFORM_OWNER` لإدارة المنصة وإنشاء الشركات؛ `ADMIN` لإدارة شركته ضمن حدود الـTenant؛ `OPERATOR` للعمليات المصرح بها؛ `VIEWER` للقراءة والتقارير؛ و`DRIVER` اختياري لاحقًا وفق متطلبات حساب السائق الواردة أعلاه. تُراجع الأدوار الحالية واختبارات الصلاحيات قبل أي migration أو تغيير في JWT.
+- **حالة القرار:** المتطلبات أعلاه معتمدة مبدئيًا للتصميم؛ الأدوار النهائية وتفاصيل كل صلاحية يجب توثيقها قبل التنفيذ.
+
+### 3.11 Phase status and execution documents
+The roadmap below is the only source of truth for phase order and overall status. Detailed files explain scope and acceptance criteria; they must not create a competing roadmap. Status describes phase-level acceptance, not whether some related code already exists.
+
+| Phase | Overall status | Execution plan |
+|---|---|---|
+| 0 — Stabilize and verify the existing core | In progress — re-verify current branch and refresh test evidence before acceptance | [PHASE-00-CORE.md](phases/PHASE-00-CORE.md) |
+| 1 — Master data and shift usability | In progress — compare existing implementation with the phase exit criteria | [PHASE-01-MASTER-DATA.md](phases/PHASE-01-MASTER-DATA.md) |
+| 2 — Financial foundation and monthly close | Not started | [PHASE-02-FINANCIALS.md](phases/PHASE-02-FINANCIALS.md) |
+| 3 — Purchases, suppliers and inventory | Not started | Tracked in this roadmap until a detailed plan is needed |
+| 4 — Reports and exports | Not started | Tracked in this roadmap until a detailed plan is needed |
+| 5 — Authentication redesign and optional driver accounts | Not started as a redesign phase | [PHASE-05-AUTHENTICATION.md](phases/PHASE-05-AUTHENTICATION.md) |
+| 6 — Version/update policy and APK pilot | Not started | Tracked in this roadmap until a detailed plan is needed |
+| 7 — Subscription management and manual-payment pilot | Not started | Tracked in this roadmap until a detailed plan is needed |
+| 8 — Payment gateway and push notifications | Not started | Tracked in this roadmap until a detailed plan is needed |
+
+**How to update status:** change a phase status only after inspecting the current branch and recording evidence. "Implemented" means the scoped changes exist; "Tested" additionally requires actual test results. A file existing, a task being discussed, or a test merely being present is not evidence that a phase passed. Record the next action/blocker in the phase plan or the relevant roadmap phase section.
+
 ## 4. Step-by-step delivery plan
 
 ### Phase 0 — Stabilize and verify the existing core
+**Status:** In progress; current branch state and latest test evidence must be refreshed before marking this phase tested/accepted.  
+**Detailed plan:** [PHASE-00-CORE.md](phases/PHASE-00-CORE.md).  
 **Goal:** establish a reliable base before adding new modules.
 - Review the current branch, local changes, API contracts, Flyway migrations, and test coverage.
 - Finish and test shift lifecycle (create, list/filter, update, cancel/reinstate where supported), concurrency, driver/equipment availability, optimistic locking/version conflicts, and tenant isolation.
@@ -126,12 +183,16 @@ This baseline is not a claim that every endpoint or tenant-isolation case has be
 **Exit criteria:** agreed shift workflows pass tests; no known tenant-crossing access; no unreviewed changes are lost.
 
 ### Phase 1 — Driver/equipment master data and shift usability
+**Status:** In progress; compare the current implementation with the exit criteria before accepting the phase.  
+**Detailed plan:** [PHASE-01-MASTER-DATA.md](phases/PHASE-01-MASTER-DATA.md).  
 - Complete driver/equipment management and clear unavailable/inactive states with reasons and current shift context where applicable.
 - Confirm rates/defaults are copied into each shift as historical snapshots.
 - Improve date selection and driver/equipment selection UX without breaking the current Flutter/Dart compatibility.
 **Exit criteria:** contractor can manage master data and run the agreed shift workflow reliably.
 
 ### Phase 2 — Financial foundation, driver ledger, equipment expenses and monthly closing
+**Status:** Not started.  
+**Detailed plan:** [PHASE-02-FINANCIALS.md](phases/PHASE-02-FINANCIALS.md).  
 - Define and test the exact accounting rules first, including sign conventions for positive/negative balances and the period in which each transaction is recognized.
 - Implement driver ledger movements: opening balance, shift wages, advances, approved deductions, bonuses/allowances, actual payments, adjustments and reversals.
 - Implement configurable equipment expense categories and expense entries that can be linked to an equipment or a specific shift; support unpaid, partially paid and fully paid status.
@@ -157,6 +218,8 @@ This baseline is not a claim that every endpoint or tenant-isolation case has be
 **Exit criteria:** report totals match ledger totals and approved closing snapshots for test datasets.
 
 ### Phase 5 — Authentication redesign and optional driver accounts
+**Status:** Not started as a redesign phase; current auth endpoints are baseline only.  
+**Detailed plan:** [PHASE-05-AUTHENTICATION.md](phases/PHASE-05-AUTHENTICATION.md).  
 - Design the identity and tenant-membership model before changing schema.
 - Multi-tenant driver identity/linking is deferred until a real need appears; revisit the model and migration impact before supporting it.
 - Define account activation, phone ownership verification, and recovery for users without email if the requirements change.
@@ -215,39 +278,3 @@ For each phase:
 
 **Important:** This roadmap records intent and verified baseline observations. It does not claim that proposed features have been implemented.
 
-
-### 3.7 إنشاء الشركات وإدارة الحسابات — قرار معتمد
-- **صاحب النظام (Platform Owner):** هو الوحيد الذي ينشئ الشركات (Tenants) في المرحلة الحالية، ويُنشئ أو يحدد حساب المدير الأول للشركة، ويتحكم في تفعيل الشركة أو إيقافها.
-- **مدير الشركة (ADMIN):** يستطيع إنشاء وإدارة المستخدمين داخل Tenant الخاص بشركته فقط، ولا يملك صلاحية إنشاء شركة جديدة أو الوصول إلى بيانات الشركات الأخرى.
-- **أدوار الموظفين:** يجب فصل دور المدير عن أدوار الموظفين؛ لا يجوز منح كل مستخدم جديد دور `ADMIN` تلقائيًا. تُحدد صلاحيات كل دور قبل تنفيذه.
-- **التسجيل الذاتي للشركات مغلق حاليًا.** إنشاء Tenant يجب أن يكون محميًا بصلاحية صاحب النظام، وليس متاحًا لزائر أو لمدير شركة.
-- **مستقبلًا:** يمكن لصاحب النظام فتح التسجيل الذاتي عبر إعداد مركزي قابل للتحكم، بعد تجهيز مسار تسجيل مضبوط واختبارات الصلاحيات وعزل البيانات ومنع إساءة الاستخدام. فتحه مستقبلًا لا يمنح مديري الشركات صلاحية إنشاء الشركات.
-- **متطلبات التنفيذ:** فصل إنشاء Tenant عن إنشاء مستخدم داخل Tenant؛ عدم الوثوق بأي `tenantId` يرسله العميل لتحديد نطاق الصلاحيات؛ إضافة صلاحية واضحة لصاحب النظام؛ مراجعة أدوار المستخدمين؛ واختبار منع مدير الشركة من إنشاء Tenant أو الوصول إلى Tenant آخر، واختبار رفض التسجيل العام عندما يكون مغلقًا.
-- **حالة القرار:** معتمد من صاحب المنتج. **حالة التنفيذ البرمجي:** لم يُنفذ بهذا التوثيق وحده، ويجب تحديثها فقط بعد تعديل الكود وتشغيل الاختبارات والتحقق من النتائج.
-
-
-### 3.8 دفتر السائقين والإقفال الشهري — قرار معتمد
-- يجب أن يكون لكل سائق كشف حركات مالي واضح يدعم الرصيد الافتتاحي، أجور الورديات المكتملة، السلف، الخصومات المعتمدة، المكافآت/البدلات، المدفوعات الفعلية، التسويات والتصحيحات المعتمدة.
-- الرصيد الختامي للسائق في الفترة يصبح رصيده الافتتاحي للفترة التالية، من دون إعادة إنشاء أو تكرار الحركات الأصلية. يجب أن يوضح الكشف هل الرصيد مستحق للسائق أم مديونية عليه وفق اصطلاح إشارة ثابت وواضح.
-- لا تُعدّل الحركات المالية المرحلة بصمت ولا تُحذف نهائيًا؛ تستخدم عمليات تصحيح/عكس موثقة مع المستخدم والوقت والسبب.
-- الإقفال الشهري يسجل الفترة، حالة الإقفال، المستخدم المعتمد، وقت الاعتماد، أرقام/أرصدة الإقفال، وأي إعادة فتح مع سبب وصلاحية خاصة. يجب أن تكون عملية الإقفال والترحيل آمنة من التكرار عند إعادة الطلب أو انقطاع الاتصال.
-- لا يجوز إقفال فترة مع وجود تعارضات أو بيانات غير مكتملة غير معتمدة؛ يعرض النظام استثناءات واضحة للمراجعة قبل الاعتماد.
-- **حالة القرار:** معتمد على مستوى متطلبات المنتج. **حالة التنفيذ:** لم يُنفذ بعد؛ يُعاد التحقق قبل بدء المرحلة المالية.
-
-### 3.9 حسابات المعدات والملكية وتسوية الملاك — قرار معتمد
-- يدعم النموذج المعدات المملوكة للشركة والمعدات المملوكة لطرف/شريك آخر، من دون إنشاء مسارين منفصلين لتسجيل الورديات والمصروفات. نوع الملكية وبيانات المالك/الشريك وطريقة التسوية تُسجل عند الحاجة.
-- القاعدة التشغيلية المتفق عليها: **صافي تشغيل المعدة = قيمة الورديات المكتملة المستحقة للمعدة − أجور السائقين المرتبطة بهذه الورديات − مصروفات المعدة المعترف بها**.
-- أجرة السائق تُخصم مرة واحدة فقط من نتيجة تشغيل المعدة، وتظهر كمستحق في دفتر السائق؛ لا تُخصم مرة ثانية من رصيد السائق.
-- يجب فصل نتيجة التشغيل عن التدفقات النقدية وعن حساب مستحقات المالك/الشريك. مستحق المالك يتحدد وفق عقد/طريقة التسوية الفعلية ولا يُفترض تلقائيًا أنه يساوي صافي التشغيل.
-- مصروف المعدة يؤثر على الفترة التي يخصها وفق السياسة المعتمدة سواء دُفع فورًا أو بقي مستحقًا. حالة السداد مستقلة: غير مدفوع، مدفوع جزئيًا، مدفوع بالكامل. سداد مصروف سابق لا يُسجل كمصروف جديد في فترة السداد.
-- المصروف يمكن ربطه بمعدة مباشرة أو بورديّة محددة. يجب منع احتساب المصروف نفسه مرتين، خصوصًا عند صرف مخزون للمعدة مستقبلًا.
-- تُحفظ أسعار الوردية وأجور السائق وتكلفة التشغيل الموجودة كقيم تاريخية للوردية؛ لا تُحذف الحقول الحالية `defaultShiftPrice` أو `operatingCostPerShift` أو ما يقابلها في الـAPI. المصروفات الفعلية تُسجل منفصلة عن تكلفة التشغيل التقديرية لتجنب الخصم المزدوج.
-- **حالة القرار:** معتمد على مستوى متطلبات المنتج. **حالة التنفيذ:** لم يُنفذ بعد؛ لا تُعد هذه البنود دليلًا على وجود وظائفها في الكود.
-
-### 3.10 تصنيفات المصروفات وصلاحيات المستخدمين — قرار معتمد مبدئيًا
-- تصنيفات مصروفات المعدات قابلة للإضافة والتعديل والتفعيل/التعطيل من المستخدم المخوّل. تعطيل أو إعادة تسمية تصنيف لا يغيّر الوصف التاريخي للمعاملات القديمة؛ لا يُسمح بحذف تصنيف مرتبط بحركات مالية.
-- يبدأ النظام بتصنيفات شائعة مثل السولار/الديزل، الزيوت والشحوم، الصيانة، قطع الغيار، وتصنيف مخصص، مع السماح بتوسعتها دون تعديل الكود لكل تصنيف جديد.
-- يجب فرض الصلاحيات في الـBackend، وليس فقط بإخفاء الأزرار في Flutter. التعديلات المالية والإقفالات والتصحيحات تتطلب صلاحيات محددة وسجل تدقيق.
-- يجب التمييز بين **Platform Owner** الذي يدير إنشاء الشركات على مستوى المنصة، وبين مدير الشركة والمستخدمين داخل الـTenant. لا نستخدم اسم `OWNER` دون حسم نطاقه لتجنب الخلط بين مالك المنصة ومالك الشركة/المعدة.
-- نموذج الأدوار المستهدف مبدئيًا: `PLATFORM_OWNER` لإدارة المنصة وإنشاء الشركات؛ `ADMIN` لإدارة شركته ضمن حدود الـTenant؛ `OPERATOR` للعمليات المصرح بها؛ `VIEWER` للقراءة والتقارير؛ و`DRIVER` اختياري لاحقًا وفق متطلبات حساب السائق الواردة أعلاه. تُراجع الأدوار الحالية واختبارات الصلاحيات قبل أي migration أو تغيير في JWT.
-- **حالة القرار:** المتطلبات أعلاه معتمدة مبدئيًا للتصميم؛ الأدوار النهائية وتفاصيل كل صلاحية يجب توثيقها قبل التنفيذ.
