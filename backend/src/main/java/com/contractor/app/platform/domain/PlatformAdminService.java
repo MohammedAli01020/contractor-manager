@@ -49,7 +49,7 @@ public class PlatformAdminService {
   LocalDateTime expiry=LocalDateTime.now(ZoneOffset.UTC).plusHours(activationHours);
   tokens.save(new TenantAdminActivationToken(tenant.getId(),admin.getId(),TokenHasher.sha256Hex(raw),expiry));
   String sep=baseUrl.contains("?")?"&":"?";
-  return new CreateTenantResponse(tenant.getId(),tenant.getName(),admin.getId(),admin.getUsername(),baseUrl+sep+"token="+raw,raw,expiry.toString());
+  return new CreateTenantResponse(tenant.getId(),tenant.getName(),admin.getId(),admin.getUsername(),baseUrl+sep+"token="+raw,expiry.toString());
  }
  @Transactional
  public void activateAdmin(ActivateAdminRequest req){
