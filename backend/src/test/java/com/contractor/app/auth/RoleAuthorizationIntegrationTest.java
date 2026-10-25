@@ -58,24 +58,44 @@ class RoleAuthorizationIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void viewerAndOperatorCannotWriteDriversEquipmentTypesOrShifts() throws Exception {
+        Map<String, Object> validDriver = Map.of(
+                "name", "Authorization test",
+                "workerType", "DRIVER",
+                "morningRate", 0,
+                "eveningRate", 0,
+                "nightRate", 0);
+        Map<String, Object> validEquipment = Map.of(
+                "code", "AUTH-TEST",
+                "equipmentTypeId", 1,
+                "operatingCostPerShift", 0);
+        Map<String, Object> validEquipmentType = Map.of("name", "Authorization test");
+        Map<String, Object> validShift = Map.of(
+                "shiftType", "MORNING",
+                "siteId", 1,
+                "driverId", 1,
+                "equipmentId", 1);
+        Map<String, Object> validVersion = Map.of("version", 0);
+        Map<String, Object> validCancel = Map.of("reason", "Authorization test", "version", 0);
+
         for (String token : new String[] {viewerToken, operatorToken}) {
-            postJson("/api/v1/drivers", Map.of(), token).andExpect(status().isForbidden());
-            putJson("/api/v1/drivers/1", Map.of(), token).andExpect(status().isForbidden());
+            // Use validation-valid bodies so these assertions exercise authorization, not DTO validation.
+            postJson("/api/v1/drivers", validDriver, token).andExpect(status().isForbidden());
+            putJson("/api/v1/drivers/1", validDriver, token).andExpect(status().isForbidden());
             deleteJson("/api/v1/drivers/1", token).andExpect(status().isForbidden());
 
-            postJson("/api/v1/equipment", Map.of(), token).andExpect(status().isForbidden());
-            putJson("/api/v1/equipment/1", Map.of(), token).andExpect(status().isForbidden());
+            postJson("/api/v1/equipment", validEquipment, token).andExpect(status().isForbidden());
+            putJson("/api/v1/equipment/1", validEquipment, token).andExpect(status().isForbidden());
             deleteJson("/api/v1/equipment/1", token).andExpect(status().isForbidden());
 
-            postJson("/api/v1/equipment-types", Map.of(), token).andExpect(status().isForbidden());
-            putJson("/api/v1/equipment-types/1", Map.of(), token).andExpect(status().isForbidden());
+            postJson("/api/v1/equipment-types", validEquipmentType, token).andExpect(status().isForbidden());
+            putJson("/api/v1/equipment-types/1", validEquipmentType, token).andExpect(status().isForbidden());
             deleteJson("/api/v1/equipment-types/1", token).andExpect(status().isForbidden());
 
-            postJson("/api/v1/shifts", Map.of(), token).andExpect(status().isForbidden());
-            putJson("/api/v1/shifts/1", Map.of(), token).andExpect(status().isForbidden());
-            postJson("/api/v1/shifts/1/finish", Map.of(), token).andExpect(status().isForbidden());
-            postJson("/api/v1/shifts/1/cancel", Map.of(), token).andExpect(status().isForbidden());
-            postJson("/api/v1/shifts/1/reinstate", Map.of(), token).andExpect(status().isForbidden());
+            postJson("/api/v1/shifts", validShift, token).andExpect(status().isForbidden());
+            putJson("/api/v1/shifts/1", validShift, token).andExpect(status().isForbidden());
+            postJson("/api/v1/shifts/1/finish", validVersion, token).andExpect(status().isForbidden());
+            postJson("/api/v1/shifts/1/cancel", validCancel, token).andExpect(status().isForbidden());
+            postJson("/api/v1/shifts/1/reinstate", validVersion, token).andExpect(status().isForbidden());
         }
     }
 
