@@ -24,6 +24,8 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.Optional;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -48,14 +50,17 @@ public class AuthService {
     public AuthService(TenantRepository tenants, UserRepository users, RefreshTokenRepository refreshTokens,
                        PasswordEncoder encoder, JwtService jwt, AuditService audit,
                        @Value("${app.registration.enabled:false}") boolean registrationEnabled,
-                       @Value("${app.jwt.refresh-token-days:30}") long refreshTokenDays) {
+                       @Value("${app.jwt.refresh-token-days:30}") long refreshTokenDays,
+                       Environment environment) {
         this.tenants = tenants;
         this.users = users;
         this.refreshTokens = refreshTokens;
         this.encoder = encoder;
         this.jwt = jwt;
         this.audit = audit;
-        this.registrationEnabled = registrationEnabled;
+        // Direct tenant creation is only permitted in the isolated test profile.
+        // An environment variable alone must never reopen public production registration.
+        this.registrationEnabled = registrationEnabled && environment.acceptsProfiles(Profiles.of("test"));
         this.refreshTokenDays = refreshTokenDays;
         this.dummyHash = encoder.encode("timing-equalizer-not-a-real-password");
     }

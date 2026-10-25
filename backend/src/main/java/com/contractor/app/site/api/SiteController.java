@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import javax.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -22,6 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/v1/sites")
+@PreAuthorize("hasAnyRole('ADMIN','OPERATOR','VIEWER')")
 @Tag(name = "Sites")
 public class SiteController {
 
@@ -45,18 +47,21 @@ public class SiteController {
         return service.get(CurrentUser.tenantId(), id);
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public SiteResponse create(@Valid @RequestBody SiteRequest request) {
         return service.create(CurrentUser.tenantId(), request);
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @PutMapping("/{id}")
     @Operation(summary = "تعديل موقع (يتطلب version)")
     public SiteResponse update(@PathVariable Long id, @Valid @RequestBody SiteRequest request) {
         return service.update(CurrentUser.tenantId(), id, request);
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @Operation(summary = "تعطيل موقع (حذف منطقي)")

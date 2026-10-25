@@ -1,4 +1,3 @@
-
 services:
   db:
     image: mysql:8.0
@@ -43,8 +42,8 @@ services:
       DB_USERNAME: ${MYSQL_USER}
       DB_PASSWORD: ${MYSQL_PASSWORD}
       APP_JWT_SECRET: ${APP_JWT_SECRET:?Set APP_JWT_SECRET in .env}
-      APP_REGISTRATION_ENABLED: ${APP_REGISTRATION_ENABLED:-true}
-      SWAGGER_ENABLED: ${SWAGGER_ENABLED:-true}
+      APP_REGISTRATION_ENABLED: ${APP_REGISTRATION_ENABLED:-false}
+      SWAGGER_ENABLED: ${SWAGGER_ENABLED:-false}
 
     ports:
       - "${API_PORT:-8080}:8080"

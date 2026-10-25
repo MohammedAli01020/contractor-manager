@@ -48,9 +48,10 @@ app:
   # المنطقة الزمنية لحساب "اليوم" (لرفض الورديات بتاريخ مستقبلي). التخزين نفسه بتوقيت UTC.
   business-timezone: Africa/Cairo
 
+# Disabled by default; explicitly enable in local development via SWAGGER_ENABLED=true.
 springdoc:
   api-docs:
-    enabled: ${SWAGGER_ENABLED:true}
+    enabled: ${SWAGGER_ENABLED:false}
   swagger-ui:
-    enabled: ${SWAGGER_ENABLED:true}
+    enabled: ${SWAGGER_ENABLED:false}
     path: /swagger-ui.html

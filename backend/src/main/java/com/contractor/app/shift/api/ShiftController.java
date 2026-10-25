@@ -20,6 +20,7 @@ import java.util.List;
 import javax.validation.Valid;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -32,6 +33,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/v1/shifts")
+@PreAuthorize("hasAnyRole('ADMIN','OPERATOR','VIEWER')")
 @Tag(name = "Shifts")
 public class ShiftController {
 
@@ -84,6 +86,7 @@ public class ShiftController {
         return auditService.history(CurrentUser.tenantId(), AuditEntityType.SHIFT, id);
     }
 
+    @PreAuthorize("hasAnyRole('ADMIN','OPERATOR')")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "بدء وردية (تُسجَّل شغالة). التاريخ الافتراضي اليوم، ويقبل تاريخًا سابقًا")
@@ -91,24 +94,28 @@ public class ShiftController {
         return service.start(CurrentUser.tenantId(), request);
     }
 
+    @PreAuthorize("hasAnyRole('ADMIN','OPERATOR')")
     @PutMapping("/{id}")
     @Operation(summary = "تعديل وردية (يتطلب version، ويُسجَّل كل تغيير في سجل التدقيق)")
     public ShiftResponse update(@PathVariable Long id, @Valid @RequestBody ShiftRequest request) {
         return service.update(CurrentUser.tenantId(), id, request);
     }
 
+    @PreAuthorize("hasAnyRole('ADMIN','OPERATOR')")
     @PostMapping("/{id}/finish")
     @Operation(summary = "إنهاء وردية شغالة: يغيّر المؤشر فقط")
     public ShiftResponse finish(@PathVariable Long id, @Valid @RequestBody ShiftVersionRequest request) {
         return service.finish(CurrentUser.tenantId(), id, request.getVersion());
     }
 
+    @PreAuthorize("hasAnyRole('ADMIN','OPERATOR')")
     @PostMapping("/{id}/cancel")
     @Operation(summary = "إلغاء وردية بسبب (تُستبعد من الحسابات)")
     public ShiftResponse cancel(@PathVariable Long id, @Valid @RequestBody ShiftCancelRequest request) {
         return service.cancel(CurrentUser.tenantId(), id, request);
     }
 
+    @PreAuthorize("hasAnyRole('ADMIN','OPERATOR')")
     @PostMapping("/{id}/reinstate")
     @Operation(summary = "إعادة تفعيل وردية ملغاة: المنتهية تعود منتهية، والتي أُلغيت أثناء التشغيل تعود شغالة إذا كان السائق والمعدة متاحين")
     public ShiftResponse reinstate(@PathVariable Long id, @Valid @RequestBody ShiftVersionRequest request) {
