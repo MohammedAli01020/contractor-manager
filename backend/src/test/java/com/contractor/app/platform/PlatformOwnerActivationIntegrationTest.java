@@ -7,6 +7,16 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.contractor.app.AbstractIntegrationTest;
 import com.contractor.app.platform.domain.PlatformOwner;
 import com.contractor.app.platform.domain.PlatformBootstrapService;
+import com.contractor.app.platform.domain.TenantAdminActivationToken;
+import com.contractor.app.platform.infra.TenantAdminActivationTokenRepository;
+import com.contractor.app.common.security.TokenHasher;
+import com.contractor.app.tenant.domain.Tenant;
+import com.contractor.app.tenant.infra.TenantRepository;
+import com.contractor.app.user.domain.Role;
+import com.contractor.app.user.domain.User;
+import com.contractor.app.user.infra.UserRepository;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import com.contractor.app.platform.infra.PlatformOwnerRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.HashMap;
@@ -22,6 +32,9 @@ class PlatformOwnerActivationIntegrationTest extends AbstractIntegrationTest {
     @Autowired private PlatformOwnerRepository owners;
     @Autowired private PlatformBootstrapService bootstrap;
     @Autowired private PasswordEncoder encoder;
+    @Autowired private TenantRepository tenants;
+    @Autowired private UserRepository users;
+    @Autowired private TenantAdminActivationTokenRepository activationTokens;
 
     @Test
     void ownerCreatesTenantAdminActivationIsOneTimeAndTokensStaySeparated() throws Exception {
@@ -59,6 +72,20 @@ class PlatformOwnerActivationIntegrationTest extends AbstractIntegrationTest {
         adminLogin.put("password", "StrongAdminPass123");
         mockMvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(adminLogin))).andExpect(status().isForbidden());
+
+        String expiredRawToken = TokenHasher.newOpaqueToken();
+        Tenant expiredTenant = tenants.saveAndFlush(new Tenant("Expired activation tenant"));
+        User expiredAdmin = new User(expiredTenant.getId(), uniqueName("expired_admin_"), "Expired Admin",
+                null, encoder.encode("UnusablePass123"), Role.ADMIN);
+        expiredAdmin.setPasswordActivated(false);
+        expiredAdmin = users.saveAndFlush(expiredAdmin);
+        activationTokens.saveAndFlush(new TenantAdminActivationToken(expiredTenant.getId(), expiredAdmin.getId(),
+                TokenHasher.sha256Hex(expiredRawToken), LocalDateTime.now(ZoneOffset.UTC).minusMinutes(1)));
+        Map<String, Object> expiredActivation = new HashMap<>();
+        expiredActivation.put("token", expiredRawToken);
+        expiredActivation.put("password", "StrongAdminPass123");
+        mockMvc.perform(post("/api/v1/platform/admin-activation").contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(expiredActivation))).andExpect(status().isBadRequest());
 
         Map<String, Object> activate = new HashMap<>();
         activate.put("token", activationToken);
