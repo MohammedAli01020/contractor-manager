@@ -179,14 +179,38 @@ class _DriversScreenState extends State<DriversScreen> {
                                 return Card(
                                   margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                                   child: ListTile(
-                                    leading: CircleAvatar(child: Icon(isDriver ? Icons.drive_eta : Icons.engineering)),
+                                    leading: CircleAvatar(
+                                      backgroundColor: !active
+                                          ? Colors.grey.withOpacity(0.12)
+                                          : (!available
+                                              ? Colors.orange.withOpacity(0.12)
+                                              : Colors.blue.withOpacity(0.12)),
+                                      child: Icon(
+                                        isDriver ? Icons.person_outline : Icons.engineering_outlined,
+                                        color: !active
+                                            ? Colors.grey
+                                            : (!available
+                                                ? Colors.orange.shade800
+                                                : Colors.blue.shade700),
+                                      ),
+                                    ),
                                     title: Text(_value(item['name']), style: const TextStyle(fontWeight: FontWeight.bold)),
                                     subtitle: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: <Widget>[
                                         Text((isDriver ? 'سائق' : 'عامل') + ' • هاتف: ' + _value(item['phone'])),
                                         Text('صباحي: ' + _value(item['morningRate']) + ' | مسائي: ' + _value(item['eveningRate']) + ' | ليلي: ' + _value(item['nightRate'])),
-                                        Text(!active ? 'الحساب معطل' : (available ? 'متاح' : 'غير متاح: ' + _value(item['unavailableReason']))),
+                                        Text(
+                                          !active
+                                              ? 'الحساب معطّل'
+                                              : (available ? 'متاح' : 'غير متاح: ' + _value(item['unavailableReason'])),
+                                          style: TextStyle(
+                                            color: !active
+                                                ? Colors.grey
+                                                : (available ? Colors.blue.shade700 : Colors.orange.shade800),
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
                                       ],
                                     ),
                                     isThreeLine: true,
