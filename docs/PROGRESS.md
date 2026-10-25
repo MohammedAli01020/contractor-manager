@@ -42,28 +42,27 @@ These are gaps in test evidence, **not confirmed implementation defects**:
 - A `CommandLineRunner` alone is not a separate CLI because it also runs during application startup. The intended CLI should run the task and exit without starting the public API web server.
 - Do not remove the existing runner until the CLI is implemented and tested. CLI implementation remains pending; no implementation or test result is claimed here.
 
-## Exact next steps
+## Agreed execution plan — next steps
 
-1. Check the current local Git state before editing:
+Follow this order. The first two steps are backend/security work; the Next.js dashboard comes after the bootstrap workflow is safe.
+
+1. **Refresh repository state and close the security-test gaps.** From Windows CMD:
    ```bat
    cd /d D:\\contractor-manager
    git status -sb
    git log -1 --oneline
-   ```
-2. Open and inspect:
-   `backend/src/test/java/com/contractor/app/platform/PlatformOwnerActivationIntegrationTest.java`
-3. Add focused tests for the security cases above. Do not change application code unless a test demonstrates a real issue; explain the proposed code change before making it.
-4. Run the targeted integration test:
-   ```bat
    cd /d D:\\contractor-manager\\backend
    mvn "-Dtest=PlatformOwnerActivationIntegrationTest" test
    ```
-5. Run the full backend suite:
-   ```bat
-   mvn test
-   ```
-6. Record the actual results here and update `docs/platform-owner-activation.md` and the roadmap only when supported by test evidence.
-7. Review `git diff` and `git status`; commit and push only after explicit user approval. Do not merge into `main` without explicit approval.
+   Add/adjust focused tests for disabling a Platform Owner after JWT issuance, tenant-admin refresh before activation, and concurrent activation-token consumption. Consider a concurrent bootstrap test. Do not claim new results until the commands have actually run.
+2. **Implement a standalone Platform Owner bootstrap CLI.** It must create the initial owner and exit without starting the API web server. Reuse `PlatformBootstrapService`; do not duplicate validation, password hashing, transaction, singleton guard lock, or the one-owner rule. Do not put passwords in source control, command-line arguments, or logs. Keep the current `PlatformOwnerBootstrapRunner` until the CLI is tested; then decide whether to remove it or limit it to controlled development use.
+3. **Test the CLI and startup safety.** Cover first creation, repeated invocation, invalid/missing credentials, password hashing, concurrent attempts, a non-zero exit on failure, clean process exit, and normal API startup without owner creation. Run the targeted tests and then `mvn test`; record only observed results.
+4. **Run the local backend and MySQL.** Use the repository's documented setup. Create the first Platform Owner through the CLI, then verify login at `POST /api/v1/platform/auth/login` and the protected tenant-creation endpoint. Use local/test credentials only.
+5. **Build the Platform Owner web UI with Next.js.** This is a separate frontend from the existing Arabic tenant-admin activation page. Start with a login page and a protected dashboard shell, then a tenant/company creation screen. Keep UI validation for usability only; authorization and business rules stay in Spring Boot.
+6. **Connect Next.js to the Spring Boot API.** Use the local backend base URL during development. Integrate `POST /api/v1/platform/auth/login` and `POST /api/v1/platform/tenants`, handle unauthorized/expired sessions safely, and keep the Platform Owner token separate from tenant-user authentication. Decide the final token storage/session approach before production; do not put secrets in client-side source.
+7. **Verify the full workflow end to end.** Platform Owner login → create tenant and first ADMIN → privately share activation link → tenant ADMIN sets a password → tenant ADMIN can log in. Also test tenant isolation, Platform Owner disabled/revoked access, expired/replayed activation links, and failure/retry behavior.
+8. **Deploy only after local verification.** Decide the production hosting arrangement for Next.js and Spring Boot, configure HTTPS and environment secrets, and test the deployed activation URL. No separate frontend hosting bill is needed while developing locally; production hosting decisions can wait.
+9. **Review the diff and Git state.** Commit/push only with explicit approval. Keep work on `feature/platform-owner-activation`; do not merge to `main` without explicit approval.
 
 ## Working rules
 
