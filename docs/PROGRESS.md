@@ -34,6 +34,14 @@ These are gaps in test evidence, **not confirmed implementation defects**:
 4. Consider a concurrent bootstrap test to complement the existing sequential single-use bootstrap test.
 5. Review relevant authorization and validation edge cases and add tests where needed.
 
+## Agreed bootstrap direction
+
+- Preferred target: a dedicated administrative CLI command to create the initial Platform Owner, rather than using normal API server startup as the creation trigger.
+- Existing implementation: `PlatformOwnerBootstrapRunner` uses Spring Boot `ApplicationRunner`, gated by `app.platform.bootstrap.enabled=true`, and delegates to `PlatformBootstrapService`.
+- Reuse the existing service and database guard; do not duplicate the creation logic.
+- A `CommandLineRunner` alone is not a separate CLI because it also runs during application startup. The intended CLI should run the task and exit without starting the public API web server.
+- Do not remove the existing runner until the CLI is implemented and tested. CLI implementation remains pending; no implementation or test result is claimed here.
+
 ## Exact next steps
 
 1. Check the current local Git state before editing:
