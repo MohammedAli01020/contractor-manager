@@ -1,7 +1,7 @@
 # Contractor Manager — Product Roadmap & Decisions
 
 **Repository:** `MohammedAli01020/contractor-manager`  
-**Planning branch:** `fix/active-shift-concurrency`  
+**Branch policy:** branch-independent roadmap; verify status against the branch under review.  
 **Status:** Planning document. Proposed features below are not implemented unless explicitly marked as existing.  
 **Purpose:** Keep product decisions, unresolved questions, phase order, and verified phase status in one version-controlled source of truth.
 
