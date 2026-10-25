@@ -131,12 +131,16 @@ This baseline is not a claim that every endpoint or tenant-isolation case has be
 - Improve date selection and driver/equipment selection UX without breaking the current Flutter/Dart compatibility.
 **Exit criteria:** contractor can manage master data and run the agreed shift workflow reliably.
 
-### Phase 2 — Financial foundation and driver ledger
-- Define and test the exact accounting rules first.
-- Implement driver ledger movements: shift wages, advances, approved deductions, bonuses/allowances, actual payments, opening balance, adjustments, reversals.
-- Implement equipment operating expense entries and equipment statements.
-- Separate operational profit from cash flow and supplier liabilities.
-**Exit criteria:** sample cases reconcile, including the no-double-deduction rule.
+### Phase 2 — Financial foundation, driver ledger, equipment expenses and monthly closing
+- Define and test the exact accounting rules first, including sign conventions for positive/negative balances and the period in which each transaction is recognized.
+- Implement driver ledger movements: opening balance, shift wages, advances, approved deductions, bonuses/allowances, actual payments, adjustments and reversals.
+- Implement configurable equipment expense categories and expense entries that can be linked to an equipment or a specific shift; support unpaid, partially paid and fully paid status.
+- Model equipment ownership (company-owned or third-party/partner-owned) and, when applicable, owner/partner settlements separately from operating result and cash movement.
+- Implement monthly period close: reconciliation preview, exceptions, approval metadata, immutable closing snapshot, opening balances for the next period, and controlled reopen/correction flow.
+- Make posting, payment and close operations idempotent; prevent duplicate wage/expense/payment posting and enforce tenant isolation and audit history.
+- Preserve existing shift price/wage/operating-cost snapshots and avoid double-counting estimated operating costs, actual expenses, driver wages or inventory consumption.
+- Separate operational profit from cash flow and supplier/owner liabilities.
+**Exit criteria:** sample cases reconcile for driver balances, equipment operating result, owner/partner amounts due, unpaid liabilities, monthly carry-forward, corrections and retries; no double deduction or duplicated transaction.
 
 ### Phase 3 — Purchases, suppliers and inventory
 - Design suppliers, purchase invoices and invoice lines, payment status, stock items/units, warehouses (if required), stock movements and issue-to-equipment flows.
@@ -146,10 +150,11 @@ This baseline is not a claim that every endpoint or tenant-isolation case has be
 **Exit criteria:** inventory quantities and financial ledgers reconcile for purchase, issue, return, cancellation and retry cases.
 
 ### Phase 4 — Reports and exports
-- Equipment, driver and supplier statements; daily/monthly/custom date ranges; opening balance, movements, totals, closing balance.
-- PDF/Excel exports after the underlying ledgers are stable.
+- Equipment, driver and supplier/owner statements; daily/monthly/custom date ranges; opening balance, movements, totals, closing balance and payment status.
+- Monthly close reports, period-to-period comparisons, unreconciled items and unpaid/partially paid liabilities.
+- PDF/Excel exports after the underlying ledgers and close process are stable.
 - Restrict each report to authorized tenant and role.
-**Exit criteria:** report totals match ledger totals for test datasets.
+**Exit criteria:** report totals match ledger totals and approved closing snapshots for test datasets.
 
 ### Phase 5 — Authentication redesign and optional driver accounts
 - Design the identity and tenant-membership model before changing schema.
@@ -219,3 +224,30 @@ For each phase:
 - **مستقبلًا:** يمكن لصاحب النظام فتح التسجيل الذاتي عبر إعداد مركزي قابل للتحكم، بعد تجهيز مسار تسجيل مضبوط واختبارات الصلاحيات وعزل البيانات ومنع إساءة الاستخدام. فتحه مستقبلًا لا يمنح مديري الشركات صلاحية إنشاء الشركات.
 - **متطلبات التنفيذ:** فصل إنشاء Tenant عن إنشاء مستخدم داخل Tenant؛ عدم الوثوق بأي `tenantId` يرسله العميل لتحديد نطاق الصلاحيات؛ إضافة صلاحية واضحة لصاحب النظام؛ مراجعة أدوار المستخدمين؛ واختبار منع مدير الشركة من إنشاء Tenant أو الوصول إلى Tenant آخر، واختبار رفض التسجيل العام عندما يكون مغلقًا.
 - **حالة القرار:** معتمد من صاحب المنتج. **حالة التنفيذ البرمجي:** لم يُنفذ بهذا التوثيق وحده، ويجب تحديثها فقط بعد تعديل الكود وتشغيل الاختبارات والتحقق من النتائج.
+
+
+### 3.8 دفتر السائقين والإقفال الشهري — قرار معتمد
+- يجب أن يكون لكل سائق كشف حركات مالي واضح يدعم الرصيد الافتتاحي، أجور الورديات المكتملة، السلف، الخصومات المعتمدة، المكافآت/البدلات، المدفوعات الفعلية، التسويات والتصحيحات المعتمدة.
+- الرصيد الختامي للسائق في الفترة يصبح رصيده الافتتاحي للفترة التالية، من دون إعادة إنشاء أو تكرار الحركات الأصلية. يجب أن يوضح الكشف هل الرصيد مستحق للسائق أم مديونية عليه وفق اصطلاح إشارة ثابت وواضح.
+- لا تُعدّل الحركات المالية المرحلة بصمت ولا تُحذف نهائيًا؛ تستخدم عمليات تصحيح/عكس موثقة مع المستخدم والوقت والسبب.
+- الإقفال الشهري يسجل الفترة، حالة الإقفال، المستخدم المعتمد، وقت الاعتماد، أرقام/أرصدة الإقفال، وأي إعادة فتح مع سبب وصلاحية خاصة. يجب أن تكون عملية الإقفال والترحيل آمنة من التكرار عند إعادة الطلب أو انقطاع الاتصال.
+- لا يجوز إقفال فترة مع وجود تعارضات أو بيانات غير مكتملة غير معتمدة؛ يعرض النظام استثناءات واضحة للمراجعة قبل الاعتماد.
+- **حالة القرار:** معتمد على مستوى متطلبات المنتج. **حالة التنفيذ:** لم يُنفذ بعد؛ يُعاد التحقق قبل بدء المرحلة المالية.
+
+### 3.9 حسابات المعدات والملكية وتسوية الملاك — قرار معتمد
+- يدعم النموذج المعدات المملوكة للشركة والمعدات المملوكة لطرف/شريك آخر، من دون إنشاء مسارين منفصلين لتسجيل الورديات والمصروفات. نوع الملكية وبيانات المالك/الشريك وطريقة التسوية تُسجل عند الحاجة.
+- القاعدة التشغيلية المتفق عليها: **صافي تشغيل المعدة = قيمة الورديات المكتملة المستحقة للمعدة − أجور السائقين المرتبطة بهذه الورديات − مصروفات المعدة المعترف بها**.
+- أجرة السائق تُخصم مرة واحدة فقط من نتيجة تشغيل المعدة، وتظهر كمستحق في دفتر السائق؛ لا تُخصم مرة ثانية من رصيد السائق.
+- يجب فصل نتيجة التشغيل عن التدفقات النقدية وعن حساب مستحقات المالك/الشريك. مستحق المالك يتحدد وفق عقد/طريقة التسوية الفعلية ولا يُفترض تلقائيًا أنه يساوي صافي التشغيل.
+- مصروف المعدة يؤثر على الفترة التي يخصها وفق السياسة المعتمدة سواء دُفع فورًا أو بقي مستحقًا. حالة السداد مستقلة: غير مدفوع، مدفوع جزئيًا، مدفوع بالكامل. سداد مصروف سابق لا يُسجل كمصروف جديد في فترة السداد.
+- المصروف يمكن ربطه بمعدة مباشرة أو بورديّة محددة. يجب منع احتساب المصروف نفسه مرتين، خصوصًا عند صرف مخزون للمعدة مستقبلًا.
+- تُحفظ أسعار الوردية وأجور السائق وتكلفة التشغيل الموجودة كقيم تاريخية للوردية؛ لا تُحذف الحقول الحالية `defaultShiftPrice` أو `operatingCostPerShift` أو ما يقابلها في الـAPI. المصروفات الفعلية تُسجل منفصلة عن تكلفة التشغيل التقديرية لتجنب الخصم المزدوج.
+- **حالة القرار:** معتمد على مستوى متطلبات المنتج. **حالة التنفيذ:** لم يُنفذ بعد؛ لا تُعد هذه البنود دليلًا على وجود وظائفها في الكود.
+
+### 3.10 تصنيفات المصروفات وصلاحيات المستخدمين — قرار معتمد مبدئيًا
+- تصنيفات مصروفات المعدات قابلة للإضافة والتعديل والتفعيل/التعطيل من المستخدم المخوّل. تعطيل أو إعادة تسمية تصنيف لا يغيّر الوصف التاريخي للمعاملات القديمة؛ لا يُسمح بحذف تصنيف مرتبط بحركات مالية.
+- يبدأ النظام بتصنيفات شائعة مثل السولار/الديزل، الزيوت والشحوم، الصيانة، قطع الغيار، وتصنيف مخصص، مع السماح بتوسعتها دون تعديل الكود لكل تصنيف جديد.
+- يجب فرض الصلاحيات في الـBackend، وليس فقط بإخفاء الأزرار في Flutter. التعديلات المالية والإقفالات والتصحيحات تتطلب صلاحيات محددة وسجل تدقيق.
+- يجب التمييز بين **Platform Owner** الذي يدير إنشاء الشركات على مستوى المنصة، وبين مدير الشركة والمستخدمين داخل الـTenant. لا نستخدم اسم `OWNER` دون حسم نطاقه لتجنب الخلط بين مالك المنصة ومالك الشركة/المعدة.
+- نموذج الأدوار المستهدف مبدئيًا: `PLATFORM_OWNER` لإدارة المنصة وإنشاء الشركات؛ `ADMIN` لإدارة شركته ضمن حدود الـTenant؛ `OPERATOR` للعمليات المصرح بها؛ `VIEWER` للقراءة والتقارير؛ و`DRIVER` اختياري لاحقًا وفق متطلبات حساب السائق الواردة أعلاه. تُراجع الأدوار الحالية واختبارات الصلاحيات قبل أي migration أو تغيير في JWT.
+- **حالة القرار:** المتطلبات أعلاه معتمدة مبدئيًا للتصميم؛ الأدوار النهائية وتفاصيل كل صلاحية يجب توثيقها قبل التنفيذ.
