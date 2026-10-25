@@ -289,3 +289,15 @@ For each phase:
 
 **Important:** This roadmap records intent and verified baseline observations. It does not claim that proposed features have been implemented.
 
+
+
+### 3.9 Platform Owner bootstrap — agreed direction
+- **Decision:** The preferred long-term operator workflow is a dedicated CLI/admin command that creates the initial Platform Owner, rather than relying on a normal web-server startup to create the account.
+- **Reuse existing logic:** Keep and reuse `PlatformBootstrapService` for validation, password hashing, the database guard lock, and the single-owner check. Do not duplicate bootstrap business logic in the CLI.
+- **Current implementation:** `PlatformOwnerBootstrapRunner` currently implements a Spring Boot startup-time bootstrap, enabled only by `app.platform.bootstrap.enabled=true`. This is existing code, not the agreed target end state.
+- **Target implementation:** Build a separate administrative entry point that can run the bootstrap task and exit without starting the API web server. Do not merely replace `ApplicationRunner` with `CommandLineRunner`; both execute during Spring Boot startup and do not, by themselves, provide an independent CLI workflow.
+- **Credential handling:** Never commit credentials or put the password in command-line arguments or logs. Use a secure prompt or an appropriate secret source for the deployment environment. Treat environment variables as sensitive and remove bootstrap-only secrets after successful creation where applicable.
+- **Safety requirements:** Refuse creation when a Platform Owner already exists; preserve transactionality and database-level serialization; return a clear non-zero failure result; verify behavior when two attempts run concurrently; and ensure normal application startup does not attempt to create an owner.
+- **Migration approach:** Do not remove the existing Runner until the CLI path is implemented and tested. Then decide whether to remove the Runner or retain it only for explicitly controlled local/development use. Avoid leaving two undocumented production bootstrap paths.
+- **Acceptance tests:** cover first-owner creation, duplicate/repeated invocation, invalid/missing credentials, password hashing, concurrent attempts, clean CLI process exit, and normal API startup with bootstrap disabled.
+- **Status:** Product/architecture direction agreed; CLI implementation and tests **not yet implemented or verified**. Work on `feature/platform-owner-activation`; do not merge into `main` without explicit approval.
