@@ -7,6 +7,8 @@ Flutter (Android) + Spring Boot 2.7 (Java 11) + MySQL 8 + Docker Compose.
 
 - [خريطة المنتج والقرارات وحالة المراحل](docs/PRODUCT_ROADMAP.md) — المصدر الوحيد لترتيب المراحل وحالتها.
 - [خطط التنفيذ التفصيلية](docs/phases/) — نطاق المرحلة وشروط قبولها والأدلة المطلوبة.
+- [صفحة تفعيل مدير الشركة](activation-page/README.md) — واجهة ثابتة مجانية قابلة للنشر على Cloudflare Pages.
+- [إعداد Platform Owner وتفعيل الأدمن](docs/platform-owner-activation.md) — متطلبات الإعداد والأمان والنشر.
 
 هذا الملف مخصص للتثبيت والتشغيل والاختبارات؛ تفاصيل المراحل لا تُدار هنا.
 
