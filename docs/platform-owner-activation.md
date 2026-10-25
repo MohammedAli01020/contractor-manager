@@ -27,7 +27,7 @@ The following implementation files/features are present on this branch, but pres
 - Integration test source: `PlatformOwnerActivationIntegrationTest.java`.
 - Setup/security notes and this progress record.
 
-**Verification status: NOT VERIFIED.** The Maven/MySQL integration suite has not yet been confirmed as passing for this branch. Review `SecurityConfig` and related wiring against the actual project, run the tests, and fix any compile/security/test failures before deployment or merge. Do not describe this feature as tested until actual results are recorded.
+**Latest recorded backend test evidence:** on 2026-10-25, `mvn test` completed with **92 tests, 0 failures, 0 errors, 0 skipped; BUILD SUCCESS** (run from `D:\\contractor-manager\\backend`). This records the last reported run; rerun tests after further code changes. The separate security cases listed in `docs/PROGRESS.md` still need explicit verification. Do not treat the passing suite as proof that every security/concurrency edge case has been covered.
 
 ## Initial Platform Owner bootstrap
 
@@ -59,12 +59,19 @@ The create-tenant response includes an activation URL for manual sharing. The to
 
 ## Local development and Railway deployment
 
-### Local development (current recommended next step)
+### Local development and agreed next steps
 
-1. Run the backend and MySQL locally using the repository's documented development setup.
-2. Open the activation page at `http://localhost:<backend-port>/activate-admin/index.html` after starting Spring Boot. Use the actual port configured for your local run.
-3. Develop the full Next.js Platform Owner dashboard as a separate local frontend when that phase begins; point it at the local Spring Boot API.
-4. Test owner authentication, tenant creation, activation, and tenant isolation. Never use production owner credentials or production activation links for local tests.
+Follow this sequence rather than starting the frontend first:
+
+1. **Finish backend security verification** using `PlatformOwnerActivationIntegrationTest.java`: Platform Owner disabled after JWT issuance, tenant-admin refresh before activation, concurrent activation-token consumption, and concurrent bootstrap where practical. Run the focused test and then `mvn test`; record the actual results.
+2. **Implement the standalone bootstrap CLI.** It should create the first Platform Owner and exit without starting the public API web server. Reuse `PlatformBootstrapService` for validation, password hashing, transactionality, the database guard lock, and the one-owner check. Keep credentials out of source control, command-line arguments, and logs. Retain the current startup Runner until the CLI and its tests pass, then decide whether to remove it or restrict it to controlled development use.
+3. **Start Spring Boot and MySQL locally** using the repository's documented setup. Create the initial Platform Owner with the CLI and verify owner login at `POST /api/v1/platform/auth/login`.
+4. **Build a separate Next.js Platform Owner frontend** with a login page, protected dashboard shell, and tenant-creation screen. This is not the existing tenant-admin activation page; that page remains static HTML/CSS/JavaScript served by Spring Boot.
+5. **Connect Next.js to the local Spring Boot API.** Use `POST /api/v1/platform/auth/login` and `POST /api/v1/platform/tenants`. Keep Platform Owner authentication separate from tenant-user authentication. Decide the production-safe session/token storage approach before deployment; never commit credentials or secrets in frontend source.
+6. **Test the complete workflow:** Platform Owner login → create tenant and first ADMIN → privately share activation URL → first ADMIN chooses a password on `/activate-admin/index.html` → ADMIN can log in. Verify tenant isolation, disabled-owner access, activation expiry/replay, and failure/retry cases.
+7. **Deploy after local verification.** Choose the final Next.js/Spring Boot hosting arrangement later, configure HTTPS and environment secrets, and test the real public activation URL. No separate frontend hosting is required during local development.
+
+Use local/test credentials only. Do not merge this feature into `main` without explicit approval.
 
 ### Serve the activation page from the same Spring Boot service in production
 
