@@ -1,6 +1,8 @@
 package com.contractor.app.user.domain;
 
-/** حاليًا دور واحد. إضافة أدوار لاحقًا لا تتطلب تغيير بنية الجدول. */
+/** Tenant-scoped application roles. Platform owner is intentionally not a tenant user. */
 public enum Role {
-    ADMIN
+    ADMIN,
+    OPERATOR,
+    VIEWER
 }
