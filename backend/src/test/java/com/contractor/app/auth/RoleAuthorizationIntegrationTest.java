@@ -57,7 +57,7 @@ class RoleAuthorizationIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    void viewerAndOperatorCannotWriteDriversEquipmentTypesOrShifts() throws Exception {
+    void viewerAndOperatorCannotWriteMasterData() throws Exception {
         Map<String, Object> validDriver = Map.of(
                 "name", "Authorization test",
                 "workerType", "DRIVER",
@@ -69,16 +69,9 @@ class RoleAuthorizationIntegrationTest extends AbstractIntegrationTest {
                 "equipmentTypeId", 1,
                 "operatingCostPerShift", 0);
         Map<String, Object> validEquipmentType = Map.of("name", "Authorization test");
-        Map<String, Object> validShift = Map.of(
-                "shiftType", "MORNING",
-                "siteId", 1,
-                "driverId", 1,
-                "equipmentId", 1);
-        Map<String, Object> validVersion = Map.of("version", 0);
-        Map<String, Object> validCancel = Map.of("reason", "Authorization test", "version", 0);
 
         for (String token : new String[] {viewerToken, operatorToken}) {
-            // Use validation-valid bodies so these assertions exercise authorization, not DTO validation.
+            // Valid request bodies ensure the response tests authorization rather than DTO validation.
             postJson("/api/v1/drivers", validDriver, token).andExpect(status().isForbidden());
             putJson("/api/v1/drivers/1", validDriver, token).andExpect(status().isForbidden());
             deleteJson("/api/v1/drivers/1", token).andExpect(status().isForbidden());
@@ -90,13 +83,24 @@ class RoleAuthorizationIntegrationTest extends AbstractIntegrationTest {
             postJson("/api/v1/equipment-types", validEquipmentType, token).andExpect(status().isForbidden());
             putJson("/api/v1/equipment-types/1", validEquipmentType, token).andExpect(status().isForbidden());
             deleteJson("/api/v1/equipment-types/1", token).andExpect(status().isForbidden());
-
-            postJson("/api/v1/shifts", validShift, token).andExpect(status().isForbidden());
-            putJson("/api/v1/shifts/1", validShift, token).andExpect(status().isForbidden());
-            postJson("/api/v1/shifts/1/finish", validVersion, token).andExpect(status().isForbidden());
-            postJson("/api/v1/shifts/1/cancel", validCancel, token).andExpect(status().isForbidden());
-            postJson("/api/v1/shifts/1/reinstate", validVersion, token).andExpect(status().isForbidden());
         }
+    }
+
+    @Test
+    void viewerCannotPerformShiftOperations() throws Exception {
+        Map<String, Object> validShift = Map.of(
+                "shiftType", "MORNING",
+                "siteId", 1,
+                "driverId", 1,
+                "equipmentId", 1);
+        Map<String, Object> validVersion = Map.of("version", 0);
+        Map<String, Object> validCancel = Map.of("reason", "Authorization test", "version", 0);
+
+        postJson("/api/v1/shifts", validShift, viewerToken).andExpect(status().isForbidden());
+        putJson("/api/v1/shifts/1", validShift, viewerToken).andExpect(status().isForbidden());
+        postJson("/api/v1/shifts/1/finish", validVersion, viewerToken).andExpect(status().isForbidden());
+        postJson("/api/v1/shifts/1/cancel", validCancel, viewerToken).andExpect(status().isForbidden());
+        postJson("/api/v1/shifts/1/reinstate", validVersion, viewerToken).andExpect(status().isForbidden());
     }
 
     @Test
