@@ -14,7 +14,6 @@ CREATE TABLE platform_owners (
 
 -- Composite key supports a tenant-scoped FK for activation credentials.
 ALTER TABLE users
-    ADD UNIQUE KEY uq_users_id_tenant (id, tenant_id),
     ADD COLUMN password_activated BOOLEAN NOT NULL DEFAULT TRUE;
 
 -- One-time activation credentials are stored as SHA-256 hashes only.
