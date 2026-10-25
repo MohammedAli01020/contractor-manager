@@ -27,7 +27,11 @@ The following implementation files/features are present on this branch, but pres
 - Integration test source: `PlatformOwnerActivationIntegrationTest.java`.
 - Setup/security notes and this progress record.
 
-**Latest recorded backend test evidence:** on 2026-10-25, `mvn test` completed with **92 tests, 0 failures, 0 errors, 0 skipped; BUILD SUCCESS** (run from `D:\\contractor-manager\\backend`). This records the last reported run; rerun tests after further code changes. The separate security cases listed in `docs/PROGRESS.md` still need explicit verification. Do not treat the passing suite as proof that every security/concurrency edge case has been covered.
+**Recorded backend test evidence:**
+- Earlier full-suite run on 2026-10-25: `mvn test` completed with **92 tests, 0 failures, 0 errors, 0 skipped; BUILD SUCCESS** (from `D:\\contractor-manager\\backend`). This predates the focused security-test additions.
+- Focused run reported by the user on 2026-10-25: `mvn "-Dtest=PlatformOwnerActivationIntegrationTest" test` completed with **4 tests, 0 failures, 0 errors, 0 skipped; BUILD SUCCESS** in about 2 minutes 10 seconds.
+- The focused run covers the disabled-owner/old-JWT case, inactive tenant-admin refresh rejection, and concurrent activation-token consumption. These focused checks are recorded as passed based on the user's actual output.
+- **Still pending:** run `mvn test` again after the test additions to confirm the complete backend suite. Do not rerun the focused class without a relevant code change or failure to investigate.
 
 ## Initial Platform Owner bootstrap
 
@@ -63,7 +67,7 @@ The create-tenant response includes an activation URL for manual sharing. The to
 
 Follow this sequence rather than starting the frontend first:
 
-1. **Finish backend security verification** using `PlatformOwnerActivationIntegrationTest.java`: Platform Owner disabled after JWT issuance, tenant-admin refresh before activation, concurrent activation-token consumption, and concurrent bootstrap where practical. Run the focused test and then `mvn test`; record the actual results.
+1. **Security verification status:** the focused tests for Platform Owner disabled after JWT issuance, tenant-admin refresh before activation, and concurrent activation-token consumption have passed in the user's reported run (4 tests, no failures/errors, 2026-10-25). Do not rerun those same focused tests without a relevant code change. Run the full `mvn test` suite next and record its actual result. A concurrent bootstrap test remains a possible additional test.
 2. **Implement the standalone bootstrap CLI.** It should create the first Platform Owner and exit without starting the public API web server. Reuse `PlatformBootstrapService` for validation, password hashing, transactionality, the database guard lock, and the one-owner check. Keep credentials out of source control, command-line arguments, and logs. Retain the current startup Runner until the CLI and its tests pass, then decide whether to remove it or restrict it to controlled development use.
 3. **Start Spring Boot and MySQL locally** using the repository's documented setup. Create the initial Platform Owner with the CLI and verify owner login at `POST /api/v1/platform/auth/login`.
 4. **Build a separate Next.js Platform Owner frontend** with a login page, protected dashboard shell, and tenant-creation screen. This is not the existing tenant-admin activation page; that page remains static HTML/CSS/JavaScript served by Spring Boot.
