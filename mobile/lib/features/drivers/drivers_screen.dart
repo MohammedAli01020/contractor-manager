@@ -14,6 +14,7 @@ class DriversScreen extends StatefulWidget {
 class _DriversScreenState extends State<DriversScreen> {
   final _search = TextEditingController();
   List<Map<String, dynamic>> _items = <Map<String, dynamic>>[];
+  final Set<int> _runningDriverIds = <int>{};
   bool _loading = true;
   bool _includeInactive = false;
   String? _error;
@@ -37,23 +38,38 @@ class _DriversScreenState extends State<DriversScreen> {
       _error = null;
     });
     try {
-      final response = await getIt<Dio>().get<Map<String, dynamic>>(
-        '/drivers',
-        queryParameters: <String, dynamic>{
-          'page': 0,
-          'size': 100,
-          'q': _search.text.trim().isEmpty ? null : _search.text.trim(),
-          'includeInactive': _includeInactive,
-        },
-      );
-      final data = response.data;
+      final responses = await Future.wait([
+        getIt<Dio>().get<Map<String, dynamic>>(
+          '/drivers',
+          queryParameters: <String, dynamic>{
+            'page': 0,
+            'size': 100,
+            'q': _search.text.trim().isEmpty ? null : _search.text.trim(),
+            'includeInactive': _includeInactive,
+          },
+        ),
+        getIt<Dio>().get<List<dynamic>>('/shifts/running'),
+      ]);
+      final response = responses[0];
+      final running = responses[1].data as List<dynamic>? ?? <dynamic>[];
+      final runningIds = running
+          .whereType<Map<String, dynamic>>()
+          .map((shift) => shift['driverId'] is int
+              ? shift['driverId'] as int
+              : int.tryParse('${shift['driverId']}'))
+          .whereType<int>()
+          .toSet();
+      final data = response.data as Map<String, dynamic>?;
       if (data == null || data['items'] is! List) {
         throw Exception('استجابة قائمة السائقين غير صالحة.');
       }
       final list = (data['items'] as List)
           .whereType<Map<String, dynamic>>()
           .toList();
-      if (mounted) setState(() => _items = list);
+      if (mounted) setState(() {
+        _items = list;
+        _runningDriverIds..clear()..addAll(runningIds);
+      });
     } on DioError catch (e) {
       if (mounted) setState(() => _error = _message(e));
     } catch (e) {
@@ -176,22 +192,31 @@ class _DriversScreenState extends State<DriversScreen> {
                                 final isDriver = item['workerType'] == 'DRIVER';
                                 final available = item['availability'] == 'AVAILABLE';
                                 final active = item['active'] != false;
+                                final rawId = item['id'];
+                                final id = rawId is int ? rawId : int.tryParse('$rawId');
+                                final running = id != null && _runningDriverIds.contains(id);
+                                final stateColor = !active
+                                    ? Colors.grey
+                                    : running
+                                        ? Colors.green.shade700
+                                        : available
+                                            ? Colors.blue.shade700
+                                            : Colors.orange.shade800;
+                                final stateLabel = !active
+                                    ? 'الحساب معطّل'
+                                    : running
+                                        ? 'شغال الآن'
+                                        : available
+                                            ? 'متاح'
+                                            : 'غير متاح: ' + _value(item['unavailableReason']);
                                 return Card(
                                   margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                                   child: ListTile(
                                     leading: CircleAvatar(
-                                      backgroundColor: !active
-                                          ? Colors.grey.withOpacity(0.12)
-                                          : (!available
-                                              ? Colors.orange.withOpacity(0.12)
-                                              : Colors.blue.withOpacity(0.12)),
+                                      backgroundColor: stateColor.withOpacity(0.12),
                                       child: Icon(
                                         isDriver ? Icons.person_outline : Icons.engineering_outlined,
-                                        color: !active
-                                            ? Colors.grey
-                                            : (!available
-                                                ? Colors.orange.shade800
-                                                : Colors.blue.shade700),
+                                        color: stateColor,
                                       ),
                                     ),
                                     title: Text(_value(item['name']), style: const TextStyle(fontWeight: FontWeight.bold)),
@@ -201,14 +226,10 @@ class _DriversScreenState extends State<DriversScreen> {
                                         Text((isDriver ? 'سائق' : 'عامل') + ' • هاتف: ' + _value(item['phone'])),
                                         Text('صباحي: ' + _value(item['morningRate']) + ' | مسائي: ' + _value(item['eveningRate']) + ' | ليلي: ' + _value(item['nightRate'])),
                                         Text(
-                                          !active
-                                              ? 'الحساب معطّل'
-                                              : (available ? 'متاح' : 'غير متاح: ' + _value(item['unavailableReason'])),
+                                          stateLabel,
                                           style: TextStyle(
-                                            color: !active
-                                                ? Colors.grey
-                                                : (available ? Colors.blue.shade700 : Colors.orange.shade800),
-                                            fontWeight: FontWeight.w600,
+                                            color: stateColor,
+                                            fontWeight: FontWeight.w700,
                                           ),
                                         ),
                                       ],
