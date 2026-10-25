@@ -32,6 +32,14 @@ Verify that the existing backend, database constraints, and Flutter client behav
 
 The paths above are a documentation baseline, not a substitute for checking the current controller/API contract.
 
+## Resource status, live lists, and audit behavior to verify
+- [ ] Driver availability uses the supported `AVAILABLE` / `UNAVAILABLE` states and a reason when required; equipment status uses the supported `AVAILABLE`, `MAINTENANCE`, and `OUT_OF_SERVICE` states.
+- [ ] A driver or equipment item with an active shift cannot be deactivated or moved into an incompatible state; verify the conflict response.
+- [ ] “Working now” is derived from active shifts rather than maintained as a second independent state.
+- [ ] Verify the live endpoints `GET /api/v1/live/equipment` and `GET /api/v1/live/drivers`, including `onlyFree` behavior and the context shown for active resources, against the actual controller contract.
+- [ ] Verify `GET /api/v1/audit` is tenant-scoped, paginated, newest-first, and records supported changes with actor/time in the same transaction as the operation.
+- [ ] Audit records never store passwords, access tokens, or refresh-token secrets. Confirm actual audit scope from code; do not assume every entity/action is currently covered.
+
 ## Acceptance criteria
 - [ ] No two active shifts can use the same driver or equipment, including under concurrent requests.
 - [ ] Database constraints/triggers and application behavior agree; database failures are translated into stable conflict responses.
