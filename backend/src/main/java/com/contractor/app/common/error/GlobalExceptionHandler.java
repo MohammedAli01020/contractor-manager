@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.ServletWebRequest;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
+import org.springframework.web.server.ResponseStatusException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
@@ -135,6 +136,20 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                                                                   HttpHeaders headers, HttpStatus status,
                                                                   WebRequest request) {
         return build(HttpStatus.BAD_REQUEST, "BAD_REQUEST", "صيغة الطلب غير صحيحة.", request, null);
+    }
+
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<Object> handleResponseStatus(
+            ResponseStatusException ex, WebRequest request) {
+
+        HttpStatus status = ex.getStatus();
+        String reason = ex.getReason();
+
+        String message = (reason == null || reason.trim().isEmpty())
+                ? messageFor(status)
+                : reason;
+
+        return build(status, status.name(), message, request, null);
     }
 
     @Override

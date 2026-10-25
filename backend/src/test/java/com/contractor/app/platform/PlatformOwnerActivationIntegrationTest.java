@@ -67,11 +67,13 @@ class PlatformOwnerActivationIntegrationTest extends AbstractIntegrationTest {
         String activationUrl = createdBody.path("activationUrl").asText();
         String activationToken = activationUrl.substring(activationUrl.indexOf("token=") + 6);
 
+        // The newly created admin has a random temporary password. A guessed password
+        // must fail authentication before activation because the credentials do not match.
         Map<String, Object> adminLogin = new HashMap<>();
         adminLogin.put("username", adminUsername);
         adminLogin.put("password", "StrongAdminPass123");
         mockMvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(adminLogin))).andExpect(status().isForbidden());
+                .content(objectMapper.writeValueAsString(adminLogin))).andExpect(status().isUnauthorized());
 
         String expiredRawToken = TokenHasher.newOpaqueToken();
         Tenant expiredTenant = tenants.saveAndFlush(new Tenant("Expired activation tenant"));
@@ -79,6 +81,15 @@ class PlatformOwnerActivationIntegrationTest extends AbstractIntegrationTest {
                 null, encoder.encode("UnusablePass123"), Role.ADMIN);
         expiredAdmin.setPasswordActivated(false);
         expiredAdmin = users.saveAndFlush(expiredAdmin);
+
+        // Correct credentials for an inactive account must be rejected as forbidden.
+        Map<String, Object> inactiveAdminLogin = new HashMap<>();
+        inactiveAdminLogin.put("username", expiredAdmin.getUsername());
+        inactiveAdminLogin.put("password", "UnusablePass123");
+        mockMvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(inactiveAdminLogin)))
+                .andExpect(status().isForbidden());
+
         activationTokens.saveAndFlush(new TenantAdminActivationToken(expiredTenant.getId(), expiredAdmin.getId(),
                 TokenHasher.sha256Hex(expiredRawToken), LocalDateTime.now(ZoneOffset.UTC).minusMinutes(1)));
         Map<String, Object> expiredActivation = new HashMap<>();
