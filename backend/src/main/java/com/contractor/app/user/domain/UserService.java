@@ -53,8 +53,12 @@ public class UserService {
         if (users.existsByUsername(username)) {
             throw ApiException.conflict("اسم المستخدم مستخدم بالفعل.");
         }
+        Role requestedRole = request.getRole() == null ? Role.OPERATOR : request.getRole();
+        if (requestedRole != Role.OPERATOR && requestedRole != Role.VIEWER) {
+            throw ApiException.badRequest("يمكن إنشاء مستخدم بدور OPERATOR أو VIEWER فقط.");
+        }
         User user = new User(tenantId, username, request.getFullName().trim(),
-                Texts.blankToNull(request.getPhone()), encoder.encode(request.getPassword()), Role.ADMIN);
+                Texts.blankToNull(request.getPhone()), encoder.encode(request.getPassword()), requestedRole);
         users.save(user);
         audit.record(tenantId, AuditEntityType.USER, user.getId(), AuditAction.CREATED, null, null,
                 "username=" + user.getUsername());
