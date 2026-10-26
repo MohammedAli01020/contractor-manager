@@ -115,3 +115,58 @@ export async function POST(request: NextRequest) {
   }
   return NextResponse.json(payload, { status: upstream.status, headers: { "Cache-Control": "no-store" } });
 }
+
+
+export async function PATCH(request: NextRequest) {
+  const cookieStore = await cookies();
+  const token = cookieStore.get("platform_owner_token")?.value;
+  if (!token) return NextResponse.json({ message: "سجّل الدخول أولًا." }, { status: 401 });
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ message: "البيانات المرسلة غير صالحة." }, { status: 400 });
+  }
+  const tenantId = Number((body as { tenantId?: unknown } | null)?.tenantId);
+  const status = (body as { status?: unknown } | null)?.status;
+  if (!Number.isSafeInteger(tenantId) || tenantId <= 0 ||
+      (status !== "ACTIVE" && status !== "SUSPENDED")) {
+    return NextResponse.json({ message: "رقم الشركة أو الحالة غير صالحين." }, { status: 400 });
+  }
+
+  let upstream: Response;
+  try {
+    upstream = await fetch(`${backendUrl()}/platform/tenants/${tenantId}/status`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ status }),
+      cache: "no-store",
+      signal: AbortSignal.timeout(15_000),
+    });
+  } catch {
+    return NextResponse.json({ message: "تعذر الاتصال بالـ Backend. تأكد من أن الخادم يعمل." }, { status: 502 });
+  }
+
+  if (upstream.status === 401 || upstream.status === 403) {
+    const response = NextResponse.json({ message: "الجلسة غير صالحة أو ليس لديك تصريح." }, { status: upstream.status });
+    response.cookies.set("platform_owner_token", "", { path: "/", maxAge: 0 });
+    response.cookies.set("platform_owner_username", "", { path: "/", maxAge: 0 });
+    return response;
+  }
+  if (upstream.ok) return new NextResponse(null, { status: upstream.status, headers: { "Cache-Control": "no-store" } });
+
+  const text = await upstream.text();
+  let message = "تعذر تغيير حالة الشركة.";
+  try {
+    const payload = text ? JSON.parse(text) as { message?: unknown } : {};
+    if (typeof payload.message === "string") message = payload.message;
+  } catch {
+    // Keep the safe fallback when the backend response is not JSON.
+  }
+  return NextResponse.json({ message }, { status: upstream.status >= 400 && upstream.status < 500 ? upstream.status : 502 });
+}
