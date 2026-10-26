@@ -5,8 +5,49 @@ export const runtime = "nodejs";
 const MAX_RESPONSE_BYTES = 32_768;
 
 function backendUrl() {
-  const value = process.env.BACKEND_API_URL || "http://localhost:8080/api/v1";
-  return value.replace(/\/+$/, "");
+  const value = process.env.BACKEND_API_URL || "http://localhost:8081/api/v1";
+  return value.replace(/\\/+$/, "");
+}
+
+export async function GET() {
+  const cookieStore = await cookies();
+  const token = cookieStore.get("platform_owner_token")?.value;
+  if (!token) return NextResponse.json({ message: "سجّل الدخول أولًا." }, { status: 401 });
+
+  let upstream: Response;
+  try {
+    upstream = await fetch(`${backendUrl()}/platform/tenants`, {
+      method: "GET",
+      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      cache: "no-store",
+      signal: AbortSignal.timeout(15_000),
+    });
+  } catch {
+    return NextResponse.json({ message: "تعذر الاتصال بالـ Backend. تأكد من عنوان BACKEND_API_URL ومن أن الخادم يعمل." }, { status: 502 });
+  }
+
+  if (upstream.status === 401 || upstream.status === 403) {
+    const response = NextResponse.json({ message: "الجلسة غير صالحة أو ليس لديك تصريح." }, { status: upstream.status });
+    response.cookies.set("platform_owner_token", "", { path: "/", maxAge: 0 });
+    response.cookies.set("platform_owner_username", "", { path: "/", maxAge: 0 });
+    return response;
+  }
+  const contentLength = Number(upstream.headers.get("content-length") || 0);
+  if (contentLength > MAX_RESPONSE_BYTES) return NextResponse.json({ message: "استجابة الخادم أكبر من المتوقع." }, { status: 502 });
+  const text = await upstream.text();
+  if (text.length > MAX_RESPONSE_BYTES) return NextResponse.json({ message: "استجابة الخادم أكبر من المتوقع." }, { status: 502 });
+
+  let payload: unknown;
+  try {
+    payload = text ? JSON.parse(text) : [];
+  } catch {
+    return NextResponse.json({ message: "تعذر قراءة استجابة الخادم." }, { status: 502 });
+  }
+  if (!upstream.ok) return NextResponse.json({ message: "تعذر تحميل الشركات من الخادم." }, { status: upstream.status >= 400 && upstream.status < 500 ? upstream.status : 502 });
+  if (!Array.isArray(payload) || payload.some((item) => !item || typeof item.tenantId !== "number" || typeof item.tenantName !== "string" || typeof item.status !== "string")) {
+    return NextResponse.json({ message: "استجابة قائمة الشركات من الخادم غير مكتملة." }, { status: 502 });
+  }
+  return NextResponse.json({ tenants: payload }, { headers: { "Cache-Control": "no-store" } });
 }
 
 export async function POST(request: NextRequest) {
@@ -40,7 +81,7 @@ export async function POST(request: NextRequest) {
       signal: AbortSignal.timeout(15_000),
     });
   } catch {
-    return NextResponse.json({ message: "تعذر الاتصال بالـ Backend. تأكد أنه يعمل على المنفذ 8080." }, { status: 502 });
+    return NextResponse.json({ message: "تعذر الاتصال بالـ Backend. تأكد من عنوان BACKEND_API_URL ومن أن الخادم يعمل." }, { status: 502 });
   }
 
   if (upstream.status === 401 || upstream.status === 403) {

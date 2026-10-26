@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
 
 type Session = { authenticated: boolean; username?: string };
+type TenantSummary = { tenantId: number; tenantName: string; status: "ACTIVE" | "SUSPENDED" | string; createdAt: string };
 type CreatedTenant = {
   tenantId: number;
   tenantName: string;
@@ -41,6 +42,9 @@ export default function PlatformOwnerApp() {
   const [created, setCreated] = useState<CreatedTenant | null>(null);
   const [copied, setCopied] = useState(false);
   const [activeView, setActiveView] = useState<"overview" | "create">("overview");
+  const [tenants, setTenants] = useState<TenantSummary[]>([]);
+  const [tenantsLoading, setTenantsLoading] = useState(false);
+  const [tenantsError, setTenantsError] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -50,6 +54,31 @@ export default function PlatformOwnerApp() {
       .catch(() => { if (active) setSession({ authenticated: false }); });
     return () => { active = false; };
   }, []);
+
+  const loadTenants = useCallback(async () => {
+    setTenantsLoading(true);
+    setTenantsError("");
+    try {
+      const response = await fetch("/api/platform/tenants", { cache: "no-store" });
+      const data = await response.json().catch(() => ({}));
+      if (response.status === 401 || response.status === 403) {
+        setSession({ authenticated: false });
+        throw new Error("انتهت صلاحية الجلسة. سجّل الدخول مرة أخرى.");
+      }
+      if (!response.ok || !Array.isArray(data.tenants)) {
+        throw new Error(data.message || "تعذر تحميل الشركات من الخادم.");
+      }
+      setTenants(data.tenants as TenantSummary[]);
+    } catch (error) {
+      setTenantsError(error instanceof Error ? error.message : "حدث خطأ أثناء تحميل الشركات.");
+    } finally {
+      setTenantsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (session?.authenticated) void loadTenants();
+  }, [session?.authenticated, loadTenants]);
 
   async function login(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -107,6 +136,7 @@ export default function PlatformOwnerApp() {
       if (!response.ok) throw new Error(data.message || "لم يتم إنشاء الشركة. راجع البيانات وحالة الـ Backend.");
       setCreated(data as CreatedTenant);
       setForm(initialForm);
+      await loadTenants();
     } catch (error) {
       setCreateError(error instanceof Error ? error.message : "حدث خطأ غير متوقع.");
     } finally {
@@ -182,7 +212,11 @@ export default function PlatformOwnerApp() {
               <button className="quick-card" onClick={() => setActiveView("create")}><span className="quick-icon purple"><Icon name="building" /></span><span className="quick-copy"><strong>إنشاء شركة</strong><small>إضافة شركة وحساب مديرها الأول</small></span><span className="quick-arrow"><Icon name="arrow" /></span></button>
               <div className="quick-card static-card"><span className="quick-icon green"><Icon name="users" /></span><span className="quick-copy"><strong>تفعيل مدير الشركة</strong><small>يختار المدير كلمة مروره من رابط التفعيل</small></span><span className="mini-tag">رابط آمن</span></div>
             </div>
-            <section className="empty-state-panel"><div className="empty-illustration"><Icon name="grid" /></div><div><h3>الأرقام الحقيقية هتظهر لما نوصل واجهات البيانات</h3><p>الـ Backend الحالي يوفّر تسجيل دخول مالك المنصة وإنشاء الشركات. لم نعرض أرقامًا تجريبية أو قائمة شركات وهمية؛ هنضيفها عندما تتوفر واجهات API مناسبة.</p></div></section>
+            <section className="tenants-panel panel">
+              <div className="tenants-heading"><div><h2>الشركات المسجلة</h2><p>قائمة الشركات الموجودة بالفعل في قاعدة البيانات.</p></div><span className="tenant-count">{tenants.length} شركة</span></div>
+              {tenantsLoading ? <div className="tenants-message">جارٍ تحميل الشركات...</div> : tenantsError ? <div className="alert alert-error" role="alert">{tenantsError}<button className="button button-ghost" type="button" onClick={() => void loadTenants()}>إعادة المحاولة</button></div> : tenants.length === 0 ? <div className="tenants-message">لا توجد شركات مسجلة في قاعدة البيانات الحالية حتى الآن.</div> : <div className="tenants-table-wrap"><table className="tenants-table"><thead><tr><th>رقم الشركة</th><th>اسم الشركة</th><th>الحالة</th><th>تاريخ الإنشاء</th></tr></thead><tbody>{tenants.map((tenant) => <tr key={tenant.tenantId}><td>#{tenant.tenantId}</td><td className="tenant-name-cell">{tenant.tenantName}</td><td><span className={tenant.status === "ACTIVE" ? "tenant-status status-active" : "tenant-status status-suspended"}>{tenant.status === "ACTIVE" ? "نشطة" : tenant.status === "SUSPENDED" ? "موقوفة" : tenant.status}</span></td><td>{tenant.createdAt ? new Date(tenant.createdAt).toLocaleDateString("ar-EG") : "—"}</td></tr>)}</tbody></table></div>}
+              <div className="tenants-footer"><button className="button button-ghost" type="button" onClick={() => void loadTenants()} disabled={tenantsLoading}>تحديث القائمة</button></div>
+            </section>
             <div className="bottom-note"><Icon name="shield" /><span>رابط التفعيل يُعرض بعد إنشاء الشركة مرة واحدة؛ شاركه مع المدير المقصود فقط.</span></div>
           </div>
         ) : (

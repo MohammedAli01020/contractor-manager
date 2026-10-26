@@ -7,6 +7,7 @@ import com.contractor.app.platform.api.dto.CreateTenantRequest;
 import com.contractor.app.platform.api.dto.CreateTenantResponse;
 import com.contractor.app.platform.api.dto.PlatformLoginRequest;
 import com.contractor.app.platform.api.dto.PlatformLoginResponse;
+import com.contractor.app.platform.api.dto.PlatformTenantSummary;
 import com.contractor.app.platform.infra.PlatformOwnerRepository;
 import com.contractor.app.platform.infra.TenantAdminActivationTokenRepository;
 import com.contractor.app.tenant.domain.Tenant;
@@ -16,6 +17,9 @@ import com.contractor.app.user.domain.User;
 import com.contractor.app.user.infra.UserRepository;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
+import java.util.stream.Collectors;
+import org.springframework.data.domain.Sort;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -37,6 +41,12 @@ public class PlatformAdminService {
   PlatformOwner owner=owners.findByUsername(username).filter(PlatformOwner::isActive).filter(o->encoder.matches(req.getPassword(),o.getPasswordHash()))
    .orElseThrow(()->new ResponseStatusException(HttpStatus.UNAUTHORIZED,"بيانات الدخول غير صحيحة"));
   return new PlatformLoginResponse(jwt.createPlatformOwnerAccessToken(owner.getId()),jwt.getAccessTtlSeconds(),owner.getId(),owner.getUsername());
+ }
+ @Transactional(readOnly=true)
+ public List<PlatformTenantSummary> listTenants(){
+  return tenants.findAll(Sort.by(Sort.Direction.DESC, "createdAt")).stream()
+   .map(tenant -> new PlatformTenantSummary(tenant.getId(), tenant.getName(), tenant.getStatus().name(), tenant.getCreatedAt()))
+   .collect(Collectors.toList());
  }
  @Transactional
  public CreateTenantResponse createTenant(CreateTenantRequest req){

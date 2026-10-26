@@ -222,3 +222,23 @@ button.quick-card { cursor: pointer; }
   .result-grid { grid-template-columns: 1fr; }
   .step-pill { font-size: 9px; }
 }
+
+
+/* Platform Owner: registered company list */
+.tenants-panel { margin-top: 20px; padding: 22px; }
+.tenants-heading { display: flex; align-items: center; justify-content: space-between; gap: 15px; margin-bottom: 17px; }
+.tenants-heading h2 { margin: 0; font-size: 16px; }
+.tenants-heading p { margin: 7px 0 0; color: var(--muted); font-size: 11px; line-height: 1.8; }
+.tenant-count { flex: 0 0 auto; padding: 7px 10px; border-radius: 8px; color: var(--purple); background: #efedff; font-size: 11px; font-weight: 800; }
+.tenants-message { padding: 25px 14px; border: 1px dashed #d8deea; border-radius: 10px; color: #8791a4; text-align: center; font-size: 12px; line-height: 1.9; }
+.tenants-table-wrap { width: 100%; overflow-x: auto; }
+.tenants-table { width: 100%; border-collapse: collapse; text-align: right; white-space: nowrap; }
+.tenants-table th, .tenants-table td { padding: 14px 12px; border-bottom: 1px solid #eef0f5; font-size: 11px; }
+.tenants-table th { color: #8993a5; background: #fafbfe; font-weight: 800; }
+.tenants-table td { color: #59657b; }
+.tenants-table .tenant-name-cell { color: var(--ink); font-weight: 700; }
+.tenant-status { display: inline-block; padding: 5px 9px; border-radius: 7px; font-size: 10px; font-weight: 800; }
+.status-active { color: #168455; background: #e7f8f0; }
+.status-suspended { color: #a33c4a; background: #fff0f2; }
+.tenants-footer { display: flex; justify-content: flex-start; margin-top: 15px; }
+@media (max-width: 480px) { .tenants-panel { padding: 16px; } .tenants-heading { align-items: flex-start; } .tenants-table th, .tenants-table td { padding: 11px 9px; } }

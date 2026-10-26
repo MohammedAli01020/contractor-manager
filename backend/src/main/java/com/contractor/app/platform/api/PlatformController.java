@@ -5,6 +5,9 @@ import com.contractor.app.platform.api.dto.CreateTenantRequest;
 import com.contractor.app.platform.api.dto.CreateTenantResponse;
 import com.contractor.app.platform.api.dto.PlatformLoginRequest;
 import com.contractor.app.platform.api.dto.PlatformLoginResponse;
+import com.contractor.app.platform.api.dto.PlatformTenantSummary;
+import java.util.List;
+import org.springframework.web.bind.annotation.GetMapping;
 import com.contractor.app.platform.domain.PlatformAdminService;
 import javax.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -21,6 +24,8 @@ public class PlatformController {
  public PlatformController(PlatformAdminService service){this.service=service;}
  @PostMapping("/auth/login")
  public PlatformLoginResponse login(@Valid @RequestBody PlatformLoginRequest request){return service.login(request);}
+ @GetMapping("/tenants")
+ public List<PlatformTenantSummary> listTenants(){return service.listTenants();}
  @PostMapping("/tenants")
  @ResponseStatus(HttpStatus.CREATED)
  public CreateTenantResponse createTenant(@Valid @RequestBody CreateTenantRequest request){return service.createTenant(request);}
