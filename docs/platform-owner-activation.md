@@ -31,17 +31,16 @@ The following implementation files/features are present on this branch, but pres
 - Earlier full-suite run on 2026-10-25: `mvn test` completed with **92 tests, 0 failures, 0 errors, 0 skipped; BUILD SUCCESS** (from `D:\\contractor-manager\\backend`). This predates the focused security-test additions.
 - Focused run reported by the user on 2026-10-25: `mvn "-Dtest=PlatformOwnerActivationIntegrationTest" test` completed with **4 tests, 0 failures, 0 errors, 0 skipped; BUILD SUCCESS** in about 2 minutes 10 seconds.
 - The focused run covers the disabled-owner/old-JWT case, inactive tenant-admin refresh rejection, and concurrent activation-token consumption. These focused checks are recorded as passed based on the user's actual output.
-- **Still pending:** run `mvn test` again after the test additions to confirm the complete backend suite. Do not rerun the focused class without a relevant code change or failure to investigate.
+- **Latest CI status:** the full backend Maven test suite passed on commit `8705c2444c19ea70d0e5f03b54482c0355679ee8` (GitHub Actions run #10). A new run is in progress for the current documentation-only commit. Do not describe a successful CI run as proof of the separate fresh-database CLI runtime workflow.
 
 ## Initial Platform Owner bootstrap
 
-### Current implementation (existing; not the target workflow)
-The current branch contains `PlatformOwnerBootstrapRunner`, a Spring Boot `ApplicationRunner` enabled only when `app.platform.bootstrap.enabled=true`. It reads `PLATFORM_OWNER_USERNAME`, `PLATFORM_OWNER_FULL_NAME`, and `PLATFORM_OWNER_PASSWORD`, then calls `PlatformBootstrapService.createInitialOwner(...)`. The service validates input, hashes the password, locks the database-backed singleton guard, and rejects creation if an owner already exists.
+### Implemented CLI and underlying bootstrap runner
+The branch contains `PlatformOwnerBootstrapCli`, a dedicated Spring Boot entry point configured with `WebApplicationType.NONE`. It enables `app.platform.bootstrap.enabled=true`, so the existing `PlatformOwnerBootstrapRunner` reads `PLATFORM_OWNER_USERNAME`, `PLATFORM_OWNER_FULL_NAME`, and `PLATFORM_OWNER_PASSWORD` and calls `PlatformBootstrapService.createInitialOwner(...)`. The service validates input, hashes the password, locks the database-backed singleton guard, and rejects creation if an owner already exists.
 
-Because this is an application startup runner, leaving the flag enabled can cause a later application startup to fail once an owner already exists. Do not leave the flag enabled for normal operation. This is existing behavior; it is not a CLI implementation.
+The CLI closes its Spring context after the runner completes and exits with a non-zero code when startup/bootstrap fails. `SecurityConfig` keeps `PasswordEncoder` available in non-web mode and only creates the HTTP `SecurityFilterChain` for servlet web applications.
 
-### Agreed target: a dedicated administrative CLI command
-The preferred long-term operator workflow is a separate command for creating the initial Platform Owner, which runs the bootstrap task and exits without starting the public API web server.
+The older `ApplicationRunner` is the implementation mechanism used inside the dedicated CLI process; it is not a replacement for the CLI entry point. Do not leave `app.platform.bootstrap.enabled=true` on normal API startup, because the runner is single-use and will reject creation after an owner exists.
 
 - Reuse `PlatformBootstrapService`; do not duplicate validation, hashing, transaction, or guard-locking logic.
 - Do not merely swap `ApplicationRunner` for `CommandLineRunner`: both execute during Spring Boot startup and do not alone create an independent CLI workflow.
@@ -49,10 +48,10 @@ The preferred long-term operator workflow is a separate command for creating the
 - Reject repeated creation when an owner already exists; keep the database guard and transaction protection.
 - Return a clear success/failure result and a non-zero process exit on failure.
 - Test concurrent attempts, invalid/missing credentials, password hashing, repeated invocation, clean process exit, and normal API startup with bootstrap disabled.
-- Keep the existing Runner until the CLI path is implemented and tested. Then decide whether to remove it or restrict it to explicitly controlled local/development use. Avoid undocumented duplicate production paths.
+- Keep the runner conditional on `app.platform.bootstrap.enabled=true`; the dedicated CLI enables it for its own process. Normal API startup must leave this property disabled.
 - Keep all work on `feature/platform-owner-activation`; do not merge into `main` without explicit approval.
 
-**Decision status:** The dedicated CLI entry point is implemented in `backend/src/main/java/com/contractor/app/platform/infra/PlatformOwnerBootstrapCli.java`. Its application is configured with `WebApplicationType.NONE`, and `SecurityConfig` creates the HTTP `SecurityFilterChain` only for servlet web applications while keeping the `PasswordEncoder` available to the CLI. The focused CLI unit test asserts that no web server is started. GitHub Actions Backend CI passed for commit `8705c2444c19ea70d0e5f03b54482c0355679ee8` on 2026-10-26. This CI result confirms the repository's Maven test suite passed, but it does not by itself prove a fresh-database end-to-end bootstrap run. That runtime check remains pending and must use an isolated disposable test database, never the existing database that already has a Platform Owner.
+**Verification status:** The focused CLI unit test asserts that `WebApplicationType.NONE` is used, and the full Maven test suite passed in GitHub Actions on commit `8705c2444c19ea70d0e5f03b54482c0355679ee8`. A fresh-database end-to-end bootstrap run is still pending and must use an isolated disposable test database, never the existing database that already has a Platform Owner.
 ## Platform API
 
 - `POST /api/v1/platform/auth/login` — owner login; returns a short-lived access token, without a refresh token.
