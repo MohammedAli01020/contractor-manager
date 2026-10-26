@@ -242,3 +242,9 @@ button.quick-card { cursor: pointer; }
 .status-suspended { color: #a33c4a; background: #fff0f2; }
 .tenants-footer { display: flex; justify-content: flex-start; margin-top: 15px; }
 @media (max-width: 480px) { .tenants-panel { padding: 16px; } .tenants-heading { align-items: flex-start; } .tenants-table th, .tenants-table td { padding: 11px 9px; } }
+
+/* Platform Owner: tenant administrator and activation state */
+.tenant-admin-cell { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+.tenant-admin-cell strong { color: var(--ink); font-size: 11px; }
+.tenant-admin-cell small { color: var(--muted); font-size: 10px; }
+.status-pending { color: #946200; background: #fff4d6; }
