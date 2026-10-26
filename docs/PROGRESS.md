@@ -80,3 +80,13 @@ Follow this order. Continue on `feature/platform-owner-activation`; do not merge
 - **Verification rule:** no fix or test result has been confirmed yet for this specific unauthorized tenant Admin login report. After a code change, run the narrow relevant test first and then the backend suite as appropriate; record only observed outputs.
 - **Safety:** preserve existing database data, do not edit applied Flyway migrations, do not merge to `main` without explicit approval, and keep Platform Owner and tenant Admin sessions/roles distinct.
 
+### Code inspection checkpoint — tenant Admin login (2026-10-26)
+
+Reviewed on `feature/platform-owner-activation`:
+- `backend/src/main/java/com/contractor/app/auth/domain/AuthService.java`: `login()` normalizes the submitted username, looks up the user, and checks the supplied password against the stored password hash. Missing username/user or password mismatch yields HTTP 401 with the generic invalid-credentials message.
+- After valid credentials, it loads the user's tenant. A missing tenant also yields HTTP 401. If `user.isActive()`, `user.isPasswordActivated()`, or tenant status `ACTIVE` fails, the current implementation throws HTTP 403 with “الحساب معطّل. تواصل مع مسؤول النظام.” Thus an account being “active” in the UI alone does not prove password activation and tenant status are also valid.
+- `AuthenticatedUserLoader.java` also filters protected requests by active user, activated password, and active tenant; this affects requests after login, not the initial username/password comparison.
+- `/api/v1/auth/login` is explicitly public in `SecurityConfig`; a 401 on this endpoint is not explained by normal authenticated-route authorization alone.
+- **Diagnostic implication:** capture the exact HTTP status/body for the failed login. If it is 401, verify the exact username sent, password/hash pairing, and that the running API container uses the current branch/image and points to the intended database. If it is 403, check `isPasswordActivated()` and tenant status as well as `isActive()`. Do not disclose or log plaintext passwords.
+- **Not yet confirmed:** no fix was made for this login report, and no new test was run in this checkpoint. Need the actual failed response/log evidence before changing authentication logic or database state.
+
