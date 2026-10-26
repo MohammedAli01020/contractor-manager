@@ -166,6 +166,8 @@ This baseline is not a claim that every endpoint or tenant-isolation case has be
 ### 3.11 Phase status and execution documents
 The roadmap below is the only source of truth for phase order and overall status. Detailed files explain scope and acceptance criteria; they must not create a competing roadmap. Status describes phase-level acceptance, not whether some related code already exists.
 
+- [Product Readiness Plan](PRODUCT-READINESS-ROADMAP.md) — commercial product acceptance gates and cross-cutting release readiness.
+
 | Phase | Overall status | Execution plan |
 |---|---|---|
 | 0 — Stabilize and verify the existing core | In progress — re-verify current branch and refresh test evidence before acceptance | [PHASE-00-CORE.md](phases/PHASE-00-CORE.md) |
