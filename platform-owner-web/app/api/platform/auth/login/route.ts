@@ -6,7 +6,7 @@ const USER_COOKIE = "platform_owner_username";
 const MAX_TOKEN_TTL = 60 * 60 * 24;
 
 function backendUrl() {
-  const value = process.env.BACKEND_API_URL || "http://localhost:8080/api/v1";
+  const value = process.env.BACKEND_API_URL || "http://localhost:8081/api/v1";
   return value.replace(/\/+$/, "");
 }
 
@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
       signal: AbortSignal.timeout(10_000),
     });
   } catch {
-    return NextResponse.json({ message: "تعذر الاتصال بالـ Backend. تأكد أنه يعمل على المنفذ 8080." }, { status: 502 });
+    return NextResponse.json({ message: "تعذر الاتصال بالـ Backend. راجع BACKEND_API_URL وتأكد أن الخادم يعمل." }, { status: 502 });
   }
 
   const payload = await upstream.json().catch(() => ({})) as Record<string, unknown>;
