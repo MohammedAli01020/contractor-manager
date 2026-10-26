@@ -41,7 +41,8 @@ export default function PlatformOwnerApp() {
   const [createError, setCreateError] = useState("");
   const [created, setCreated] = useState<CreatedTenant | null>(null);
   const [copied, setCopied] = useState(false);
-  const [activeView, setActiveView] = useState<"overview" | "create">("overview");
+  const [activeView, setActiveView] = useState<"overview" | "create" | "details">("overview");
+  const [selectedTenant, setSelectedTenant] = useState<TenantSummary | null>(null);
   const [tenants, setTenants] = useState<TenantSummary[]>([]);
   const [tenantsLoading, setTenantsLoading] = useState(false);
   const [tenantsError, setTenantsError] = useState("");
@@ -219,7 +220,7 @@ export default function PlatformOwnerApp() {
         <div className="sidebar-bottom"><div className="sidebar-help"><span className="help-icon"><Icon name="shield" /></span><strong>حساب مالك المنصة</strong><p>صلاحيات الإدارة الرئيسية منفصلة عن حسابات الشركات.</p></div><button className="nav-item logout-button" onClick={logout}><Icon name="logout" /> تسجيل الخروج</button></div>
       </aside>
       <section className="workspace">
-        <header className="topbar"><div><span className="breadcrumb">المنصة <span>/</span> {activeView === "overview" ? "نظرة عامة" : "إنشاء شركة"}</span><h1>{activeView === "overview" ? "لوحة التحكم" : "إضافة شركة جديدة"}</h1></div><div className="profile"><span className="profile-avatar">{(session.username || "م").slice(0, 1).toUpperCase()}</span><span><strong>{session.username || "مالك المنصة"}</strong><small>مالك المنصة</small></span><span className="online-dot" title="الجلسة نشطة" /></div></header>
+        <header className="topbar"><div><span className="breadcrumb">المنصة <span>/</span> {activeView === "overview" ? "نظرة عامة" : activeView === "create" ? "إنشاء شركة" : "تفاصيل الشركة"}</span><h1>{activeView === "overview" ? "لوحة التحكم" : activeView === "create" ? "إضافة شركة جديدة" : "تفاصيل الشركة"}</h1></div><div className="profile"><span className="profile-avatar">{(session.username || "م").slice(0, 1).toUpperCase()}</span><span><strong>{session.username || "مالك المنصة"}</strong><small>مالك المنصة</small></span><span className="online-dot" title="الجلسة نشطة" /></div></header>
         {activeView === "overview" ? (
           <div className="content-area">
             <section className="welcome-banner"><div><span className="eyebrow light-eyebrow">مساحة الإدارة الرئيسية</span><h2>أهلًا بك في مِعمار 👋</h2><p>من هنا تقدر تنشئ شركة جديدة وتجهّز حساب مديرها.</p><button className="button button-white" onClick={() => setActiveView("create")}>إنشاء شركة جديدة <Icon name="arrow" /></button></div><div className="banner-art"><div className="art-orbit orbit-one" /><div className="art-orbit orbit-two" /><div className="art-building"><Icon name="building" /></div><span className="art-spark spark-one">✦</span><span className="art-spark spark-two">✧</span></div></section>
@@ -240,12 +241,12 @@ export default function PlatformOwnerApp() {
                 <label className="tenant-search"><span>بحث</span><input type="search" value={tenantSearch} onChange={(event) => setTenantSearch(event.target.value)} placeholder="اسم الشركة أو المدير أو رقم الشركة" aria-label="البحث في الشركات" /></label>
                 <label className="tenant-status-filter"><span>حالة الشركة</span><select value={tenantStatusFilter} onChange={(event) => setTenantStatusFilter(event.target.value as "ALL" | "ACTIVE" | "SUSPENDED")} aria-label="تصفية الشركات حسب الحالة"><option value="ALL">كل الحالات</option><option value="ACTIVE">نشطة</option><option value="SUSPENDED">موقوفة</option></select></label>
               </div>
-              {tenantsLoading ? <div className="tenants-message">جارٍ تحميل الشركات...</div> : tenantsError ? <div className="alert alert-error" role="alert">{tenantsError}<button className="button button-ghost" type="button" onClick={() => void loadTenants()}>إعادة المحاولة</button></div> : tenants.length === 0 ? <div className="tenants-message">لا توجد شركات مسجلة في قاعدة البيانات الحالية حتى الآن.</div> : filteredTenants.length === 0 ? <div className="tenants-message">لا توجد نتائج مطابقة. غيّر كلمة البحث أو حالة الشركة.</div> : <div className="tenants-table-wrap"><table className="tenants-table"><thead><tr><th>رقم الشركة</th><th>اسم الشركة</th><th>مدير الشركة (Admin)</th><th>حالة الحساب</th><th>حالة التفعيل</th><th>حالة الشركة</th><th>تاريخ الإنشاء</th></tr></thead><tbody>{filteredTenants.map((tenant) => <tr key={tenant.tenantId}><td>#{tenant.tenantId}</td><td className="tenant-name-cell">{tenant.tenantName}</td><td>{tenant.admin ? <div className="tenant-admin-cell"><strong>{tenant.admin.fullName}</strong><small dir="ltr">{tenant.admin.username}</small></div> : <span className="muted">لا يوجد Admin مسجل</span>}</td><td>{tenant.admin ? <span className={tenant.admin.active ? "tenant-status status-active" : "tenant-status status-suspended"}>{tenant.admin.active ? "نشط" : "معطّل"}</span> : "—"}</td><td>{tenant.admin ? <span className={tenant.admin.passwordActivated ? "tenant-status status-active" : "tenant-status status-pending"}>{tenant.admin.passwordActivated ? "مفعّل" : "بانتظار التفعيل"}</span> : "—"}</td><td><span className={tenant.status === "ACTIVE" ? "tenant-status status-active" : "tenant-status status-suspended"}>{tenant.status === "ACTIVE" ? "نشطة" : tenant.status === "SUSPENDED" ? "موقوفة" : tenant.status}</span></td><td>{tenant.createdAt ? new Date(tenant.createdAt).toLocaleDateString("ar-EG") : "—"}</td></tr>)}</tbody></table></div>}
+              {tenantsLoading ? <div className="tenants-message">جارٍ تحميل الشركات...</div> : tenantsError ? <div className="alert alert-error" role="alert">{tenantsError}<button className="button button-ghost" type="button" onClick={() => void loadTenants()}>إعادة المحاولة</button></div> : tenants.length === 0 ? <div className="tenants-message">لا توجد شركات مسجلة في قاعدة البيانات الحالية حتى الآن.</div> : filteredTenants.length === 0 ? <div className="tenants-message">لا توجد نتائج مطابقة. غيّر كلمة البحث أو حالة الشركة.</div> : <div className="tenants-table-wrap"><table className="tenants-table"><thead><tr><th>رقم الشركة</th><th>اسم الشركة</th><th>مدير الشركة (Admin)</th><th>حالة الحساب</th><th>حالة التفعيل</th><th>حالة الشركة</th><th>تاريخ الإنشاء</th></tr></thead><tbody>{filteredTenants.map((tenant) => <tr key={tenant.tenantId}><td>#{tenant.tenantId}</td><td className="tenant-name-cell"><strong>{tenant.tenantName}</strong><button className="tenant-details-link" type="button" onClick={() => { setSelectedTenant(tenant); setActiveView("details"); }}>عرض التفاصيل</button></td><td>{tenant.admin ? <div className="tenant-admin-cell"><strong>{tenant.admin.fullName}</strong><small dir="ltr">{tenant.admin.username}</small></div> : <span className="muted">لا يوجد Admin مسجل</span>}</td><td>{tenant.admin ? <span className={tenant.admin.active ? "tenant-status status-active" : "tenant-status status-suspended"}>{tenant.admin.active ? "نشط" : "معطّل"}</span> : "—"}</td><td>{tenant.admin ? <span className={tenant.admin.passwordActivated ? "tenant-status status-active" : "tenant-status status-pending"}>{tenant.admin.passwordActivated ? "مفعّل" : "بانتظار التفعيل"}</span> : "—"}</td><td><span className={tenant.status === "ACTIVE" ? "tenant-status status-active" : "tenant-status status-suspended"}>{tenant.status === "ACTIVE" ? "نشطة" : tenant.status === "SUSPENDED" ? "موقوفة" : tenant.status}</span></td><td>{tenant.createdAt ? new Date(tenant.createdAt).toLocaleDateString("ar-EG") : "—"}</td></tr>)}</tbody></table></div>}
               <div className="tenants-footer"><button className="button button-ghost" type="button" onClick={() => void loadTenants()} disabled={tenantsLoading}>تحديث القائمة</button></div>
             </section>
             <div className="bottom-note"><Icon name="shield" /><span>رابط التفعيل يُعرض بعد إنشاء الشركة مرة واحدة؛ شاركه مع المدير المقصود فقط.</span></div>
           </div>
-        ) : (
+        ) : activeView === "create" ? (
           <div className="content-area create-area">
             <div className="section-heading"><div><h2>بيانات الشركة</h2><p>سيتم إنشاء الشركة وحساب المدير الأول من خلال الـ Backend.</p></div><span className="step-pill">خطوة 1 من 2</span></div>
             <div className="create-layout">
@@ -263,6 +264,43 @@ export default function PlatformOwnerApp() {
               <aside className="panel process-panel"><span className="process-kicker">ماذا سيحدث؟</span><h3>خطوات آمنة وبسيطة</h3><ol className="process-list"><li><span>1</span><div><strong>إنشاء الشركة</strong><p>يُسجّل الـ Backend الشركة وحساب المدير الأول.</p></div></li><li><span>2</span><div><strong>إصدار رابط مؤقت</strong><p>الرابط صالح لمدة محدودة ويُستخدم مرة واحدة.</p></div></li><li><span>3</span><div><strong>المدير يحدد كلمة المرور</strong><p>لا نُنشئ ولا نرسل كلمة مرور مؤقتة.</p></div></li></ol><div className="process-warning"><Icon name="shield" /><p>احتفظ برابط التفعيل بشكل خاص، فهو بمثابة مفتاح مؤقت للحساب.</p></div></aside>
             </div>
             {created && <section className="panel success-panel" aria-live="polite"><div className="success-heading"><span className="success-icon">✓</span><div><h3>تم إنشاء الشركة بنجاح</h3><p>احفظ رابط التفعيل وشاركه مع المدير المقصود فقط.</p></div></div><div className="result-grid"><div><small>الشركة</small><strong>{created.tenantName}</strong></div><div><small>رقم الشركة</small><strong>#{created.tenantId}</strong></div><div><small>اسم دخول المدير</small><strong>{created.adminUsername}</strong></div><div><small>انتهاء رابط التفعيل</small><strong>{created.expiresAt ? new Date(created.expiresAt).toLocaleString("ar-EG") : "حسب إعداد الخادم"}</strong></div></div><label className="activation-label" htmlFor="activation-link">رابط التفعيل الخاص</label><textarea id="activation-link" className="activation-url" value={created.activationUrl} readOnly rows={3} onFocus={(e) => e.currentTarget.select()} /><div className="activation-actions"><button className="button button-primary" onClick={copyActivationLink} type="button"><Icon name="copy" /> {copied ? "تم النسخ" : "نسخ رابط التفعيل"}</button><button className="button button-ghost" type="button" onClick={() => { setCreated(null); setCopied(false); }}>إخفاء الرابط</button></div><p className="secret-warning">تنبيه: لا تنشر الرابط في مكان عام أو داخل صور الشاشة. إذا أخفيته فلن نحتفظ بنسخة أخرى منه في الواجهة.</p></section>}
+          </div>
+        ) : (
+          <div className="content-area create-area">
+            <div className="section-heading">
+              <div><h2>تفاصيل الشركة</h2><p>ملخص بيانات الشركة وحساب مديرها من آخر قائمة تم تحميلها.</p></div>
+              <button className="button button-ghost" type="button" onClick={() => setActiveView("overview")}>العودة إلى الشركات</button>
+            </div>
+            {!selectedTenant ? (
+              <div className="panel tenants-message">لم يتم اختيار شركة. ارجع إلى القائمة واختر الشركة التي تريد عرضها.</div>
+            ) : (
+              <section className="panel tenant-details-panel">
+                <div className="tenant-details-header">
+                  <div><span className="eyebrow">ملف الشركة</span><h2>{selectedTenant.tenantName}</h2><p>رقم الشركة: #{selectedTenant.tenantId}</p></div>
+                  <span className={selectedTenant.status === "ACTIVE" ? "tenant-status status-active" : "tenant-status status-suspended"}>{selectedTenant.status === "ACTIVE" ? "نشطة" : selectedTenant.status === "SUSPENDED" ? "موقوفة" : selectedTenant.status}</span>
+                </div>
+                <div className="tenant-details-grid">
+                  <article><span>رقم الشركة</span><strong>#{selectedTenant.tenantId}</strong></article>
+                  <article><span>تاريخ الإنشاء</span><strong>{selectedTenant.createdAt ? new Date(selectedTenant.createdAt).toLocaleString("ar-EG") : "غير متاح"}</strong></article>
+                  <article><span>حالة الشركة</span><strong>{selectedTenant.status === "ACTIVE" ? "نشطة" : selectedTenant.status === "SUSPENDED" ? "موقوفة" : selectedTenant.status}</strong></article>
+                  <article><span>حساب المدير</span><strong>{selectedTenant.admin ? (selectedTenant.admin.active ? "نشط" : "معطّل") : "لا يوجد مدير مسجل"}</strong></article>
+                  <article><span>حالة كلمة المرور</span><strong>{selectedTenant.admin ? (selectedTenant.admin.passwordActivated ? "تم التفعيل" : "بانتظار التفعيل") : "غير متاح"}</strong></article>
+                </div>
+                <div className="tenant-admin-details">
+                  <h3>مدير الشركة (Admin)</h3>
+                  {selectedTenant.admin ? (
+                    <div className="tenant-admin-detail-grid">
+                      <div><span>الاسم بالكامل</span><strong>{selectedTenant.admin.fullName}</strong></div>
+                      <div><span>اسم المستخدم</span><strong dir="ltr">{selectedTenant.admin.username}</strong></div>
+                      <div><span>رقم المستخدم</span><strong>#{selectedTenant.admin.userId}</strong></div>
+                      <div><span>حالة الحساب</span><strong>{selectedTenant.admin.active ? "نشط" : "معطّل"}</strong></div>
+                    </div>
+                  ) : <p className="muted">لا توجد بيانات مدير مرتبطة بهذه الشركة في الاستجابة الحالية.</p>}
+                </div>
+                <div className="bottom-note"><Icon name="shield" /><span>هذه الصفحة تعرض البيانات التي يوفرها الخادم فقط. لا يتم تنفيذ إيقاف الشركة أو تعديل حساب المدير من هذه الشاشة.</span></div>
+                <div className="form-actions"><button className="button button-primary" type="button" onClick={() => setActiveView("overview")}>العودة إلى قائمة الشركات</button><button className="button button-ghost" type="button" onClick={() => void loadTenants()} disabled={tenantsLoading}>تحديث بيانات الشركات</button></div>
+              </section>
+            )}
           </div>
         )}
       </section>
