@@ -26,12 +26,20 @@ public final class PlatformOwnerBootstrapCli {
                 .build();
     }
 
+    static void verifyBootstrapRunnerStarted(ConfigurableApplicationContext context) {
+        if (context.getBeansOfType(PlatformOwnerBootstrapRunner.class).isEmpty()) {
+            throw new IllegalStateException(
+                    "Platform Owner bootstrap runner did not start; refusing to report success.");
+        }
+    }
+
     public static void main(String[] args) {
         ConfigurableApplicationContext context = null;
         int exitCode = 0;
 
         try {
             context = createApplication().run(args);
+            verifyBootstrapRunnerStarted(context);
             System.out.println("Initial Platform Owner bootstrap completed.");
         } catch (Exception exception) {
             System.err.println(
