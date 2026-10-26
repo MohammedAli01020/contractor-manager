@@ -4,9 +4,17 @@ on:
   push:
     branches:
       - feature/platform-owner-activation
+      - feature/platform-owner-web
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-ci.yml"
   pull_request:
     branches:
       - feature/platform-owner-activation
+      - feature/platform-owner-web
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-ci.yml"
   workflow_dispatch:
 
 permissions:
