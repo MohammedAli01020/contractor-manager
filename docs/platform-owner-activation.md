@@ -101,8 +101,9 @@ The URL must use the real public HTTPS domain assigned to your service. Do not c
 ## Progress update - 2026-10-26
 
 - Dedicated bootstrap CLI and its test source are present.
-- Full Maven test suite passed: 100 tests, 0 failures, 0 errors, 0 skipped.
-- `git diff --check` reported no whitespace errors in the last check.
-- User-confirmed runtime result: the CLI executed successfully and the created Platform Owner was able to log in. Whether the database was fresh is not recorded.
+- GitHub Actions [run #22](https://github.com/MohammedAli01020/contractor-manager/actions/runs/40354376129) passed on commit `f7f16e61e4d6d95a88f461453f5397480082306e`; its `Backend Maven Tests` job ran `mvn -B -ntp test` on Java 11 and uploaded Surefire reports. The earlier 100-test count belongs to the previously documented commit and is not asserted as the exact count for run #22 here.
+- The CLI now checks that `PlatformOwnerBootstrapRunner` is present before printing success; regression tests cover runner absent/present. The guard and tests are included in the passing run #22.
+- User-confirmed runtime result: CLI execution and Platform Owner login succeeded. The user also reports the tenant creation/admin activation flow and the relevant Phase 0/1 workflows have been tested successfully; exact manual case-by-case evidence was not supplied, so these are recorded as user-confirmed.
+- Whether the CLI was first run against a fresh database is not recorded. The Next.js dashboard was not found at the expected `platform-owner-web/` path on this GitHub branch. Resolve whether that dashboard is in scope before considering Phase 9 complete.
 - This progress note is maintained on `feature/platform-owner-activation`; do not merge into `main` without explicit approval.
-- Next: close the CLI success-condition regression check, verify remaining bootstrap edge cases, locate or add the Next.js Platform Owner frontend on this branch, then test the complete tenant creation and first-admin activation workflow.
+- Next: avoid repeating the user's successful happy-path tests. Resolve the dashboard scope, preserve the passing CI evidence, and test only concrete remaining gaps such as expired/replayed activation tokens or concurrent bootstrap attempts if they are not already covered.

@@ -177,14 +177,22 @@ The roadmap below is the only source of truth for phase order and overall status
 | 6 — Version/update policy and APK pilot | Not started | Tracked in this roadmap until a detailed plan is needed |
 | 7 — Subscription management and manual-payment pilot | Not started | Tracked in this roadmap until a detailed plan is needed |
 | 8 — Payment gateway and push notifications | Not started | Tracked in this roadmap until a detailed plan is needed |
-| 9 — Platform Owner and first tenant-admin activation; Next.js dashboard | In progress — backend code, activation page, CLI and security tests are present. The user confirmed successful CLI execution and Platform Owner login; whether this was against a fresh database is not recorded. The CLI's success condition still needs a regression check; the Next.js dashboard was not found at the expected path on this branch, and end-to-end tenant-admin activation remains unverified. | [Platform Owner and activation](platform-owner-activation.md) |
+| 9 — Platform Owner and first tenant-admin activation; Next.js dashboard | In progress — user reports the CLI, Platform Owner login, tenant creation/admin activation and related flows work in manual testing. CLI success-condition guard and regression tests are present; Backend CI passed on commit `f7f16e61e4d6d95a88f461453f5397480082306e`. The fresh-database condition and a Next.js dashboard at `platform-owner-web/` are not evidenced on this branch; retain Phase 9 as in progress until dashboard scope is resolved and evidence is reconciled. | [Platform Owner and activation](platform-owner-activation.md) |
 
 **How to update status:** change a phase status only after inspecting the current branch and recording evidence. "Implemented" means the scoped changes exist; "Tested" additionally requires actual test results. A file existing, a task being discussed, or a test merely being present is not evidence that a phase passed. Record the next action/blocker in the phase plan or the relevant roadmap phase section.
+
+### Verification snapshot — 2026-10-26
+- **Branch:** `feature/platform-owner-activation`
+- **Backend CI:** GitHub Actions run [#22](https://github.com/MohammedAli01020/contractor-manager/actions/runs/40354376129), commit `f7f16e61e4d6d95a88f461453f5397480082306e`, completed successfully. The `Backend Maven Tests` job ran `mvn -B -ntp test` on Java 11; Surefire reports were uploaded.
+- **Reviewed test coverage:** shift lifecycle/snapshots, duplicate active-driver/equipment constraints, tenant isolation for shift/live endpoints, concurrent shift start vs driver/equipment status transitions, and CLI runner-presence guard have test sources on this branch. CI success confirms the Maven suite passed; it does not establish that every roadmap criterion is covered.
+- **Manual evidence supplied by the user:** Platform Owner CLI and login, plus the relevant tenant/admin activation and Phase 0/1 workflows, were reported as tested successfully. Individual manual test cases were not enumerated, so this is recorded as user-confirmed rather than independently reproduced here.
+- **Not run in this CI workflow:** `flutter analyze` and `flutter test`; the checked-in workflow runs backend Maven tests only.
+- **Status decision:** keep Phases 0, 1, and 9 **In progress**. Do not ask the user to repeat already completed manual checks unless a concrete defect or missing scenario requires it. Next work should focus on filling the evidence gaps, not re-running the same happy paths.
 
 ## 4. Step-by-step delivery plan
 
 ### Phase 0 — Stabilize and verify the existing core
-**Status:** In progress; current branch state and latest test evidence must be refreshed before marking this phase tested/accepted.  
+**Status:** In progress; backend CI evidence is recorded, but Flutter checks and full acceptance review remain outstanding.  
 **Detailed plan:** [PHASE-00-CORE.md](phases/PHASE-00-CORE.md).  
 **Goal:** establish a reliable base before adding new modules.
 - Review the current branch, local changes, API contracts, Flyway migrations, and test coverage.
@@ -194,7 +202,7 @@ The roadmap below is the only source of truth for phase order and overall status
 **Exit criteria:** agreed shift workflows pass tests; no known tenant-crossing access; no unreviewed changes are lost.
 
 ### Phase 1 — Driver/equipment master data and shift usability
-**Status:** In progress; compare the current implementation with the exit criteria before accepting the phase.  
+**Status:** In progress; backend CI and core API/test coverage reviewed, but Flutter checks and all master-data acceptance criteria are not individually signed off.  
 **Detailed plan:** [PHASE-01-MASTER-DATA.md](phases/PHASE-01-MASTER-DATA.md).  
 - Complete driver/equipment management and clear unavailable/inactive states with reasons and current shift context where applicable.
 - Confirm rates/defaults are copied into each shift as historical snapshots.
