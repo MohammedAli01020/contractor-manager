@@ -6,7 +6,8 @@ const MAX_RESPONSE_BYTES = 32_768;
 
 function backendUrl() {
   const value = process.env.BACKEND_API_URL || "http://localhost:8081/api/v1";
-  return value.replace(/\\/+$/, "");
+  while (value.endsWith("/")) value = value.slice(0, -1);
+  return value;
 }
 
 export async function GET() {
