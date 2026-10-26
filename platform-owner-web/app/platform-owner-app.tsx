@@ -45,6 +45,22 @@ export default function PlatformOwnerApp() {
   const [tenants, setTenants] = useState<TenantSummary[]>([]);
   const [tenantsLoading, setTenantsLoading] = useState(false);
   const [tenantsError, setTenantsError] = useState("");
+  const [tenantSearch, setTenantSearch] = useState("");
+  const [tenantStatusFilter, setTenantStatusFilter] = useState<"ALL" | "ACTIVE" | "SUSPENDED">("ALL");
+
+  const activeTenantCount = tenants.filter((tenant) => tenant.status === "ACTIVE").length;
+  const suspendedTenantCount = tenants.filter((tenant) => tenant.status === "SUSPENDED").length;
+  const pendingAdminCount = tenants.filter((tenant) => tenant.admin && !tenant.admin.passwordActivated).length;
+  const filteredTenants = tenants.filter((tenant) => {
+    const query = tenantSearch.trim().toLocaleLowerCase();
+    const matchesSearch = !query ||
+      tenant.tenantName.toLocaleLowerCase().includes(query) ||
+      String(tenant.tenantId).includes(query) ||
+      (tenant.admin?.fullName || "").toLocaleLowerCase().includes(query) ||
+      (tenant.admin?.username || "").toLocaleLowerCase().includes(query);
+    const matchesStatus = tenantStatusFilter === "ALL" || tenant.status === tenantStatusFilter;
+    return matchesSearch && matchesStatus;
+  });
 
   useEffect(() => {
     let active = true;
@@ -212,9 +228,19 @@ export default function PlatformOwnerApp() {
               <button className="quick-card" onClick={() => setActiveView("create")}><span className="quick-icon purple"><Icon name="building" /></span><span className="quick-copy"><strong>إنشاء شركة</strong><small>إضافة شركة وحساب مديرها الأول</small></span><span className="quick-arrow"><Icon name="arrow" /></span></button>
               <div className="quick-card static-card"><span className="quick-icon green"><Icon name="users" /></span><span className="quick-copy"><strong>تفعيل مدير الشركة</strong><small>يختار المدير كلمة مروره من رابط التفعيل</small></span><span className="mini-tag">رابط آمن</span></div>
             </div>
+            <section className="tenant-metrics" aria-label="ملخص الشركات">
+              <article className="tenant-metric"><span>إجمالي الشركات</span><strong>{tenants.length}</strong><small>حسب القائمة المحمّلة</small></article>
+              <article className="tenant-metric"><span>الشركات النشطة</span><strong>{activeTenantCount}</strong><small>حالتها ACTIVE</small></article>
+              <article className="tenant-metric"><span>الشركات الموقوفة</span><strong>{suspendedTenantCount}</strong><small>حالتها SUSPENDED</small></article>
+              <article className="tenant-metric"><span>مديرون بانتظار التفعيل</span><strong>{pendingAdminCount}</strong><small>لم يحددوا كلمة المرور بعد</small></article>
+            </section>
             <section className="tenants-panel panel">
-              <div className="tenants-heading"><div><h2>الشركات المسجلة</h2><p>قائمة الشركات الموجودة بالفعل في قاعدة البيانات.</p></div><span className="tenant-count">{tenants.length} شركة</span></div>
-              {tenantsLoading ? <div className="tenants-message">جارٍ تحميل الشركات...</div> : tenantsError ? <div className="alert alert-error" role="alert">{tenantsError}<button className="button button-ghost" type="button" onClick={() => void loadTenants()}>إعادة المحاولة</button></div> : tenants.length === 0 ? <div className="tenants-message">لا توجد شركات مسجلة في قاعدة البيانات الحالية حتى الآن.</div> : <div className="tenants-table-wrap"><table className="tenants-table"><thead><tr><th>رقم الشركة</th><th>اسم الشركة</th><th>مدير الشركة (Admin)</th><th>حالة الحساب</th><th>حالة التفعيل</th><th>حالة الشركة</th><th>تاريخ الإنشاء</th></tr></thead><tbody>{tenants.map((tenant) => <tr key={tenant.tenantId}><td>#{tenant.tenantId}</td><td className="tenant-name-cell">{tenant.tenantName}</td><td>{tenant.admin ? <div className="tenant-admin-cell"><strong>{tenant.admin.fullName}</strong><small dir="ltr">{tenant.admin.username}</small></div> : <span className="muted">لا يوجد Admin مسجل</span>}</td><td>{tenant.admin ? <span className={tenant.admin.active ? "tenant-status status-active" : "tenant-status status-suspended"}>{tenant.admin.active ? "نشط" : "معطّل"}</span> : "—"}</td><td>{tenant.admin ? <span className={tenant.admin.passwordActivated ? "tenant-status status-active" : "tenant-status status-pending"}>{tenant.admin.passwordActivated ? "مفعّل" : "بانتظار التفعيل"}</span> : "—"}</td><td><span className={tenant.status === "ACTIVE" ? "tenant-status status-active" : "tenant-status status-suspended"}>{tenant.status === "ACTIVE" ? "نشطة" : tenant.status === "SUSPENDED" ? "موقوفة" : tenant.status}</span></td><td>{tenant.createdAt ? new Date(tenant.createdAt).toLocaleDateString("ar-EG") : "—"}</td></tr>)}</tbody></table></div>}
+              <div className="tenants-heading"><div><h2>الشركات المسجلة</h2><p>ابحث باسم الشركة أو رقمها أو اسم مديرها، ويمكنك تصفية القائمة حسب الحالة.</p></div><span className="tenant-count">{filteredTenants.length} من {tenants.length} شركة</span></div>
+              <div className="tenant-filters">
+                <label className="tenant-search"><span>بحث</span><input type="search" value={tenantSearch} onChange={(event) => setTenantSearch(event.target.value)} placeholder="اسم الشركة أو المدير أو رقم الشركة" aria-label="البحث في الشركات" /></label>
+                <label className="tenant-status-filter"><span>حالة الشركة</span><select value={tenantStatusFilter} onChange={(event) => setTenantStatusFilter(event.target.value as "ALL" | "ACTIVE" | "SUSPENDED")} aria-label="تصفية الشركات حسب الحالة"><option value="ALL">كل الحالات</option><option value="ACTIVE">نشطة</option><option value="SUSPENDED">موقوفة</option></select></label>
+              </div>
+              {tenantsLoading ? <div className="tenants-message">جارٍ تحميل الشركات...</div> : tenantsError ? <div className="alert alert-error" role="alert">{tenantsError}<button className="button button-ghost" type="button" onClick={() => void loadTenants()}>إعادة المحاولة</button></div> : tenants.length === 0 ? <div className="tenants-message">لا توجد شركات مسجلة في قاعدة البيانات الحالية حتى الآن.</div> : filteredTenants.length === 0 ? <div className="tenants-message">لا توجد نتائج مطابقة. غيّر كلمة البحث أو حالة الشركة.</div> : <div className="tenants-table-wrap"><table className="tenants-table"><thead><tr><th>رقم الشركة</th><th>اسم الشركة</th><th>مدير الشركة (Admin)</th><th>حالة الحساب</th><th>حالة التفعيل</th><th>حالة الشركة</th><th>تاريخ الإنشاء</th></tr></thead><tbody>{filteredTenants.map((tenant) => <tr key={tenant.tenantId}><td>#{tenant.tenantId}</td><td className="tenant-name-cell">{tenant.tenantName}</td><td>{tenant.admin ? <div className="tenant-admin-cell"><strong>{tenant.admin.fullName}</strong><small dir="ltr">{tenant.admin.username}</small></div> : <span className="muted">لا يوجد Admin مسجل</span>}</td><td>{tenant.admin ? <span className={tenant.admin.active ? "tenant-status status-active" : "tenant-status status-suspended"}>{tenant.admin.active ? "نشط" : "معطّل"}</span> : "—"}</td><td>{tenant.admin ? <span className={tenant.admin.passwordActivated ? "tenant-status status-active" : "tenant-status status-pending"}>{tenant.admin.passwordActivated ? "مفعّل" : "بانتظار التفعيل"}</span> : "—"}</td><td><span className={tenant.status === "ACTIVE" ? "tenant-status status-active" : "tenant-status status-suspended"}>{tenant.status === "ACTIVE" ? "نشطة" : tenant.status === "SUSPENDED" ? "موقوفة" : tenant.status}</span></td><td>{tenant.createdAt ? new Date(tenant.createdAt).toLocaleDateString("ar-EG") : "—"}</td></tr>)}</tbody></table></div>}
               <div className="tenants-footer"><button className="button button-ghost" type="button" onClick={() => void loadTenants()} disabled={tenantsLoading}>تحديث القائمة</button></div>
             </section>
             <div className="bottom-note"><Icon name="shield" /><span>رابط التفعيل يُعرض بعد إنشاء الشركة مرة واحدة؛ شاركه مع المدير المقصود فقط.</span></div>
