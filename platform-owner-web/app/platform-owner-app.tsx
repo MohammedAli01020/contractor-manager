@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import type { FormEvent } from "react";
 
 type Session = { authenticated: boolean; username?: string };
 type CreatedTenant = {
