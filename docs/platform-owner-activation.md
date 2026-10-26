@@ -66,8 +66,8 @@ The create-tenant response includes an activation URL for manual sharing. The to
 
 Follow this sequence rather than starting the frontend first:
 
-1. **Security verification status:** the focused tests for Platform Owner disabled after JWT issuance, tenant-admin refresh before activation, and concurrent activation-token consumption have passed in the user's reported run (4 tests, no failures/errors, 2026-10-25). Do not rerun those same focused tests without a relevant code change. Run the full `mvn test` suite next and record its actual result. A concurrent bootstrap test remains a possible additional test.
-2. **Verify the standalone bootstrap CLI at runtime.** The CLI entry point and a unit test asserting `WebApplicationType.NONE` are now present. `SecurityConfig` keeps the password encoder available in non-web mode and conditions the HTTP filter chain on a servlet web application. Reuse `PlatformBootstrapService` for validation, password hashing, transactionality, the database guard lock, and the one-owner check. Keep credentials out of source control, command-line arguments, and logs. Before any real use, test successful creation, missing/invalid credentials, repeated invocation, clean process exit, and normal API startup with bootstrap disabled against an isolated disposable database. Retain the current startup Runner until the CLI workflow is fully verified, then decide whether to remove it or restrict it to controlled development use.
+1. **Security verification status:** the latest full Maven test run passed: 100 tests, 0 failures, 0 errors, and 0 skipped. Earlier focused security tests also passed in the reported run (4 tests, 2026-10-25).
+2. **Standalone bootstrap CLI:** the CLI uses `WebApplicationType.NONE` and enables `app.platform.bootstrap.enabled=true`. `SecurityConfig` keeps the password encoder available in non-web mode and limits the HTTP security filter chain to servlet applications. Actual bootstrap execution against an isolated test database remains unverified. Before real use, verify successful creation, invalid credentials, repeated invocation, clean process exit, and normal API startup with bootstrap disabled. Never run it against the existing database, and keep credentials out of source control, command-line arguments, and logs.
 3. **Start Spring Boot and MySQL locally** using the repository's documented setup. Create the initial Platform Owner with the CLI and verify owner login at `POST /api/v1/platform/auth/login`.
 4. **Build a separate Next.js Platform Owner frontend** with a login page, protected dashboard shell, and tenant-creation screen. This is not the existing tenant-admin activation page; that page remains static HTML/CSS/JavaScript served by Spring Boot.
 5. **Connect Next.js to the local Spring Boot API.** Use `POST /api/v1/platform/auth/login` and `POST /api/v1/platform/tenants`. Keep Platform Owner authentication separate from tenant-user authentication. Decide the production-safe session/token storage approach before deployment; never commit credentials or secrets in frontend source.
@@ -97,3 +97,12 @@ The URL must use the real public HTTPS domain assigned to your service. Do not c
 - Existing users remain activated through the V10 migration default. Tenant user login and refresh reject accounts whose `password_activated` flag is false. Tenant registration remains disabled outside the test profile.
 - The frontend performs basic usability validation only. Spring Boot must validate the token, enforce expiry/single use, hash the password using the configured password encoder, and control account activation.
 - Before merge, run the full Maven integration suite against MySQL/Testcontainers and verify at least: owner bootstrap/authentication, tenant creation, login blocked before activation, successful activation, expired token, token replay, tenant isolation, and access-control boundaries.
+
+## Progress update - 2026-10-26
+
+- Dedicated bootstrap CLI and its test source are present.
+- Full Maven test suite passed: 100 tests, 0 failures, 0 errors, 0 skipped.
+- `git diff --check` reported no whitespace errors in the last check.
+- Actual bootstrap execution against a fresh database is not verified.
+- Commit and push are pending final review.
+- Next phase: build the separate Next.js Platform Owner frontend after backend review and push.
