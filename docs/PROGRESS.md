@@ -1,4 +1,17 @@
-# Project Progress
+## Latest verified handoff — 2026-10-26 (Platform Owner UI local verification)
+
+- **Platform Owner UI branch:** `feature/platform-owner-web`, remote HEAD verified as `4bd8f4e00c787d2db4d24b951fe4ad738ed8aa1e`. The user's local branch was fast-forwarded to this commit.
+- **Local frontend verification (user-provided output):** in `D:\\contractor-manager\\platform-owner-web`, `npm ci` completed successfully (357 packages; audit reported 0 vulnerabilities), `npm run lint` completed with no reported errors, and `npm run build` completed successfully on Next.js 16.4.3 with TypeScript and static-page generation passing. The install emitted an advisory about the `unrs-resolver` postinstall script not being approved; this did not prevent installation/build.
+- **End-to-end UI smoke check (user confirmed):** the app ran, Platform Owner login worked, and the dashboard workflow the user tested worked. This is user-confirmed manual verification, not an automated browser test.
+- **Existing UI capabilities:** separate Platform Owner login; secure Next.js route handlers using an HttpOnly cookie; company list; company creation with first Admin; activation URL display/copy; Admin name/username, account active state, and password activation state; refresh list and logout.
+- **Correct API route separation:** Platform Owner login is `POST /api/v1/platform/auth/login`; tenant Admin login is `POST /api/v1/auth/login`. Do not mix their sessions or endpoints.
+- **Runtime:** Next.js at `http://localhost:3000`; backend host port `8081` (container port `8080`); MySQL host port `3308`. Do not stop the unrelated service on host port `8080`.
+- **Database safety:** the user has existing data and confirmed the UI works. Do not reset/delete the database, rerun bootstrap against it, or edit applied Flyway migrations.
+- **Next UI increment:** improve the existing company dashboard with a searchable/filterable company list and factual summary counts derived only from the returned tenant data (total companies, active/suspended companies, and Admins awaiting activation). Keep it frontend-only unless an actual API gap is found; do not invent metrics or modify backend/database behavior for cosmetic UI needs.
+- **Git safety:** continue on `feature/platform-owner-web`; do not merge to `main` without explicit approval. The backend/bootstrap branch `feature/platform-owner-activation` is separate; do not assume its HEAD matches this branch.
+- **Verification status:** only the above local lint/build/manual checks are confirmed for the current UI. Re-run `npm run lint` and `npm run build` after the next UI changes and record their actual outputs.
+
+---
 
 > This file is the handoff note for continuing work across ChatGPT conversations. Update it only after checking the actual repository state and recording verified results.
 
