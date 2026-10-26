@@ -1,3 +1,15 @@
+## Tenant suspension/reactivation — implementation added, verification pending (2026-10-26)
+
+- **Branch:** `feature/platform-owner-web`; no changes to `main`, database contents, schema, or Flyway migrations.
+- Added a Platform Owner-only backend endpoint: `PATCH /api/v1/platform/tenants/{tenantId}/status`, accepting only `ACTIVE` or `SUSPENDED`. It returns 404 for an unknown tenant and 400 for an invalid status. Existing `/api/v1/platform/**` authorization requires the `PLATFORM_OWNER` role.
+- Added the service operation using the existing `TenantStatus` enum and `Tenant.setStatus`; no database migration is needed. The existing `AuthenticatedUserLoader` checks tenant status for protected requests, so suspension blocks tenant-user protected access and reactivation removes that tenant-status block (individual user disabled state still applies).
+- Added a same-origin Next.js route proxy using the HttpOnly Platform Owner session cookie; the bearer token is not sent to browser JavaScript. Added details-page controls with confirmation, loading/error states, and in-memory list/detail refresh after success.
+- Added an integration test covering suspend/reactivate, missing Platform Owner authentication, unknown tenant ID, and invalid status.
+- **Verification pending:** GitHub source commits are present, but backend tests, frontend lint/build, and manual browser behavior have not yet been observed for this increment. Do not claim this feature is verified until checks pass.
+- **Next local steps:** inspect `git status -sb` in `D:\\contractor-manager`; if the worktree is clean, run `git pull --ff-only origin feature/platform-owner-web`. Then run backend tests from `backend` (use the repo's existing Maven wrapper if present; otherwise `mvn test`) and run `npm run lint` plus `npm run build` from `platform-owner-web`. Preserve local edits if the worktree is not clean. Do not reset the database or merge to `main` without explicit approval.
+
+---
+
 ## Latest UI increment — 2026-10-26 (tenant dashboard search and metrics)
 
 - **Implemented on** `feature/platform-owner-web`: added search over company name, tenant ID, Admin full name, and Admin username; added a company status filter (all/active/suspended); added a no-matches state; added responsive summary cards for total companies, active companies, suspended companies, and Admins awaiting password activation.
