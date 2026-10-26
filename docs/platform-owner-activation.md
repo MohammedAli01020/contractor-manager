@@ -51,7 +51,7 @@ The older `ApplicationRunner` is the implementation mechanism used inside the de
 - Keep the runner conditional on `app.platform.bootstrap.enabled=true`; the dedicated CLI enables it for its own process. Normal API startup must leave this property disabled.
 - Keep all work on `feature/platform-owner-activation`; do not merge into `main` without explicit approval.
 
-**Verification status:** The focused CLI unit test asserts that `WebApplicationType.NONE` is used, and the full Maven test suite passed in GitHub Actions on commit `8705c2444c19ea70d0e5f03b54482c0355679ee8`. A fresh-database end-to-end bootstrap run is still pending and must use an isolated disposable test database, never the existing database that already has a Platform Owner.
+**Verification status:** The user confirmed successful CLI execution followed by successful Platform Owner login. Whether that run used a fresh database was not established. The focused CLI unit test asserts that `WebApplicationType.NONE` is used, and the full Maven test suite passed in GitHub Actions on commit `8705c2444c19ea70d0e5f03b54482c0355679ee8`. If fresh-database behavior needs certification, repeat only against an isolated disposable test database, never the existing database.
 ## Platform API
 
 - `POST /api/v1/platform/auth/login` — owner login; returns a short-lived access token, without a refresh token.
@@ -67,7 +67,7 @@ The create-tenant response includes an activation URL for manual sharing. The to
 Follow this sequence rather than starting the frontend first:
 
 1. **Security verification status:** the latest full Maven test run passed: 100 tests, 0 failures, 0 errors, and 0 skipped. Earlier focused security tests also passed in the reported run (4 tests, 2026-10-25).
-2. **Standalone bootstrap CLI:** the CLI uses `WebApplicationType.NONE` and enables `app.platform.bootstrap.enabled=true`. `SecurityConfig` keeps the password encoder available in non-web mode and limits the HTTP security filter chain to servlet applications. Actual bootstrap execution against an isolated test database remains unverified. Before real use, verify successful creation, invalid credentials, repeated invocation, clean process exit, and normal API startup with bootstrap disabled. Never run it against the existing database, and keep credentials out of source control, command-line arguments, and logs.
+2. **Standalone bootstrap CLI:** the CLI uses `WebApplicationType.NONE` and enables `app.platform.bootstrap.enabled=true`. `SecurityConfig` keeps the password encoder available in non-web mode and limits the HTTP security filter chain to servlet applications. The user confirmed successful CLI execution and Platform Owner login; execution against an isolated fresh test database is not specifically confirmed. Remaining checks include invalid credentials, repeated invocation, clean process exit, normal API startup with bootstrap disabled, and ensuring the CLI cannot report success if the runner did not execute. Never run it against the existing database, and keep credentials out of source control, command-line arguments, and logs.
 3. **Start Spring Boot and MySQL locally** using the repository's documented setup. Create the initial Platform Owner with the CLI and verify owner login at `POST /api/v1/platform/auth/login`.
 4. **Build a separate Next.js Platform Owner frontend** with a login page, protected dashboard shell, and tenant-creation screen. This is not the existing tenant-admin activation page; that page remains static HTML/CSS/JavaScript served by Spring Boot.
 5. **Connect Next.js to the local Spring Boot API.** Use `POST /api/v1/platform/auth/login` and `POST /api/v1/platform/tenants`. Keep Platform Owner authentication separate from tenant-user authentication. Decide the production-safe session/token storage approach before deployment; never commit credentials or secrets in frontend source.
@@ -103,6 +103,6 @@ The URL must use the real public HTTPS domain assigned to your service. Do not c
 - Dedicated bootstrap CLI and its test source are present.
 - Full Maven test suite passed: 100 tests, 0 failures, 0 errors, 0 skipped.
 - `git diff --check` reported no whitespace errors in the last check.
-- Actual bootstrap execution against a fresh database is not verified.
-- Commit and push are pending final review.
-- Next phase: build the separate Next.js Platform Owner frontend after backend review and push.
+- User-confirmed runtime result: the CLI executed successfully and the created Platform Owner was able to log in. Whether the database was fresh is not recorded.
+- This progress note is maintained on `feature/platform-owner-activation`; do not merge into `main` without explicit approval.
+- Next: close the CLI success-condition regression check, verify remaining bootstrap edge cases, locate or add the Next.js Platform Owner frontend on this branch, then test the complete tenant creation and first-admin activation workflow.
