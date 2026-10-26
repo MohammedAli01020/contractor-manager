@@ -2,16 +2,32 @@
 
 > This file is the handoff note for continuing work across ChatGPT conversations. Update it only after checking the actual repository state and recording verified results.
 
+
+## Latest verified handoff — 2026-10-26 (login routing and Platform Owner UI)
+
+- **Frontend branch:** `feature/platform-owner-web`, verified HEAD `86c7b1f660edf457c0de1903313f87f163d35c2a`. This branch contains the Next.js Platform Owner dashboard. Backend bootstrap/security work also exists on the separate `feature/platform-owner-activation` branch; do not assume the two branch heads are identical.
+- **Local runtime verified by the user:** Next.js at `http://localhost:3000`; Docker backend host port is `8081` (container port 8080); MySQL host port is `3308`. The backend image built successfully and the API container restarted successfully. Do not stop the unrelated service bound to host port 8080.
+- **Login issue resolved by correct endpoint selection:** tenant Admin `mali` was receiving HTTP 401 when trying to log in through `POST /api/v1/platform/auth/login`. The user confirmed login succeeded after switching to the tenant-user endpoint `POST /api/v1/auth/login`. The former endpoint is for Platform Owner only.
+- **Frontend code review result:** `platform-owner-web/app/platform-owner-app.tsx` sends the Platform Owner login form to the same-origin Next.js route `/api/platform/auth/login`. Its route handler in `platform-owner-web/app/api/platform/auth/login/route.ts` forwards to backend `/platform/auth/login` using `BACKEND_API_URL`, sets an HttpOnly token cookie, and does not expose the token to browser JavaScript. This is correct for the Platform Owner UI.
+- **Separation of roles:** the current Next.js page is specifically the Platform Owner interface; it is not the tenant Admin login page. Do not change the Platform Owner login endpoint to `/api/v1/auth/login`. If a tenant Admin login UI is added later, it must use the tenant-user login route and keep its session/authentication separate from the Platform Owner cookie.
+- **Tenant list/create proxies:** the Next.js `/api/platform/tenants` route forwards authenticated requests to backend `/platform/tenants` with the Platform Owner bearer token. The dashboard lists tenant and Admin summary information, and the create-company flow displays the Admin activation URL.
+- **Database safety:** two existing tenants/Admin accounts were visible in the UI. Do not rerun bootstrap against the existing database, reset the database, or edit applied Flyway migrations.
+- **Verification evidence:** user confirmed that the tenant Admin login worked after using the correct endpoint. Earlier user output showed the API container/build succeeded and the unauthenticated tenant-list endpoint correctly returned 401. Frontend source was reviewed on GitHub; this note does not claim a new automated UI test was run during this turn.
+- **Next steps:** (1) run a quick UI regression check: Platform Owner login → tenant list → logout; (2) verify tenant Admin login through `POST /api/v1/auth/login`; (3) add/update automated checks for the frontend route mapping if the current test setup supports them; (4) review the frontend README because its note that the tenant list is unavailable is now stale; (5) update progress after observed test results.
+- **Git safety:** continue work on the appropriate feature branch. Do not merge into `main` without explicit approval.
+
+
 ## Current workspace
 
 - **Repository:** [contractor-manager](https://github.com/MohammedAli01020/contractor-manager)
-- **Working branch:** `feature/platform-owner-activation`
+- **Backend working branch:** `feature/platform-owner-activation`
+- **Platform Owner web UI branch:** `feature/platform-owner-web`
 - **Local project path:** `D:\\contractor-manager`
 - **Main branch:** Do not merge into `main` without explicit approval.
 
 ## Current status
 
-**In progress:** The standalone Platform Owner bootstrap CLI has been added, its focused CLI-mode test passes in CI, and the latest GitHub Actions backend run succeeded. Next, review bootstrap security and close remaining test-coverage gaps before moving to local end-to-end verification and the web UI.
+**Current status:** Backend bootstrap work and the separate Next.js Platform Owner UI are both in progress on their respective feature branches. The login-routing issue for tenant Admin `mali` was resolved by using `POST /api/v1/auth/login`; the Platform Owner UI correctly remains on `POST /api/v1/platform/auth/login`. Continue with local UI regression checks, route-mapping tests, and the remaining backend bootstrap security review.
 
 ### Confirmed completed
 
