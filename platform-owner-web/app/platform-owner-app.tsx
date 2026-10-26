@@ -48,6 +48,8 @@ export default function PlatformOwnerApp() {
   const [tenantsError, setTenantsError] = useState("");
   const [tenantSearch, setTenantSearch] = useState("");
   const [tenantStatusFilter, setTenantStatusFilter] = useState<"ALL" | "ACTIVE" | "SUSPENDED">("ALL");
+  const [statusBusy, setStatusBusy] = useState(false);
+  const [statusError, setStatusError] = useState("");
 
   const activeTenantCount = tenants.filter((tenant) => tenant.status === "ACTIVE").length;
   const suspendedTenantCount = tenants.filter((tenant) => tenant.status === "SUSPENDED").length;
@@ -168,6 +170,37 @@ export default function PlatformOwnerApp() {
       setCopied(true);
     } catch {
       setCreateError("تعذر النسخ تلقائيًا. حدّد الرابط وانسخه يدويًا.");
+    }
+  }
+
+  async function updateTenantStatus() {
+    if (!selectedTenant || statusBusy) return;
+    const nextStatus = selectedTenant.status === "ACTIVE" ? "SUSPENDED" : "ACTIVE";
+    const action = nextStatus === "SUSPENDED" ? "إيقاف" : "إعادة تفعيل";
+    const confirmed = window.confirm(`هل أنت متأكد من ${action} شركة «${selectedTenant.tenantName}»؟ ${nextStatus === "SUSPENDED" ? "سيُمنع مستخدمو الشركة من الوصول إلى الطلبات المحمية." : "سيتمكن مستخدمو الشركة من الدخول مجددًا إذا كانت حساباتهم مفعّلة."}`);
+    if (!confirmed) return;
+
+    setStatusBusy(true);
+    setStatusError("");
+    try {
+      const response = await fetch("/api/platform/tenants", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tenantId: selectedTenant.tenantId, status: nextStatus }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (response.status === 401 || response.status === 403) {
+        setSession({ authenticated: false });
+        throw new Error("انتهت صلاحية الجلسة أو ليس لديك تصريح. سجّل الدخول مرة أخرى.");
+      }
+      if (!response.ok) throw new Error(data.message || "تعذر تغيير حالة الشركة.");
+      const updated = { ...selectedTenant, status: nextStatus };
+      setSelectedTenant(updated);
+      setTenants((current) => current.map((tenant) => tenant.tenantId === updated.tenantId ? updated : tenant));
+    } catch (error) {
+      setStatusError(error instanceof Error ? error.message : "حدث خطأ أثناء تغيير حالة الشركة.");
+    } finally {
+      setStatusBusy(false);
     }
   }
 
@@ -297,8 +330,15 @@ export default function PlatformOwnerApp() {
                     </div>
                   ) : <p className="muted">لا توجد بيانات مدير مرتبطة بهذه الشركة في الاستجابة الحالية.</p>}
                 </div>
-                <div className="bottom-note"><Icon name="shield" /><span>هذه الصفحة تعرض البيانات التي يوفرها الخادم فقط. لا يتم تنفيذ إيقاف الشركة أو تعديل حساب المدير من هذه الشاشة.</span></div>
-                <div className="form-actions"><button className="button button-primary" type="button" onClick={() => setActiveView("overview")}>العودة إلى قائمة الشركات</button><button className="button button-ghost" type="button" onClick={() => void loadTenants()} disabled={tenantsLoading}>تحديث بيانات الشركات</button></div>
+                <div className="bottom-note"><Icon name="shield" /><span>إيقاف الشركة يمنع مستخدميها من الوصول إلى الطلبات المحمية. إعادة التفعيل لا تتجاوز حالة تعطيل حساب المستخدم نفسه.</span></div>
+                {statusError && <div className="alert alert-error" role="alert">{statusError}</div>}
+                <div className="form-actions">
+                  <button className={selectedTenant.status === "ACTIVE" ? "button button-danger" : "button button-primary"} type="button" onClick={() => void updateTenantStatus()} disabled={statusBusy}>
+                    {statusBusy ? "جارٍ تحديث الحالة..." : selectedTenant.status === "ACTIVE" ? "إيقاف الشركة" : "إعادة تفعيل الشركة"}
+                  </button>
+                  <button className="button button-ghost" type="button" onClick={() => setActiveView("overview")}>العودة إلى قائمة الشركات</button>
+                  <button className="button button-ghost" type="button" onClick={() => void loadTenants()} disabled={tenantsLoading}>تحديث بيانات الشركات</button>
+                </div>
               </section>
             )}
           </div>
