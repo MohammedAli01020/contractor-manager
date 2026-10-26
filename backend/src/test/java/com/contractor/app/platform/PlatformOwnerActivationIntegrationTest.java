@@ -2,6 +2,7 @@ package com.contractor.app.platform;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -216,6 +217,56 @@ class PlatformOwnerActivationIntegrationTest extends AbstractIntegrationTest {
         } finally {
             executor.shutdownNow();
         }
+    }
+
+    @Test
+    void tenantStatusCanBeSuspendedAndReactivatedOnlyByPlatformOwner() throws Exception {
+        Tenant tenant = tenants.saveAndFlush(new Tenant("Status transition tenant"));
+        String ownerUsername = uniqueName("status_owner_");
+        owners.saveAndFlush(new PlatformOwner(ownerUsername, "Status Owner", encoder.encode("StrongOwnerPass123")));
+
+        Map<String, Object> login = new HashMap<>();
+        login.put("username", ownerUsername);
+        login.put("password", "StrongOwnerPass123");
+        MvcResult ownerLogin = mockMvc.perform(post("/api/v1/platform/auth/login")
+                .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(login)))
+                .andExpect(status().isOk()).andReturn();
+        String ownerToken = objectMapper.readTree(ownerLogin.getResponse().getContentAsString())
+                .path("accessToken").asText();
+
+        Map<String, Object> suspend = new HashMap<>();
+        suspend.put("status", "SUSPENDED");
+        mockMvc.perform(patch("/api/v1/platform/tenants/{tenantId}/status", tenant.getId())
+                .header("Authorization", "Bearer " + ownerToken)
+                .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(suspend)))
+                .andExpect(status().isNoContent());
+        assertEquals(com.contractor.app.tenant.domain.TenantStatus.SUSPENDED,
+                tenants.findById(tenant.getId()).orElseThrow().getStatus());
+
+        Map<String, Object> reactivate = new HashMap<>();
+        reactivate.put("status", "ACTIVE");
+        mockMvc.perform(patch("/api/v1/platform/tenants/{tenantId}/status", tenant.getId())
+                .header("Authorization", "Bearer " + ownerToken)
+                .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(reactivate)))
+                .andExpect(status().isNoContent());
+        assertEquals(com.contractor.app.tenant.domain.TenantStatus.ACTIVE,
+                tenants.findById(tenant.getId()).orElseThrow().getStatus());
+
+        mockMvc.perform(patch("/api/v1/platform/tenants/{tenantId}/status", tenant.getId())
+                .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(suspend)))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(patch("/api/v1/platform/tenants/{tenantId}/status", 99999999L)
+                .header("Authorization", "Bearer " + ownerToken)
+                .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(suspend)))
+                .andExpect(status().isNotFound());
+
+        Map<String, Object> invalid = new HashMap<>();
+        invalid.put("status", "DELETED");
+        mockMvc.perform(patch("/api/v1/platform/tenants/{tenantId}/status", tenant.getId())
+                .header("Authorization", "Bearer " + ownerToken)
+                .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(invalid)))
+                .andExpect(status().isBadRequest());
     }
 
 }
