@@ -5,6 +5,7 @@ import com.contractor.app.common.security.TokenHasher;
 import com.contractor.app.platform.api.dto.ActivateAdminRequest;
 import com.contractor.app.platform.api.dto.CreateTenantRequest;
 import com.contractor.app.platform.api.dto.CreateTenantResponse;
+import com.contractor.app.platform.api.dto.PlatformAdminSummary;
 import com.contractor.app.platform.api.dto.PlatformLoginRequest;
 import com.contractor.app.platform.api.dto.PlatformLoginResponse;
 import com.contractor.app.platform.api.dto.PlatformTenantSummary;
@@ -45,7 +46,16 @@ public class PlatformAdminService {
  @Transactional(readOnly=true)
  public List<PlatformTenantSummary> listTenants(){
   return tenants.findAll(Sort.by(Sort.Direction.DESC, "createdAt")).stream()
-   .map(tenant -> new PlatformTenantSummary(tenant.getId(), tenant.getName(), tenant.getStatus().name(), tenant.getCreatedAt()))
+   .map(tenant -> {
+    PlatformAdminSummary admin = users.findByTenantIdOrderByFullNameAsc(tenant.getId()).stream()
+     .filter(user -> user.getRole() == Role.ADMIN)
+     .findFirst()
+     .map(user -> new PlatformAdminSummary(user.getId(), user.getFullName(), user.getUsername(),
+       user.isActive(), user.isPasswordActivated()))
+     .orElse(null);
+    return new PlatformTenantSummary(tenant.getId(), tenant.getName(), tenant.getStatus().name(),
+      tenant.getCreatedAt(), admin);
+   })
    .collect(Collectors.toList());
  }
  @Transactional
