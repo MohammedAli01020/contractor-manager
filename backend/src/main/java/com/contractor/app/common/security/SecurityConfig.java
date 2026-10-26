@@ -15,25 +15,21 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @Configuration
 @EnableMethodSecurity
 public class SecurityConfig {
-    private final JwtService jwtService;
-    private final AuthenticatedUserLoader userLoader;
-    private final PlatformOwnerLoader ownerLoader;
-    private final RestAuthenticationEntryPoint entryPoint;
-    private final RestAccessDeniedHandler accessDeniedHandler;
 
-    public SecurityConfig(JwtService jwtService, AuthenticatedUserLoader userLoader,
-                          PlatformOwnerLoader ownerLoader, RestAuthenticationEntryPoint entryPoint,
-                          RestAccessDeniedHandler accessDeniedHandler) {
-        this.jwtService = jwtService;
-        this.userLoader = userLoader;
-        this.ownerLoader = ownerLoader;
-        this.entryPoint = entryPoint;
-        this.accessDeniedHandler = accessDeniedHandler;
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
     }
 
     @Bean
     @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(
+            HttpSecurity http,
+            JwtService jwtService,
+            AuthenticatedUserLoader userLoader,
+            PlatformOwnerLoader ownerLoader,
+            RestAuthenticationEntryPoint entryPoint,
+            RestAccessDeniedHandler accessDeniedHandler) throws Exception {
         http.csrf().disable()
                 .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 .and().exceptionHandling().authenticationEntryPoint(entryPoint).accessDeniedHandler(accessDeniedHandler)
@@ -48,7 +44,4 @@ public class SecurityConfig {
                         UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
-
-    @Bean
-    public PasswordEncoder passwordEncoder() { return new BCryptPasswordEncoder(); }
 }
