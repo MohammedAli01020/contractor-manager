@@ -77,7 +77,7 @@ export default function PlatformOwnerApp() {
   }, []);
 
   useEffect(() => {
-    if (session?.authenticated) void loadTenants();
+    if (session?.authenticated) Promise.resolve().then(() => loadTenants());
   }, [session?.authenticated, loadTenants]);
 
   async function login(event: FormEvent<HTMLFormElement>) {
