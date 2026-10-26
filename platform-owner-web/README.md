@@ -1,36 +1,32 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# واجهة مالك منصة مِعمار
 
-## Getting Started
+واجهة Next.js منفصلة عن Spring Boot لإدارة المنصة، باللغة العربية واتجاه RTL.
 
-First, run the development server:
+## المتطلبات
+- Node.js 20.9 أو أحدث (المشروع تم إنشاؤه واختباره مبدئيًا على Node 24).
+- Spring Boot API يعمل محليًا على المنفذ 8080.
+- قاعدة بيانات وتسجيل دخول Platform Owner مُجهّزان بالفعل. لا تعِد تشغيل bootstrap على قاعدة البيانات الموجودة.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## التشغيل المحلي على Windows
+1. شغّل الـ Backend بالطريقة المعتادة من مجلد `backend`.
+2. افتح نافذة CMD أخرى:
+   ```bat
+   cd /d D:\contractor-manager\platform-owner-web
+   copy .env.example .env.local
+   npm install
+   npm run dev
+   ```
+3. افتح http://localhost:3000
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## الواجهات المتصلة
+- `POST /api/v1/platform/auth/login`: تسجيل دخول مالك المنصة.
+- `POST /api/v1/platform/tenants`: إنشاء شركة وحساب مديرها الأول.
+- رابط التفعيل يُعرض من استجابة الـ Backend ويجب مشاركته بشكل خاص.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+تُمرَّر استدعاءات الـ API عبر Next.js Route Handlers. يُحفظ JWT في Cookie بخاصية HttpOnly ولا يُرسل إلى JavaScript في المتصفح، ولا يُخزن في localStorage. يتم التحقق النهائي من الصلاحيات لدى Spring Boot.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## حدود الإصدار الحالي
+- لا توجد واجهة قائمة شركات لأن Backend الحالي لا يوفّر endpoint لعرضها.
+- لا توجد أرقام إحصائية وهمية؛ تُضاف الإحصائيات عند توفير endpoints موثقة لها.
+- لا يوجد استعادة كلمة مرور أو تحديث تلقائي للجلسة؛ عند انتهاء JWT يلزم تسجيل الدخول مجددًا.
+- استخدم HTTPS في أي نشر حقيقي. إعدادات الأمان والتكامل النهائي تحتاج اختبارًا محليًا مع الـ Backend قبل النشر.
