@@ -12,6 +12,7 @@ import com.contractor.app.platform.api.dto.PlatformTenantSummary;
 import com.contractor.app.platform.infra.PlatformOwnerRepository;
 import com.contractor.app.platform.infra.TenantAdminActivationTokenRepository;
 import com.contractor.app.tenant.domain.Tenant;
+import com.contractor.app.tenant.domain.TenantStatus;
 import com.contractor.app.tenant.infra.TenantRepository;
 import com.contractor.app.user.domain.Role;
 import com.contractor.app.user.domain.User;
@@ -57,6 +58,14 @@ public class PlatformAdminService {
       tenant.getCreatedAt(), admin);
    })
    .collect(Collectors.toList());
+ }
+ @Transactional
+ public void updateTenantStatus(Long tenantId, com.contractor.app.platform.api.dto.UpdateTenantStatusRequest.TenantStatus requestedStatus) {
+  Tenant tenant = tenants.findById(tenantId)
+   .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "الشركة غير موجودة"));
+  tenant.setStatus(requestedStatus == com.contractor.app.platform.api.dto.UpdateTenantStatusRequest.TenantStatus.ACTIVE
+   ? TenantStatus.ACTIVE : TenantStatus.SUSPENDED);
+  tenants.save(tenant);
  }
  @Transactional
  public CreateTenantResponse createTenant(CreateTenantRequest req){
