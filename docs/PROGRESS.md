@@ -69,3 +69,14 @@ Follow this order. Continue on `feature/platform-owner-activation`; do not merge
 - Never claim a test passed unless its output confirms it.
 - Do not edit previously-applied Flyway migrations.
 - Before resuming in a new chat, read this file, then verify the actual branch, commit, working tree, and relevant test output. This note is a handoff aid, not a substitute for checking the repository.
+
+## Handoff update — 2026-10-26 (tenant Admin login diagnosis + local Docker state)
+
+- **Current branch for the login investigation:** `feature/platform-owner-activation`. The tenant Admin login issue is still the active debugging task: the user reports the Admin is active, but login through `POST /api/v1/auth/login` returns an unauthorized response. Do not assume the account is inactive; verify the actual persisted user/tenant state and the authentication checks in the latest branch code.
+- **Keep authentication routes separate:** `POST /api/v1/auth/login` is for tenant Admin/user login. `POST /api/v1/platform/auth/login` is only for Platform Owner. Do not “fix” this by swapping the Platform Owner UI endpoint.
+- **Local Docker state reported by user (2026-10-26):** `docker compose config --services` lists `db` and `api`; database container `contractor-db` was healthy on host port `3308`; API container `contractor-api` maps host `8081` to container `8080`. An unrelated EspoCRM service uses host port `8080`; do not stop or remap it without asking.
+- **Resolved runtime symptom:** the user reported that the earlier `GET /api/platform/tenants` 502 issue was resolved (“خلاص اشتغل”). Do not reopen that as an active failure unless it reappears.
+- **Current next diagnostic steps:** inspect the exact latest `feature/platform-owner-activation` code for the login service, user-enabled/activation flags, tenant status checks, password encoder, JWT/authentication exception mapping, and relevant integration tests. Then ask for or inspect the actual API log/response from one failed login attempt if the code alone does not explain it. Do not change database rows or reset data as a shortcut.
+- **Verification rule:** no fix or test result has been confirmed yet for this specific unauthorized tenant Admin login report. After a code change, run the narrow relevant test first and then the backend suite as appropriate; record only observed outputs.
+- **Safety:** preserve existing database data, do not edit applied Flyway migrations, do not merge to `main` without explicit approval, and keep Platform Owner and tenant Admin sessions/roles distinct.
+
