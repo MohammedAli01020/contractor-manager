@@ -34,7 +34,7 @@ public class PlatformAdminService {
  private final TenantAdminActivationTokenRepository tokens; private final PasswordEncoder encoder; private final JwtService jwt;
  private final String baseUrl; private final long activationHours;
  public PlatformAdminService(PlatformOwnerRepository owners,TenantRepository tenants,UserRepository users,TenantAdminActivationTokenRepository tokens,PasswordEncoder encoder,JwtService jwt,
- @Value("${app.platform.activation-base-url:http://localhost:8080/activate-admin/index.html}") String baseUrl,
+ @Value("${app.platform.activation-base-url:http://localhost:8081/activate-admin/index.html}") String baseUrl,
  @Value("${app.platform.activation-hours:24}") long activationHours){this.owners=owners;this.tenants=tenants;this.users=users;this.tokens=tokens;this.encoder=encoder;this.jwt=jwt;this.baseUrl=baseUrl;this.activationHours=activationHours;}
  @Transactional(readOnly=true)
  public PlatformLoginResponse login(PlatformLoginRequest req){
