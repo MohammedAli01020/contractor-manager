@@ -178,6 +178,7 @@ The roadmap below is the only source of truth for phase order and overall status
 | 7 — Subscription management and manual-payment pilot | Not started | Tracked in this roadmap until a detailed plan is needed |
 | 8 — Payment gateway and push notifications | Not started | Tracked in this roadmap until a detailed plan is needed |
 | 9 — Platform Owner and first tenant-admin activation; Next.js dashboard | In progress — user reports the CLI, Platform Owner login, tenant creation/admin activation and related flows work in manual testing. CLI success-condition guard and regression tests are present; Backend CI passed on commit `f7f16e61e4d6d95a88f461453f5397480082306e`. The fresh-database condition and a Next.js dashboard at `platform-owner-web/` are not evidenced on this branch; retain Phase 9 as in progress until dashboard scope is resolved and evidence is reconciled. | [Platform Owner and activation](platform-owner-activation.md) |
+| 10 — Observability & Production Monitoring | Planned — documentation added; implementation not verified | [Observability & Production Monitoring](OBSERVABILITY-ROADMAP.md) |
 
 **How to update status:** change a phase status only after inspecting the current branch and recording evidence. "Implemented" means the scoped changes exist; "Tested" additionally requires actual test results. A file existing, a task being discussed, or a test merely being present is not evidence that a phase passed. Record the next action/blocker in the phase plan or the relevant roadmap phase section.
 
@@ -264,6 +265,23 @@ The roadmap below is the only source of truth for phase order and overall status
 - Implement contractor request flow and Platform Admin confirmation/rejection.
 - Test duplicate requests, wrong amount, expired subscriptions, early renewal, grace-period boundaries, delayed review, cancellations/refunds, and repeated confirmation.
 **Exit criteria:** paid access changes only through a trusted, audited server-side action; expired tenants retain data and can still reach renewal/support.
+
+
+### Phase 10 — Observability & Production Monitoring
+**Status:** Planned — scope documented; implementation and deployment are not yet verified.  
+**Detailed plan:** [OBSERVABILITY-ROADMAP.md](OBSERVABILITY-ROADMAP.md).
+
+**Goal:** Make production behavior measurable and diagnosable without exposing tenant data or adding unnecessary infrastructure complexity.
+- Spring Boot Actuator + Micrometer for application health and metrics; Prometheus for time-series collection; Grafana for dashboards and alerts.
+- Track HTTP request rate/count, status/error rates, p50/p95/p99 latency, timeouts, JVM/GC/threads, CPU/memory/disk, MySQL health and connection-pool pressure.
+- Use bounded-cardinality route templates for metric labels; never label metrics with tokens, user IDs, tenant IDs, raw URLs, or arbitrary request parameters.
+- Use structured logs and request/correlation IDs; introduce Loki for centralized search when useful. Never log passwords, access/refresh tokens, TOTP secrets, recovery codes, or unnecessary personal/financial data.
+- Add OpenTelemetry tracing when cross-service/dependency diagnosis warrants it; use Java Flight Recorder (JFR) for targeted profiling of confirmed performance problems.
+- Keep business event counts (e.g. shifts created/completed/cancelled) separate from HTTP request counts. Platform Owner dashboards should show safe aggregates by default, not unrestricted tenant logs or financial/personal data.
+- Start within Docker Compose; add components incrementally and verify compatibility with Spring Boot 2.7.18 / Java 11. Secure all management/monitoring endpoints; define retention, storage caps, access roles, and actionable alerts.
+- Acceptance requires real dashboards and metrics, tested health checks and alert delivery, safe searchable logs with request correlation, access/retention documentation, and a repeatable incident/performance troubleshooting runbook. Load-test representative endpoints and measure monitoring overhead.
+
+**Implementation status:** documentation only. This phase does not claim that Actuator, Prometheus, Grafana, Loki, OpenTelemetry, dashboards, or alerts have been installed or configured.
 
 ### Phase 8 — Payment gateway and push notifications (later)
 - Research provider eligibility and fees; implement sandbox integration and verify webhooks/signatures/idempotency.
