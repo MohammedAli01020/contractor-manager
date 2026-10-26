@@ -285,3 +285,8 @@ button.quick-card { cursor: pointer; }
 .tenant-details-panel .form-actions { margin-top: 20px; }
 @media (max-width: 780px) { .tenant-details-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 480px) { .tenant-details-panel { padding: 17px; } .tenant-details-header { flex-direction: column; } .tenant-details-grid, .tenant-admin-detail-grid { grid-template-columns: 1fr; } .tenant-details-panel .form-actions .button { width: 100%; } }
+
+/* Platform Owner: destructive tenant action */
+.button-danger { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 11px 16px; border: 1px solid #f0c5cb; border-radius: 9px; color: #a33c4a; background: #fff0f2; font: inherit; font-size: 12px; font-weight: 800; cursor: pointer; transition: background .15s ease, border-color .15s ease; }
+.button-danger:hover:not(:disabled) { background: #ffe2e6; border-color: #e7a6b0; }
+.button-danger:disabled { opacity: .6; cursor: not-allowed; }
