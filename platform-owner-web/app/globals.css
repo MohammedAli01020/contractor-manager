@@ -248,3 +248,20 @@ button.quick-card { cursor: pointer; }
 .tenant-admin-cell strong { color: var(--ink); font-size: 11px; }
 .tenant-admin-cell small { color: var(--muted); font-size: 10px; }
 .status-pending { color: #946200; background: #fff4d6; }
+
+
+/* Platform Owner: data-derived company metrics and filters */
+.tenant-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-top: 22px; }
+.tenant-metric { display: flex; flex-direction: column; gap: 9px; min-width: 0; padding: 18px; border: 1px solid var(--line); border-radius: 14px; background: #fff; }
+.tenant-metric span { color: #7e899d; font-size: 11px; line-height: 1.7; }
+.tenant-metric strong { color: var(--ink); font-size: 27px; letter-spacing: -.5px; }
+.tenant-metric small { color: #a0a8b7; font-size: 10px; line-height: 1.7; }
+.tenant-filters { display: flex; align-items: end; gap: 12px; margin: 0 0 17px; }
+.tenant-search, .tenant-status-filter { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.tenant-search { flex: 1; }
+.tenant-search span, .tenant-status-filter span { color: #7f899b; font-size: 10px; font-weight: 700; }
+.tenant-search input, .tenant-status-filter select { width: 100%; min-height: 42px; padding: 0 12px; border: 1px solid #dfe4ed; border-radius: 9px; color: var(--ink); background: #fff; font: inherit; font-size: 11px; }
+.tenant-search input:focus, .tenant-status-filter select:focus { outline: 3px solid #b8b2ff; outline-offset: 2px; border-color: #8c83ed; }
+.tenant-status-filter { flex: 0 0 180px; }
+@media (max-width: 1050px) { .tenant-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 480px) { .tenant-metrics { gap: 9px; } .tenant-metric { padding: 13px; } .tenant-metric strong { font-size: 23px; } .tenant-filters { flex-direction: column; align-items: stretch; } .tenant-status-filter { flex-basis: auto; } }
