@@ -1,3 +1,13 @@
+## Latest UI increment — 2026-10-26 (tenant dashboard search and metrics)
+
+- **Implemented on** `feature/platform-owner-web`: added search over company name, tenant ID, Admin full name, and Admin username; added a company status filter (all/active/suspended); added a no-matches state; added responsive summary cards for total companies, active companies, suspended companies, and Admins awaiting password activation.
+- **Implementation is data-derived:** summary counts use the tenant list returned by the existing API; no fabricated metrics, backend changes, or database changes were introduced.
+- **Commits:** app logic `f9790772789a0a1c56d99bf8368d4b34e7fe38f0`; responsive CSS `a4cbc571844576cdcf5bc42fad65d46a337ec007`.
+- **Verification pending:** the user must fast-forward/pull the latest branch and run `npm run lint` and `npm run build`; no claim is made yet that these new changes pass locally. Then manually verify search, status filtering, counts, and empty-results behavior.
+- **Safety remains unchanged:** keep Platform Owner and tenant Admin auth paths separate, do not touch/reset the existing database, and do not merge to `main` without explicit approval.
+
+---
+
 ## Latest verified handoff — 2026-10-26 (Platform Owner UI local verification)
 
 - **Platform Owner UI branch:** `feature/platform-owner-web`, remote HEAD verified as `4bd8f4e00c787d2db4d24b951fe4ad738ed8aa1e`. The user's local branch was fast-forwarded to this commit.
