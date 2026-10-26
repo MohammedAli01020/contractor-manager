@@ -108,3 +108,14 @@ Follow this order. Continue on `feature/platform-owner-activation`; do not merge
 - Never claim a test passed unless its output confirms it.
 - Do not edit previously-applied Flyway migrations.
 - Before resuming in a new chat, read this file, then verify the actual branch, commit, working tree, and relevant test output. This note is a handoff aid, not a substitute for checking the repository.
+
+
+## Platform Owner UI increment — company details view
+
+- Added a read-only company details view on feature/platform-owner-web. Open it from the “عرض التفاصيل” link beside a company name in the dashboard.
+- The view displays tenant ID/name/status/creation date and the Admin summary (name, username, user ID, account active state, and password-activation state) from the already-loaded tenant list.
+- This is intentionally read-only: it does not invent backend endpoints or attempt to suspend/reactivate a company or change an Admin account. Those actions need a backend capability/security review first.
+- Added responsive styling for the details view.
+- Commits: 22a9b964de0df01bd0d31267a33f7fc0c12ece68 (view), 66f53243331dbd79e778bb7f756a6dcb6ca38312 (styles).
+- Verification pending: this change has not yet been run through local lint/build or manual browser testing. Do not report it as verified until the user runs those checks.
+- Next local check: inspect git status -sb before pulling; if the working tree is clean, pull feature/platform-owner-web, then run npm run lint and npm run build from platform-owner-web. Keep existing DB data intact and do not merge into main without explicit approval.
