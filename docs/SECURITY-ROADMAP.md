@@ -21,6 +21,20 @@ Platform Owner is the highest-impact account because it can create and manage te
 - Record security-relevant events without logging passwords, raw tokens, TOTP secrets, recovery codes, or other credentials.
 - Provide safe initial enrollment/bootstrap so mandatory 2FA does not permanently lock out the legitimate owner. Test lost-device and recovery paths before production enforcement.
 
+
+
+### 1.1.1 Initial Platform Owner bootstrap and verified email
+- The first Platform Owner must be provisioned through a controlled, one-time bootstrap/setup flow, not a public self-registration page.
+- The initial setup must collect an email address and require proof of ownership before marking it as verified.
+- Do not hardcode a default password, email address, TOTP secret, recovery code, or other credential in source control. Use a secure deployment/bootstrap mechanism for initial account creation and credential setup.
+- Require the owner to complete TOTP enrollment and verify a generated code before granting normal Platform Owner access. Password-only authentication during setup must not yield a full owner access token.
+- Keep setup unavailable after successful bootstrap, or protect re-entry with a deliberate, auditable recovery procedure; never leave an unauthenticated account-creation endpoint enabled.
+- Use the verified email for account recovery and security alerts only; it is not an automatic substitute for TOTP. Recovery must still use a controlled, rate-limited process.
+- The setup UI should explain that the user scans a QR code with Google Authenticator or another compatible TOTP app, then enters a current six-digit code to confirm pairing. Treat the QR code and underlying secret as credentials: display only during enrollment and never log them.
+- Generate one-time recovery codes after successful 2FA setup and show them once for the owner to store securely.
+
+**Acceptance criteria:** initial setup cannot be claimed by an arbitrary visitor; email ownership is verified; no hardcoded credential is required; the owner cannot use full Platform Owner privileges before TOTP enrollment is confirmed; repeated bootstrap attempts are blocked or require an audited recovery process.
+
 ### 1.2 Tenant Admins
 - Require secure first-admin activation; activation links expire, are single-use, and are invalidated when reissued.
 - Require a verified email address before it can be used for account recovery. Email provider configuration must be explicit; never claim an email was sent if delivery is not configured or fails.
