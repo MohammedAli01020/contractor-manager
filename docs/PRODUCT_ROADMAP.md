@@ -9,6 +9,15 @@
 
 ---
 
+## Legal and commercial readiness documents
+
+- [Product readiness roadmap](PRODUCT-READINESS-ROADMAP.md) — operational and release acceptance criteria.
+- [Legal policies and terms roadmap](LEGAL-POLICIES-ROADMAP.md) — planning checklist for terms of use, privacy, software license, subscription policy, customer data handling, backup/deletion, support/updates, and intellectual property.
+- [Security roadmap](SECURITY-ROADMAP.md) — security requirements and account lifecycle.
+- [Observability roadmap](OBSERVABILITY-ROADMAP.md) — monitoring and operational diagnostics.
+
+The legal-policy roadmap is planning documentation only, not a finalized contract or legal advice. Have the actual product practices and documents reviewed by qualified Egyptian legal counsel before launch.
+
 ## 1. Rules for all future work
 
 1. Inspect the current code, migrations, tests, and branch before proposing edits; do not assume a feature is absent without checking.
