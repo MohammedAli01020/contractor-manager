@@ -5,6 +5,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.contractor.app.AbstractIntegrationTest;
 import com.contractor.app.platform.domain.PlatformOwner;
@@ -73,6 +75,10 @@ class PlatformOwnerActivationIntegrationTest extends AbstractIntegrationTest {
         String activationUrl = createdBody.path("activationUrl").asText();
         String activationToken = activationUrl.substring(activationUrl.indexOf("token=") + 6);
 
+        User pendingAdmin = users.findByUsername(adminUsername).orElseThrow();
+        assertEquals("first-admin@example.test", pendingAdmin.getEmail());
+        assertFalse(pendingAdmin.isEmailVerified(), "Email is not verified before activation is completed");
+
         // The newly created admin has a random temporary password. A guessed password
         // must fail authentication before activation because the credentials do not match.
         Map<String, Object> adminLogin = new HashMap<>();
@@ -109,6 +115,8 @@ class PlatformOwnerActivationIntegrationTest extends AbstractIntegrationTest {
         activate.put("password", "StrongAdminPass123");
         mockMvc.perform(post("/api/v1/platform/admin-activation").contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(activate))).andExpect(status().isNoContent());
+        User activatedAdmin = users.findByUsername(adminUsername).orElseThrow();
+        assertTrue(activatedAdmin.isEmailVerified(), "Successful activation link proves control of the email inbox");
         mockMvc.perform(post("/api/v1/platform/admin-activation").contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(activate))).andExpect(status().isBadRequest());
 
