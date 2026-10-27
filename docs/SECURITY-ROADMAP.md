@@ -135,3 +135,40 @@ Tenant isolation is a security invariant, not a UI feature:
 - All roles: backend-enforced least privilege, tenant isolation, rate limits, appropriate session revocation, and security audit events.
 - Delivery order: review baseline → tenant-admin email/activation/recovery → Platform Owner 2FA → tenant-admin 2FA → authorization/session/audit hardening.
 - These are approved requirements, not claims of implementation. Implementation starts only after the current branch and existing auth design have been reviewed.
+
+
+## 6. Consolidated execution plan — approved 2026-10-27
+
+This section consolidates the approved security roadmap with the Platform Owner company/account-management workflow. Approval means the requirements below are accepted; it does not mean implementation is complete.
+
+### 6.1 Platform Owner company and user administration
+
+- Keep a central list of all tenants with status and the primary tenant-admin summary.
+- Add a tenant-scoped view of user accounts for a selected company, showing only necessary profile/role/activation/status fields. Never expose password hashes, reset tokens, TOTP secrets, recovery codes, or other credentials.
+- Keep Platform Owner actions separate from tenant-admin capabilities and enforce authorization in backend endpoints, not only in the UI.
+- Record sensitive administrative actions in the audit log.
+- Provide a controlled resend-activation action for a tenant admin who has not activated their account. Issuing a new activation token must invalidate prior tokens.
+- Provide a separate password-reset request for an already activated tenant admin. Do not let the Platform Owner read or choose the user's password, or view a reset token in production.
+- Prefer delivery to the account's verified email address. A manual copy-link fallback is permitted only in explicitly enabled local/development environments, protected by Platform Owner authorization, and must never be silently enabled in production.
+
+### 6.2 Password recovery and email delivery
+
+- Confirm email-provider configuration and ownership verification before enabling recovery for an account.
+- Password-reset tokens must be cryptographically random, short-lived, single-use, stored as hashes, and invalidated on reissue/use.
+- Return generic responses that do not disclose whether an account/email exists.
+- Rate-limit reset and resend endpoints and avoid placing raw tokens in logs or audit events.
+- Do not report successful delivery if the email provider is missing or delivery fails; handle provider errors safely.
+- Define and test refresh-token and access-session invalidation after password reset and other account-security changes.
+
+### 6.3 Delivery sequence and status
+
+1. **Phase A — Baseline review:** underway. The latest GitHub branch has been inspected for the security roadmap, tenant-admin authentication/recovery service, Platform Owner service, user model, and backend dependencies. The current `User` model has no email field in the inspected source, and the inspected `AuthService` has login, refresh, logout, and authenticated password change but no password-reset flow. Platform Owner tenant listing exposes a primary admin summary; the inspected `PlatformAdminService` creates an initial activation link but has no resend/reset implementation. These observations are limited to the files inspected and must be checked against controllers, repositories, migrations, frontend routes, and tests before implementation.
+2. **Phase B — Tenant-admin email, activation and password recovery:** pending design approval for exact files/API/schema changes; include a forward-only Flyway migration and safe handling of existing accounts.
+3. **Phase C — Platform Owner mandatory TOTP 2FA and recovery codes:** pending.
+4. **Phase D — Tenant-admin TOTP 2FA and central enforcement policy:** pending.
+5. **Phase E — Account administration, tenant isolation, sessions, rate limits, CSRF/origin review, and audit hardening:** pending; includes the user-list view and controlled resend-activation/reset actions.
+6. **Verification and release readiness:** run focused backend tests, full backend tests/CI, frontend lint/build where affected, and record exact commit and results. Do not merge into `main` without explicit approval.
+
+### 6.4 Implementation gate
+
+Before each implementation phase, publish the exact affected files, API endpoints, migration/configuration impact, threat cases, and tests. Do not edit migrations that may already have been applied. Preserve local and remote progress, do not reset or delete the existing database, and do not claim completion until code and test evidence support it.
