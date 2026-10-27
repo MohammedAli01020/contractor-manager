@@ -47,7 +47,7 @@ Tenant isolation is a security invariant, not a UI feature:
 ## 2. Delivery sequence
 
 ### Security Phase A — Review the current baseline
-**Status: Not started**
+**Status: Complete (source review only; no application code changed)**
 
 - Inspect the current branch's auth endpoints, JWT/refresh-token lifecycle, Spring Security rules, user schema, migrations, tenant-scoped repository methods, and existing tests.
 - Identify current session/token revocation capabilities and the email delivery configuration.
@@ -162,8 +162,8 @@ This section consolidates the approved security roadmap with the Platform Owner 
 
 ### 6.3 Delivery sequence and status
 
-1. **Phase A — Baseline review:** underway. The latest GitHub branch has been inspected for the security roadmap, tenant-admin authentication/recovery service, Platform Owner service, user model, and backend dependencies. The current `User` model has no email field in the inspected source, and the inspected `AuthService` has login, refresh, logout, and authenticated password change but no password-reset flow. Platform Owner tenant listing exposes a primary admin summary; the inspected `PlatformAdminService` creates an initial activation link but has no resend/reset implementation. These observations are limited to the files inspected and must be checked against controllers, repositories, migrations, frontend routes, and tests before implementation.
-2. **Phase B — Tenant-admin email, activation and password recovery:** pending design approval for exact files/API/schema changes; include a forward-only Flyway migration and safe handling of existing accounts.
+1. **Phase A — Baseline review:** complete for the source areas listed below. The latest feature branch head is `7bbd41d2ddc17327cb02fd9a29b53343ab0c2202`; compared with the previously reported local commit `ff2b567f15ebb41adfd6519d697225cc5d3de685`, it is ahead by two documentation-only commits and has no application-code diff. The branch contains migrations V1–V11, with V11 as the latest migration. `User` has no email field; `AuthService` has login, refresh, logout, and authenticated password change but no reset flow; `PlatformAdminService` creates activation links but has no resend/reset flow; activation tokens are hash-only, expiring, single-use and locked on consumption. `SecurityConfig` disables CSRF and permits auth/activation routes; this is a hardening review item, not by itself proof of an exploitable issue. The tenant repository has tenant-scoped user lookups, and existing integration tests cover activation lifecycle, disabled owners, and tenant/role separation. Email delivery is not configured in the inspected `application.yml` or backend dependencies. No application tests were run during this source-only review; the latest commit is documentation-only and has no reported status checks.
+2. **Phase B — Tenant-admin email, activation and password recovery:** implementation design prepared below; application code has not changed. Use a new forward-only Flyway migration (V12 unless a fresh branch check reveals a later migration), keep email nullable for existing accounts, and require verified email before recovery.
 3. **Phase C — Platform Owner mandatory TOTP 2FA and recovery codes:** pending.
 4. **Phase D — Tenant-admin TOTP 2FA and central enforcement policy:** pending.
 5. **Phase E — Account administration, tenant isolation, sessions, rate limits, CSRF/origin review, and audit hardening:** pending; includes the user-list view and controlled resend-activation/reset actions.
@@ -172,3 +172,33 @@ This section consolidates the approved security roadmap with the Platform Owner 
 ### 6.4 Implementation gate
 
 Before each implementation phase, publish the exact affected files, API endpoints, migration/configuration impact, threat cases, and tests. Do not edit migrations that may already have been applied. Preserve local and remote progress, do not reset or delete the existing database, and do not claim completion until code and test evidence support it.
+
+
+#### Phase B implementation design — proposed file/API scope
+
+**Backend files expected to change**
+
+- `backend/pom.xml`: add the Spring Boot mail dependency only if the selected delivery implementation uses SMTP.
+- `backend/src/main/resources/application.yml`: add explicit environment-backed mail and recovery/activation configuration; never commit provider credentials.
+- `backend/src/main/resources/db/migration/V12__user_email_and_recovery_tokens.sql` (name/number to be rechecked immediately before implementation): add nullable `users.email`, `users.email_verified` defaulting false, and token tables for email verification/password reset. Do not alter V1–V11.
+- `backend/src/main/java/com/contractor/app/user/domain/User.java` and `UserRepository.java`: add normalized email/verification fields and safe lookup methods; do not add unscoped post-login user lookups.
+- `backend/src/main/java/com/contractor/app/platform/api/dto/CreateTenantRequest.java`, `CreateTenantResponse.java`, `PlatformController.java`, and `PlatformAdminService.java`: capture the first admin's email, deliver activation to that address, and add owner-authorized resend-activation. Reissue must revoke older activation tokens. A raw activation URL may be returned only behind an explicit development-only setting; production responses must not expose it.
+- `backend/src/main/java/com/contractor/app/auth/api/AuthController.java`, `AuthService.java`, and new request/response DTOs: add generic password-reset request and token-confirmation endpoints, plus authenticated email-verification request/confirmation for existing users without a verified email.
+- New email-delivery service/configuration, token domain/repository classes, and safe token-generation/expiry helpers; tokens stored as hashes, never logged.
+- `platform-owner-web/app/platform-owner-app.tsx` and `platform-owner-web/app/api/platform/tenants/route.ts`: collect admin email, display delivery outcome safely, and add a tenant-scoped user list/resend-activation action without exposing secrets. Add/reset UI only where supported by the API contract.
+- Backend integration tests for migration compatibility, email verification, activation reissue invalidating old links, reset generic responses, expiry/replay, tenant boundaries, mail-not-configured/provider-failure behavior, and session revocation after reset.
+
+**Proposed API contract**
+
+- `POST /api/v1/auth/password-reset/request`: accept an email; return the same generic response whether the email is absent, unverified, or unknown. Do not return a token.
+- `POST /api/v1/auth/password-reset/confirm`: accept a one-time token and new password; reject expired/replayed/revoked tokens and revoke the user's refresh sessions.
+- `POST /api/v1/auth/email-verification/request` and `POST /api/v1/auth/email-verification/confirm`: verify email ownership before it can be used for recovery. Existing users with null email remain able to sign in but cannot recover through email until verification is complete.
+- `POST /api/v1/platform/tenants/{tenantId}/admin-activation/resend`: Platform Owner only; reject invalid tenant/account state safely, invalidate earlier activation links, and send the replacement to the saved admin email.
+- `GET /api/v1/platform/tenants/{tenantId}/users`: Platform Owner only; return profile, role, activation, active status and email-verification status only, never credentials or tokens.
+
+**Threat cases and verification gates**
+
+- Prevent email/account enumeration; reject unverified-email recovery; bind verification/reset tokens to the intended user and purpose; enforce expiry, one-time use, invalidation on reissue, and tenant/user ownership.
+- Apply request throttling to reset, verification, and resend flows before production enablement. Do not claim a message was sent if mail is unconfigured or delivery fails. Keep raw tokens out of logs, audit payloads, and production responses.
+- Preserve current sign-in and existing user records during migration. Test migration from a populated pre-V12 schema and ensure old accounts are not automatically marked as email-verified.
+- Do not modify `main`; do not reset or delete the existing database. No application code has been changed as part of Phase A.
