@@ -5,6 +5,9 @@ import com.contractor.app.platform.api.dto.CreateTenantRequest;
 import com.contractor.app.platform.api.dto.CreateTenantResponse;
 import com.contractor.app.platform.api.dto.PlatformLoginRequest;
 import com.contractor.app.platform.api.dto.PlatformLoginResponse;
+import com.contractor.app.platform.api.dto.PlatformMfaChallengeRequest;
+import com.contractor.app.platform.api.dto.PlatformMfaCodeRequest;
+import com.contractor.app.platform.api.dto.PlatformMfaSetupResponse;
 import com.contractor.app.platform.api.dto.UpdateTenantStatusRequest;
 import com.contractor.app.platform.api.dto.PlatformTenantSummary;
 import java.util.List;
@@ -27,6 +30,12 @@ public class PlatformController {
  public PlatformController(PlatformAdminService service){this.service=service;}
  @PostMapping("/auth/login")
  public PlatformLoginResponse login(@Valid @RequestBody PlatformLoginRequest request){return service.login(request);}
+ @PostMapping("/auth/mfa/setup")
+ public PlatformMfaSetupResponse beginMfaSetup(@Valid @RequestBody PlatformMfaChallengeRequest request){return service.beginTotpSetup(request);}
+ @PostMapping("/auth/mfa/enable")
+ public PlatformLoginResponse enableMfa(@Valid @RequestBody PlatformMfaCodeRequest request){return service.enableTotp(request);}
+ @PostMapping("/auth/mfa/verify")
+ public PlatformLoginResponse verifyMfa(@Valid @RequestBody PlatformMfaCodeRequest request){return service.verifyTotp(request);}
  @GetMapping("/tenants")
  public List<PlatformTenantSummary> listTenants(){return service.listTenants();}
  @PatchMapping("/tenants/{tenantId}/status")
