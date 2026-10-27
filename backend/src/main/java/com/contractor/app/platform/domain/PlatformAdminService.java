@@ -17,6 +17,11 @@ import com.contractor.app.platform.security.PlatformTotpSecretCipher;
 import java.time.Instant;
 import com.contractor.app.platform.api.dto.PlatformTenantSummary;
 import com.contractor.app.platform.infra.PlatformOwnerRepository;
+import com.contractor.app.platform.infra.PlatformOwnerRecoveryCodeRepository;
+import com.contractor.app.platform.domain.PlatformOwnerRecoveryCode;
+import java.security.SecureRandom;
+import java.util.ArrayList;
+import java.util.Locale;
 import com.contractor.app.platform.infra.TenantAdminActivationTokenRepository;
 import com.contractor.app.tenant.domain.Tenant;
 import com.contractor.app.tenant.domain.TenantStatus;
@@ -44,10 +49,13 @@ public class PlatformAdminService {
  private final TenantAdminActivationTokenRepository tokens; private final PasswordEncoder encoder; private final JwtService jwt;
  private final String baseUrl; private final long activationHours; private final boolean linkReturnEnabled; private final PlatformEmailService emailService;
  private final PlatformTotpService totp; private final PlatformTotpSecretCipher totpCipher;
+ private final PlatformOwnerRecoveryCodeRepository recoveryCodes;
+ private static final SecureRandom RECOVERY_RANDOM = new SecureRandom();
+ private static final char[] RECOVERY_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789".toCharArray();
  public PlatformAdminService(PlatformOwnerRepository owners,TenantRepository tenants,UserRepository users,TenantAdminActivationTokenRepository tokens,PasswordEncoder encoder,JwtService jwt, PlatformEmailService emailService, Environment environment,
  @Value("${app.platform.activation-base-url:http://localhost:8081/activate-admin/index.html}") String baseUrl,
  @Value("${app.platform.activation-hours:24}") long activationHours,
- @Value("${app.platform.activation-link-return-enabled:false}") boolean linkReturnEnabled, PlatformTotpService totp, PlatformTotpSecretCipher totpCipher){this.owners=owners;this.tenants=tenants;this.users=users;this.tokens=tokens;this.encoder=encoder;this.jwt=jwt;this.emailService=emailService;this.baseUrl=baseUrl;this.activationHours=activationHours;this.linkReturnEnabled=linkReturnEnabled && environment.acceptsProfiles(Profiles.of("dev","test"));this.totp=totp;this.totpCipher=totpCipher;}
+ @Value("${app.platform.activation-link-return-enabled:false}") boolean linkReturnEnabled, PlatformTotpService totp, PlatformTotpSecretCipher totpCipher, PlatformOwnerRecoveryCodeRepository recoveryCodes){this.owners=owners;this.tenants=tenants;this.users=users;this.tokens=tokens;this.encoder=encoder;this.jwt=jwt;this.emailService=emailService;this.baseUrl=baseUrl;this.activationHours=activationHours;this.linkReturnEnabled=linkReturnEnabled && environment.acceptsProfiles(Profiles.of("dev","test"));this.totp=totp;this.totpCipher=totpCipher;this.recoveryCodes=recoveryCodes;}
  @Transactional
  public PlatformLoginResponse login(PlatformLoginRequest req){
   String username=User.normalizeUsername(req.getUsername());
@@ -107,8 +115,15 @@ public class PlatformAdminService {
   owner.setTotpLastUsedStep(step);
   owner.setTotpFailedAttempts(0);
   owner.setTotpLockedUntil(null);
+  recoveryCodes.deleteAllForOwner(owner.getId());
+  List<String> rawRecoveryCodes = new ArrayList<>();
+  for (int i = 0; i < 10; i++) {
+   String rawCode = newRecoveryCode();
+   rawRecoveryCodes.add(rawCode);
+   recoveryCodes.save(new PlatformOwnerRecoveryCode(owner.getId(), TokenHasher.sha256Hex(normalizeRecoveryCode(rawCode))));
+  }
   return new PlatformLoginResponse(jwt.createPlatformOwnerAccessToken(owner.getId()), jwt.getAccessTtlSeconds(),
-    owner.getId(), owner.getUsername());
+    owner.getId(), owner.getUsername(), rawRecoveryCodes);
  }
 
  @Transactional(noRollbackFor = ResponseStatusException.class)
@@ -121,8 +136,18 @@ public class PlatformAdminService {
    throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "التحقق بخطوتين غير مهيأ لهذا الحساب.");
   if (owner.getTotpLockedUntil() != null && owner.getTotpLockedUntil().isAfter(now))
    throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "تم إيقاف المحاولات مؤقتًا. حاول لاحقًا.");
-  Long step = totp.matchingStep(totpCipher.decrypt(owner.getTotpSecret()), req.getCode(), Instant.now().getEpochSecond());
-  if (step == null || (owner.getTotpLastUsedStep() != null && step <= owner.getTotpLastUsedStep())) {
+  boolean recoveryUsed = req.getRecoveryCode() != null && !req.getRecoveryCode().trim().isEmpty();
+  Long step = null;
+  boolean valid;
+  if (recoveryUsed) {
+   String normalized = normalizeRecoveryCode(req.getRecoveryCode());
+   valid = normalized.matches("[A-Z2-9]{12}")
+     && recoveryCodes.consumeIfUnused(owner.getId(), TokenHasher.sha256Hex(normalized)) == 1;
+  } else {
+   step = totp.matchingStep(totpCipher.decrypt(owner.getTotpSecret()), req.getCode(), Instant.now().getEpochSecond());
+   valid = step != null && (owner.getTotpLastUsedStep() == null || step > owner.getTotpLastUsedStep());
+  }
+  if (!valid) {
    int failures = owner.getTotpFailedAttempts() + 1;
    owner.setTotpFailedAttempts(failures);
    if (failures >= 5) {
@@ -131,11 +156,21 @@ public class PlatformAdminService {
    }
    throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "رمز التحقق غير صحيح أو سبق استخدامه.");
   }
-  owner.setTotpLastUsedStep(step);
+  if (step != null) owner.setTotpLastUsedStep(step);
   owner.setTotpFailedAttempts(0);
   owner.setTotpLockedUntil(null);
   return new PlatformLoginResponse(jwt.createPlatformOwnerAccessToken(owner.getId()), jwt.getAccessTtlSeconds(),
     owner.getId(), owner.getUsername());
+ }
+
+ private String newRecoveryCode() {
+  StringBuilder code = new StringBuilder(12);
+  for (int i = 0; i < 12; i++) code.append(RECOVERY_ALPHABET[RECOVERY_RANDOM.nextInt(RECOVERY_ALPHABET.length)]);
+  return code.toString();
+ }
+
+ private String normalizeRecoveryCode(String value) {
+  return value == null ? "" : value.replace("-", "").replaceAll("\\s", "").toUpperCase(Locale.ROOT);
  }
 
  private JwtService.PlatformMfaChallenge requireChallenge(String token, String purpose) {
