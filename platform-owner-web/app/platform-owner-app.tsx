@@ -10,11 +10,12 @@ type CreatedTenant = {
   tenantName: string;
   adminUserId: number;
   adminUsername: string;
-  activationUrl: string;
+  activationUrl: string | null;
   expiresAt: string;
+  deliveryStatus: "EMAIL_SENT" | "DEV_LINK" | string;
 };
 
-const initialForm = { tenantName: "", adminFullName: "", adminUsername: "", adminPhone: "" };
+const initialForm = { tenantName: "", adminFullName: "", adminUsername: "", adminPhone: "", adminEmail: "" };
 
 function Icon({ name }: { name: "grid" | "building" | "shield" | "logout" | "plus" | "copy" | "arrow" | "users" }) {
   const paths: Record<typeof name, string> = {
@@ -145,6 +146,7 @@ export default function PlatformOwnerApp() {
           adminFullName: form.adminFullName.trim(),
           adminUsername: form.adminUsername.trim(),
           adminPhone: form.adminPhone.trim(),
+          adminEmail: form.adminEmail.trim(),
         }),
       });
       const data = await response.json().catch(() => ({}));
@@ -290,13 +292,14 @@ export default function PlatformOwnerApp() {
                   <div className="field"><label htmlFor="admin-name">اسم المدير بالكامل <span>*</span></label><input id="admin-name" value={form.adminFullName} onChange={(e) => setForm({ ...form, adminFullName: e.target.value })} maxLength={150} placeholder="الاسم بالكامل" required /></div>
                   <div className="field"><label htmlFor="admin-username">اسم دخول المدير <span>*</span></label><input id="admin-username" value={form.adminUsername} onChange={(e) => setForm({ ...form, adminUsername: e.target.value })} autoComplete="off" placeholder="مثال: company_admin" required /><small>لا تشارك كلمة مرور؛ المدير ينشئها بنفسه.</small></div>
                   <div className="field full"><label htmlFor="admin-phone">رقم هاتف المدير <span className="optional">(اختياري)</span></label><input id="admin-phone" type="tel" inputMode="tel" autoComplete="tel" value={form.adminPhone} onChange={(e) => setForm({ ...form, adminPhone: e.target.value })} maxLength={30} placeholder="01xxxxxxxxx" /></div>
+                  <div className="field full"><label htmlFor="admin-email">بريد المدير الإلكتروني <span>*</span></label><input id="admin-email" type="email" autoComplete="email" value={form.adminEmail} onChange={(e) => setForm({ ...form, adminEmail: e.target.value })} maxLength={254} placeholder="admin@example.com" required /><small>سيُرسل رابط التفعيل إلى هذا البريد.</small></div>
                 </div>
                 {createError && <div className="alert alert-error" role="alert">{createError}</div>}
                 <div className="form-actions"><button className="button button-primary" type="submit" disabled={createBusy}>{createBusy ? "جارٍ إنشاء الشركة..." : "إنشاء الشركة وإصدار رابط التفعيل"} <Icon name="arrow" /></button><button className="button button-ghost" type="button" onClick={() => { setForm(initialForm); setCreateError(""); }}>مسح البيانات</button></div>
               </form>
               <aside className="panel process-panel"><span className="process-kicker">ماذا سيحدث؟</span><h3>خطوات آمنة وبسيطة</h3><ol className="process-list"><li><span>1</span><div><strong>إنشاء الشركة</strong><p>يُسجّل الـ Backend الشركة وحساب المدير الأول.</p></div></li><li><span>2</span><div><strong>إصدار رابط مؤقت</strong><p>الرابط صالح لمدة محدودة ويُستخدم مرة واحدة.</p></div></li><li><span>3</span><div><strong>المدير يحدد كلمة المرور</strong><p>لا نُنشئ ولا نرسل كلمة مرور مؤقتة.</p></div></li></ol><div className="process-warning"><Icon name="shield" /><p>احتفظ برابط التفعيل بشكل خاص، فهو بمثابة مفتاح مؤقت للحساب.</p></div></aside>
             </div>
-            {created && <section className="panel success-panel" aria-live="polite"><div className="success-heading"><span className="success-icon">✓</span><div><h3>تم إنشاء الشركة بنجاح</h3><p>احفظ رابط التفعيل وشاركه مع المدير المقصود فقط.</p></div></div><div className="result-grid"><div><small>الشركة</small><strong>{created.tenantName}</strong></div><div><small>رقم الشركة</small><strong>#{created.tenantId}</strong></div><div><small>اسم دخول المدير</small><strong>{created.adminUsername}</strong></div><div><small>انتهاء رابط التفعيل</small><strong>{created.expiresAt ? new Date(created.expiresAt).toLocaleString("ar-EG") : "حسب إعداد الخادم"}</strong></div></div><label className="activation-label" htmlFor="activation-link">رابط التفعيل الخاص</label><textarea id="activation-link" className="activation-url" value={created.activationUrl} readOnly rows={3} onFocus={(e) => e.currentTarget.select()} /><div className="activation-actions"><button className="button button-primary" onClick={copyActivationLink} type="button"><Icon name="copy" /> {copied ? "تم النسخ" : "نسخ رابط التفعيل"}</button><button className="button button-ghost" type="button" onClick={() => { setCreated(null); setCopied(false); }}>إخفاء الرابط</button></div><p className="secret-warning">تنبيه: لا تنشر الرابط في مكان عام أو داخل صور الشاشة. إذا أخفيته فلن نحتفظ بنسخة أخرى منه في الواجهة.</p></section>}
+            {created && <section className="panel success-panel" aria-live="polite"><div className="success-heading"><span className="success-icon">✓</span><div><h3>تم إنشاء الشركة بنجاح</h3><p>{created.deliveryStatus === "EMAIL_SENT" ? "تم إرسال رابط التفعيل إلى البريد الإلكتروني المسجل." : "وضع التطوير: احفظ رابط التفعيل وشاركه مع المدير المقصود فقط."}</p></div></div><div className="result-grid"><div><small>الشركة</small><strong>{created.tenantName}</strong></div><div><small>رقم الشركة</small><strong>#{created.tenantId}</strong></div><div><small>اسم دخول المدير</small><strong>{created.adminUsername}</strong></div><div><small>انتهاء رابط التفعيل</small><strong>{created.expiresAt ? new Date(created.expiresAt).toLocaleString("ar-EG") : "حسب إعداد الخادم"}</strong></div></div>{created.activationUrl && <><label className="activation-label" htmlFor="activation-link">رابط التفعيل الخاص (وضع التطوير فقط)</label><textarea id="activation-link" className="activation-url" value={created.activationUrl} readOnly rows={3} onFocus={(e) => e.currentTarget.select()} /><div className="activation-actions"><button className="button button-primary" onClick={copyActivationLink} type="button"><Icon name="copy" /> {copied ? "تم النسخ" : "نسخ رابط التفعيل"}</button><button className="button button-ghost" type="button" onClick={() => { setCreated(null); setCopied(false); }}>إخفاء الرابط</button></div><p className="secret-warning">تنبيه: لا تنشر الرابط في مكان عام أو داخل صور الشاشة.</p></>}</section>}
           </div>
         ) : (
           <div className="content-area create-area">
