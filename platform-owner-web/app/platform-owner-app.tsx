@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
+import { QRCodeSVG } from "qrcode.react";
 
 type Session = { authenticated: boolean; username?: string };
 type TenantSummary = { tenantId: number; tenantName: string; status: "ACTIVE" | "SUSPENDED" | string; createdAt: string; admin: { userId: number; fullName: string; username: string; active: boolean; passwordActivated: boolean } | null };
@@ -323,10 +324,16 @@ export default function PlatformOwnerApp() {
                   <h2>{mfaMode === "setup" ? "تفعيل التحقق بخطوتين" : "التحقق بخطوتين"}</h2>
                   <p>{mfaMode === "setup" ? "افتح تطبيق مصادقة مثل Google Authenticator أو Microsoft Authenticator، وأضف الحساب يدويًا باستخدام المفتاح التالي." : "أدخل الرمز الحالي الظاهر في تطبيق المصادقة."}</p>
                   {mfaMode === "setup" && <div className="mfa-setup-details">
-                    <label htmlFor="mfa-secret">المفتاح السري للتطبيق</label>
-                    <input id="mfa-secret" value={mfaSecret} readOnly onFocus={(e) => e.currentTarget.select()} />
-                    <small>أدخل المفتاح يدويًا في تطبيق المصادقة. لا تشاركه مع أي شخص.</small>
-                    {mfaUri && <details><summary>رابط إعداد الحساب</summary><textarea value={mfaUri} readOnly rows={3} /></details>}
+                    <p>امسح رمز QR باستخدام Google Authenticator أو Microsoft Authenticator لإضافة الحساب. يظهر الرمز أثناء الإعداد فقط.</p>
+                    {mfaUri && <div className="mfa-qr-frame" style={{ display: "flex", justifyContent: "center", padding: "16px", background: "#fff", borderRadius: "12px", width: "fit-content", margin: "12px auto" }}>
+                      <QRCodeSVG value={mfaUri} size={220} level="M" marginSize={4} />
+                    </div>}
+                    <details>
+                      <summary>تعذّر مسح الرمز؟ عرض المفتاح يدويًا</summary>
+                      <label htmlFor="mfa-secret">المفتاح السري للتطبيق</label>
+                      <input id="mfa-secret" value={mfaSecret} readOnly onFocus={(e) => e.currentTarget.select()} />
+                      <small>أدخل المفتاح يدويًا في تطبيق المصادقة. لا تشاركه مع أي شخص.</small>
+                    </details>
                   </div>}
                   {mfaMode === "verify" && <>
                     <label htmlFor="mfa-recovery-code">كود الاسترداد (إذا تعذر استخدام التطبيق)</label>
