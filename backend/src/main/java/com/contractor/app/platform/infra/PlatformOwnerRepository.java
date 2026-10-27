@@ -12,6 +12,10 @@ public interface PlatformOwnerRepository extends JpaRepository<PlatformOwner, Lo
     boolean existsByUsername(String username);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select p from PlatformOwner p where p.id = :id")
+    Optional<PlatformOwner> findByIdForUpdate(@org.springframework.data.repository.query.Param("id") Long id);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select p from PlatformOwner p order by p.id")
     java.util.List<PlatformOwner> findAllForUpdate();
 }
