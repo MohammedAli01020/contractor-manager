@@ -64,6 +64,7 @@ class PlatformOwnerActivationIntegrationTest extends AbstractIntegrationTest {
         create.put("adminFullName", "First Admin");
         create.put("adminUsername", adminUsername);
         create.put("adminPhone", "");
+        create.put("adminEmail", "first-admin@example.test");
         MvcResult created = mockMvc.perform(post("/api/v1/platform/tenants")
                 .header("Authorization", "Bearer " + ownerToken).contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(create)))
