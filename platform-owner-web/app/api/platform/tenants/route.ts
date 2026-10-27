@@ -109,8 +109,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ message: "لم يتم إنشاء الشركة. راجع البيانات أو سجلات الخادم." }, { status: upstream.status >= 400 && upstream.status < 500 ? upstream.status : 502 });
   }
   if (typeof payload.tenantId !== "number" || typeof payload.tenantName !== "string" ||
-      typeof payload.adminUsername !== "string" || typeof payload.activationUrl !== "string" ||
-      !payload.activationUrl) {
+      typeof payload.adminUsername !== "string" ||
+      !(payload.activationUrl === null || typeof payload.activationUrl === "string") ||
+      typeof payload.deliveryStatus !== "string") {
     return NextResponse.json({ message: "استجابة إنشاء الشركة من الخادم غير مكتملة." }, { status: 502 });
   }
   return NextResponse.json(payload, { status: upstream.status, headers: { "Cache-Control": "no-store" } });
