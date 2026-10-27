@@ -68,6 +68,7 @@ public abstract class AbstractIntegrationTest {
         }
         registry.add("app.jwt.secret", () -> "integration-test-secret-integration-test-123");
         registry.add("app.registration.enabled", () -> "true");
+        registry.add("app.platform.activation-link-return-enabled", () -> "true");
     }
 
     @Autowired
