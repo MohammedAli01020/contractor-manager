@@ -38,7 +38,6 @@ public class PlatformTotpService {
         if (secret == null || suppliedCode == null || !suppliedCode.matches("\\d{6}")) {
             return false;
         }
-        byte[] expected = new byte[CODE_DIGITS];
         byte[] supplied = suppliedCode.getBytes(StandardCharsets.US_ASCII);
         for (int offset = -ALLOWED_WINDOW_STEPS; offset <= ALLOWED_WINDOW_STEPS; offset++) {
             String candidate;
