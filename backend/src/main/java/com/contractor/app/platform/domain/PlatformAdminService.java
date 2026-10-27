@@ -1,6 +1,7 @@
 package com.contractor.app.platform.domain;
 
 import com.contractor.app.common.security.JwtService;
+import com.contractor.app.common.email.PlatformEmailService;
 import com.contractor.app.common.security.TokenHasher;
 import com.contractor.app.platform.api.dto.ActivateAdminRequest;
 import com.contractor.app.platform.api.dto.CreateTenantRequest;
@@ -33,10 +34,11 @@ import org.springframework.web.server.ResponseStatusException;
 public class PlatformAdminService {
  private final PlatformOwnerRepository owners; private final TenantRepository tenants; private final UserRepository users;
  private final TenantAdminActivationTokenRepository tokens; private final PasswordEncoder encoder; private final JwtService jwt;
- private final String baseUrl; private final long activationHours;
- public PlatformAdminService(PlatformOwnerRepository owners,TenantRepository tenants,UserRepository users,TenantAdminActivationTokenRepository tokens,PasswordEncoder encoder,JwtService jwt,
+ private final String baseUrl; private final long activationHours; private final boolean linkReturnEnabled; private final PlatformEmailService emailService;
+ public PlatformAdminService(PlatformOwnerRepository owners,TenantRepository tenants,UserRepository users,TenantAdminActivationTokenRepository tokens,PasswordEncoder encoder,JwtService jwt, PlatformEmailService emailService,
  @Value("${app.platform.activation-base-url:http://localhost:8081/activate-admin/index.html}") String baseUrl,
- @Value("${app.platform.activation-hours:24}") long activationHours){this.owners=owners;this.tenants=tenants;this.users=users;this.tokens=tokens;this.encoder=encoder;this.jwt=jwt;this.baseUrl=baseUrl;this.activationHours=activationHours;}
+ @Value("${app.platform.activation-hours:24}") long activationHours,
+ @Value("${app.platform.activation-link-return-enabled:false}") boolean linkReturnEnabled){this.owners=owners;this.tenants=tenants;this.users=users;this.tokens=tokens;this.encoder=encoder;this.jwt=jwt;this.emailService=emailService;this.baseUrl=baseUrl;this.activationHours=activationHours;this.linkReturnEnabled=linkReturnEnabled;}
  @Transactional(readOnly=true)
  public PlatformLoginResponse login(PlatformLoginRequest req){
   String username=User.normalizeUsername(req.getUsername());
@@ -74,11 +76,15 @@ public class PlatformAdminService {
   Tenant tenant=tenants.saveAndFlush(new Tenant(req.getTenantName().trim()));
   String raw=TokenHasher.newOpaqueToken();
   User admin=new User(tenant.getId(),username,req.getAdminFullName().trim(),req.getAdminPhone(),encoder.encode(TokenHasher.newOpaqueToken()),Role.ADMIN);
-  admin.setPasswordActivated(false); admin=users.saveAndFlush(admin);
+  admin.setEmail(req.getAdminEmail()); admin.setPasswordActivated(false); admin=users.saveAndFlush(admin);
   LocalDateTime expiry=LocalDateTime.now(ZoneOffset.UTC).plusHours(activationHours);
   tokens.save(new TenantAdminActivationToken(tenant.getId(),admin.getId(),TokenHasher.sha256Hex(raw),expiry));
   String sep=baseUrl.contains("?")?"&":"?";
-  return new CreateTenantResponse(tenant.getId(),tenant.getName(),admin.getId(),admin.getUsername(),baseUrl+sep+"token="+raw,expiry.toString());
+  String activationUrl=baseUrl+sep+"token="+java.net.URLEncoder.encode(raw,java.nio.charset.StandardCharsets.UTF_8);
+  boolean emailSent=false;
+  if(emailService.isEnabled()){emailService.sendActivation(admin.getEmail(),admin.getFullName(),activationUrl,expiry);emailSent=true;}
+  else if(!linkReturnEnabled) throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,"خدمة البريد الإلكتروني غير مهيأة. لم يتم إنشاء الشركة.");
+  return new CreateTenantResponse(tenant.getId(),tenant.getName(),admin.getId(),admin.getUsername(),emailSent?null:activationUrl,expiry.toString(),emailSent?"EMAIL_SENT":"DEV_LINK");
  }
  @Transactional
  public void activateAdmin(ActivateAdminRequest req){
@@ -88,7 +94,9 @@ public class PlatformAdminService {
   if(token.isRevoked()||token.getConsumedAt()!=null||!token.getExpiresAt().isAfter(now)) throw invalidToken();
   User admin=users.findByIdAndTenantId(token.getUserId(),token.getTenantId()).orElseThrow(()->invalidToken());
   if(admin.isPasswordActivated()) throw invalidToken();
-  admin.setPasswordHash(encoder.encode(req.getPassword())); admin.setPasswordActivated(true); token.consume();
+  admin.setPasswordHash(encoder.encode(req.getPassword())); admin.setPasswordActivated(true);
+  if(admin.getEmail()!=null) admin.setEmailVerified(true);
+  token.consume();
  }
  private ResponseStatusException invalidToken(){return new ResponseStatusException(HttpStatus.BAD_REQUEST,"رابط التفعيل غير صالح أو منتهي");}
 }
