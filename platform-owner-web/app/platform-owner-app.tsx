@@ -323,7 +323,7 @@ export default function PlatformOwnerApp() {
                     {mfaUri && <details><summary>رابط إعداد الحساب</summary><textarea value={mfaUri} readOnly rows={3} /></details>}
                   </div>}
                   <label htmlFor="mfa-code">رمز التحقق (6 أرقام)</label>
-                  <input id="mfa-code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} pattern="[0-9]{6}" value={mfaCode} onChange={(e) => setMfaCode(e.target.value.replace(/\\D/g, "").slice(0, 6))} placeholder="000000" required />
+                  <input id="mfa-code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} pattern="[0-9]{6}" value={mfaCode} onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="000000" required />
                 </>
               )}
               {loginError && <div className="alert alert-error" role="alert">{loginError}</div>}
