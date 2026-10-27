@@ -35,22 +35,33 @@ public class PlatformTotpService {
     }
 
     public boolean verifyCode(String secret, String suppliedCode, long epochSeconds) {
+        return matchingStep(secret, suppliedCode, epochSeconds) != null;
+    }
+
+    /**
+     * Returns the time-step that matched, allowing callers to reject replayed codes.
+     * A null result means the supplied code is invalid.
+     */
+    public Long matchingStep(String secret, String suppliedCode, long epochSeconds) {
         if (secret == null || suppliedCode == null || !suppliedCode.matches("\\d{6}")) {
-            return false;
+            return null;
         }
         byte[] supplied = suppliedCode.getBytes(StandardCharsets.US_ASCII);
+        long currentStep = Math.floorDiv(epochSeconds, STEP_SECONDS);
         for (int offset = -ALLOWED_WINDOW_STEPS; offset <= ALLOWED_WINDOW_STEPS; offset++) {
+            long candidateStep = currentStep + offset;
+            if (candidateStep < 0) continue;
             String candidate;
             try {
-                candidate = codeAt(secret, Math.floorDiv(epochSeconds, STEP_SECONDS) + offset);
+                candidate = codeAt(secret, candidateStep);
             } catch (RuntimeException ex) {
-                return false;
+                return null;
             }
             if (MessageDigest.isEqual(candidate.getBytes(StandardCharsets.US_ASCII), supplied)) {
-                return true;
+                return candidateStep;
             }
         }
-        return false;
+        return null;
     }
 
     String codeAt(String secret, long counter) {
