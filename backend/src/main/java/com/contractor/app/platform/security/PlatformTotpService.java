@@ -64,7 +64,7 @@ public class PlatformTotpService {
         return null;
     }
 
-    String codeAt(String secret, long counter) {
+    public String codeAt(String secret, long counter) {
         try {
             byte[] key = base32Decode(secret);
             Mac mac = Mac.getInstance("HmacSHA1");
