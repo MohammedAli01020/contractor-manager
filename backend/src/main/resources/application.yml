@@ -63,6 +63,8 @@ app:
     activation-base-url: ${APP_PLATFORM_ACTIVATION_BASE_URL:http://localhost:8081/activate-admin/index.html}
     activation-hours: ${APP_PLATFORM_ACTIVATION_HOURS:24}
     activation-link-return-enabled: ${APP_PLATFORM_ACTIVATION_LINK_RETURN_ENABLED:false}
+    # Keep this key private and stable across restarts; use a random secret with 32+ characters.
+    totp-encryption-key: ${APP_PLATFORM_TOTP_ENCRYPTION_KEY:}
   # المنطقة الزمنية لحساب "اليوم" (لرفض الورديات بتاريخ مستقبلي). التخزين نفسه بتوقيت UTC.
   business-timezone: Africa/Cairo
 
