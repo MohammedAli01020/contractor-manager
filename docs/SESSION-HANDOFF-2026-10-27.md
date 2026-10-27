@@ -78,3 +78,27 @@ Implemented on the same feature branch after approval:
 - Added integration coverage for initial code issuance, successful consumption, and rejection on reuse.
 - Relevant commits: `8022db08`, `630d441c`, `ffb690f0`, `00c69892`, `407566af`, `679dd93d`, `cbb17ced`.
 - Backend CI run for test commit `679dd93d`: https://github.com/MohammedAli01020/contractor-manager/actions/runs/40484192171 (pending at the time this note was written). Do not treat the feature as verified until CI completes successfully and frontend CI is confirmed for the latest web changes.
+
+
+## Latest local checkpoint — 2026-10-27 afternoon
+
+This section supersedes any earlier next-step notes above where they conflict.
+
+### Local environment observed
+- Active working branch reported locally: `feature/platform-owner-totp-2fa`.
+- Local API and MySQL containers are running; mapped ports reported as API `8081` and MySQL `3308`.
+- The API was rebuilt and started successfully. Flyway applied migrations V13–V15; local schema version reported as `15`.
+- `GET /actuator/health` returned HTTP 401 because the endpoint is behind authentication. Do not interpret that response alone as an application outage.
+- The latest local `git status` reported a modification to `platform-owner-web/app/platform-owner-app.ts`. This is local working-tree work and is not confirmed as committed/pushed by this checkpoint.
+
+### Immediate next action
+1. Open the local Platform Owner page and test the relevant flow in the browser.
+2. If it fails, inspect the browser DevTools **Network** entry for the failing request and record its HTTP status and response body (redact tokens, cookies, and secrets).
+3. Compare the local UI/API behavior with the latest branch source before changing code.
+4. Preserve the local modification to `platform-owner-web/app/platform-owner-app.ts`; review its diff before staging or committing.
+5. After verification, rerun the relevant backend and web checks. Confirm CI against the actual final branch head before considering the work complete.
+
+### Current status / limits
+- Recovery-code lifecycle implementation is described in the section above; the earlier “recovery codes are not complete” paragraph is historical and must not be treated as current status.
+- Backend CI success documented above applies only to the specific commit/run listed there. Frontend CI for the latest web changes and the current end-to-end browser flow still need confirmation.
+- No merge to `main`, production deployment, or production database migration is authorized by this checkpoint.
