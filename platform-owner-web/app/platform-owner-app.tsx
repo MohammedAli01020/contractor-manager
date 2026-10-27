@@ -42,6 +42,8 @@ export default function PlatformOwnerApp() {
   const [mfaSecret, setMfaSecret] = useState("");
   const [mfaUri, setMfaUri] = useState("");
   const [mfaCode, setMfaCode] = useState("");
+  const [mfaRecoveryCode, setMfaRecoveryCode] = useState("");
+  const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
   const [form, setForm] = useState(initialForm);
   const [createBusy, setCreateBusy] = useState(false);
   const [createError, setCreateError] = useState("");
@@ -154,7 +156,7 @@ export default function PlatformOwnerApp() {
       const response = await fetch("/api/platform/auth/mfa/complete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ challengeToken: mfaChallenge, code: mfaCode, setup: mfaMode === "setup" }),
+        body: JSON.stringify({ challengeToken: mfaChallenge, code: mfaCode, recoveryCode: mfaRecoveryCode, setup: mfaMode === "setup" }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.message || "تعذر التحقق من الرمز.");
@@ -163,6 +165,8 @@ export default function PlatformOwnerApp() {
       setMfaSecret("");
       setMfaUri("");
       setMfaCode("");
+      setMfaRecoveryCode("");
+      if (mfaMode === "setup" && Array.isArray(data.recoveryCodes)) setRecoveryCodes(data.recoveryCodes.filter((value: unknown): value is string => typeof value === "string"));
       setSession({ authenticated: true, username: data.username || username.trim() });
       setActiveView("overview");
     } catch (error) {
@@ -183,6 +187,8 @@ export default function PlatformOwnerApp() {
     setMfaSecret("");
     setMfaUri("");
     setMfaCode("");
+    setMfaRecoveryCode("");
+    setRecoveryCodes([]);
     setCreateError("");
   }
 
@@ -322,8 +328,13 @@ export default function PlatformOwnerApp() {
                     <small>أدخل المفتاح يدويًا في تطبيق المصادقة. لا تشاركه مع أي شخص.</small>
                     {mfaUri && <details><summary>رابط إعداد الحساب</summary><textarea value={mfaUri} readOnly rows={3} /></details>}
                   </div>}
+                  {mfaMode === "verify" && <>
+                    <label htmlFor="mfa-recovery-code">كود الاسترداد (إذا تعذر استخدام التطبيق)</label>
+                    <input id="mfa-recovery-code" autoComplete="off" value={mfaRecoveryCode} onChange={(e) => setMfaRecoveryCode(e.target.value.toUpperCase().slice(0, 40))} placeholder="أدخل كود الاسترداد" />
+                    <p className="muted">استخدم رمز التطبيق أو كود الاسترداد، وليس كليهما.</p>
+                  </>}
                   <label htmlFor="mfa-code">رمز التحقق (6 أرقام)</label>
-                  <input id="mfa-code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} pattern="[0-9]{6}" value={mfaCode} onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="000000" required />
+                  <input id="mfa-code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} pattern="[0-9]{6}" value={mfaCode} onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="000000" required={mfaMode === "setup" || !mfaRecoveryCode} disabled={mfaMode === "verify" && !!mfaRecoveryCode} />
                 </>
               )}
               {loginError && <div className="alert alert-error" role="alert">{loginError}</div>}
@@ -333,6 +344,26 @@ export default function PlatformOwnerApp() {
             <div className="login-foot"><span className="status-dot" /> الاتصال يتم عبر الخادم المحلي</div>
           </div>
           <p className="copyright">© {new Date().getFullYear()} مِعمار · إدارة المنصة</p>
+        </section>
+      </main>
+    );
+  }
+
+  if (recoveryCodes.length > 0) {
+    return (
+      <main className="login-layout">
+        <section className="login-main" style={{ width: "100%", minHeight: "100vh" }}>
+          <div className="login-card" style={{ maxWidth: 560, width: "100%" }}>
+            <div className="login-icon"><Icon name="shield" /></div>
+            <span className="eyebrow">خطوة أمان مهمة</span>
+            <h2>احفظ أكواد الاسترداد</h2>
+            <p className="muted">هذه الأكواد بدائل للدخول عند فقدان تطبيق المصادقة. كل كود يعمل مرة واحدة فقط، ولن تظهر مرة أخرى. احفظها في مكان آمن ولا تشاركها.</p>
+            <div className="mfa-setup-details" dir="ltr" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              {recoveryCodes.map((code) => <code key={code} style={{ padding: 10, border: "1px solid var(--border, #ddd)", borderRadius: 8, textAlign: "center" }}>{code}</code>)}
+            </div>
+            <button className="button button-primary button-full" type="button" onClick={() => { void navigator.clipboard.writeText(recoveryCodes.join("\\n")); }}>نسخ الأكواد</button>
+            <button className="button button-ghost button-full" type="button" onClick={() => setRecoveryCodes([])}>حفظت الأكواد — متابعة</button>
+          </div>
         </section>
       </main>
     );
