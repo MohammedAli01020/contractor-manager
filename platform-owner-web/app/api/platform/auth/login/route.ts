@@ -45,6 +45,18 @@ export async function POST(request: NextRequest) {
     const status = upstream.status === 401 || upstream.status === 403 ? upstream.status : 502;
     return NextResponse.json({ message: "فشل تسجيل الدخول. راجع بيانات الحساب وحالة الخادم." }, { status });
   }
+  if ((payload.status === "MFA_REQUIRED" || payload.status === "MFA_SETUP_REQUIRED") &&
+      typeof payload.challengeToken === "string" && payload.challengeToken &&
+      typeof payload.username === "string") {
+    return NextResponse.json({
+      authenticated: false,
+      mfaRequired: payload.status === "MFA_REQUIRED",
+      setupRequired: payload.status === "MFA_SETUP_REQUIRED",
+      challengeToken: payload.challengeToken,
+      username: payload.username,
+    }, { headers: { "Cache-Control": "no-store" } });
+  }
+
   if (typeof payload.accessToken !== "string" || !payload.accessToken ||
       typeof payload.username !== "string" || typeof payload.expiresInSeconds !== "number") {
     return NextResponse.json({ message: "استجابة تسجيل الدخول من الخادم غير مكتملة." }, { status: 502 });
