@@ -67,3 +67,14 @@ Do not call MFA production-ready until this is implemented or explicitly removed
 
 - PR #6 was closed at the user's request and was **not merged**: https://github.com/MohammedAli01020/contractor-manager/pull/6
 - No merge to `main` or deployment was performed during the latest work.
+
+## Recovery-code lifecycle implementation (2026-10-27)
+
+Implemented on the same feature branch after approval:
+- Added `PlatformOwnerRecoveryCode` persistence mapping and repository for the existing V13 recovery-code table. No existing migration was edited and no new schema migration was added.
+- After a valid first-time TOTP enrollment, the backend creates 10 random recovery codes, returns them in that successful enrollment response only, and stores SHA-256 hashes only.
+- MFA verification accepts either a six-digit TOTP or a recovery code. Recovery-code consumption is an atomic update constrained to unused rows; a consumed code is rejected on later attempts. Existing owner-row locking and lockout behavior remain in place.
+- Updated the web MFA proxy and login UI to accept recovery codes and display/copy the initial set once after enrollment.
+- Added integration coverage for initial code issuance, successful consumption, and rejection on reuse.
+- Relevant commits: `8022db08`, `630d441c`, `ffb690f0`, `00c69892`, `407566af`, `679dd93d`, `cbb17ced`.
+- Backend CI run for test commit `679dd93d`: https://github.com/MohammedAli01020/contractor-manager/actions/runs/40484192171 (pending at the time this note was written). Do not treat the feature as verified until CI completes successfully and frontend CI is confirmed for the latest web changes.
