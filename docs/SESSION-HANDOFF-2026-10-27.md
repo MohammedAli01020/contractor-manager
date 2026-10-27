@@ -1,0 +1,69 @@
+# Session handoff — 2026-10-27 (Platform Owner TOTP MFA)
+
+## Scope and safety rules
+
+- Repository: https://github.com/MohammedAli01020/contractor-manager
+- Active branch for this work: `feature/platform-owner-totp-2fa`
+- Latest verified commit at handoff: `a572a135699bbce90b7a1abb4dfa6e22982c66eb`
+- Do not merge into `main`, create a pull request, or deploy unless the user explicitly asks.
+- Do not reset/delete the existing database, run bootstrap against it, or apply migrations to production. Do not edit already-applied migrations.
+- Do not stop the unrelated service using host port 8080. Preserve local changes and secrets; never ask the user to paste `.env` secrets into chat.
+
+## Latest verified CI
+
+- GitHub Actions workflow: **Backend CI**, run #51.
+- Run URL: https://github.com/MohammedAli01020/contractor-manager/actions/runs/40480574616
+- Commit: `a572a135699bbce90b7a1abb4dfa6e22982c66eb`
+- Result: **completed / success** on 2026-10-27.
+- The `Backend Maven Tests` job and all steps passed, including Java 11 setup, backend tests, test summary, and Maven report upload.
+- This confirms the backend test suite passed on that commit; it does not prove every MFA security scenario is covered or that the feature is production-ready.
+- Platform Owner Web CI run #23 also passed on commit `83a4897ca79d91ebee2cfb7effa8cbd315951b3b`: https://github.com/MohammedAli01020/contractor-manager/actions/runs/40479158809. This is an earlier commit than the latest backend fix; rerun/verify web CI against the final feature branch state before sign-off.
+
+## Work completed on the branch
+
+1. Added/updated backend CI for the branch.
+2. Added Flyway migration V15 to expand `platform_owners.totp_secret` to `VARCHAR(128)`.
+3. Fixed numeric filtering in the frontend OTP input.
+4. Fixed an integration test's stale optimistic-lock entity by reloading the Platform Owner after the login helper (which may update MFA-related state) and before disabling it.
+5. Latest change committed as `a572a135699bbce90b7a1abb4dfa6e22982c66eb` (“Reload platform owner before disabling in integration test”).
+
+## MFA implementation notes
+
+Implemented areas documented in the prior review:
+- TOTP RFC 6238; 6-digit code, 30-second period, ±1 time-step validation window.
+- 20-byte random secret, Base32 encoding, and AES-GCM encrypted secret storage using `APP_PLATFORM_TOTP_ENCRYPTION_KEY` (configured secret must be at least 32 characters).
+- Platform Owner login returns `MFA_REQUIRED` or `MFA_SETUP_REQUIRED` rather than immediately issuing an access token when MFA is required.
+- Setup/enable/verify endpoints:
+  - `POST /api/v1/platform/auth/mfa/setup`
+  - `POST /api/v1/platform/auth/mfa/enable`
+  - `POST /api/v1/platform/auth/mfa/verify`
+- Challenge JWT, last-used TOTP step replay prevention, failed-attempt counter, and 15-minute lockout after five failures are part of the described implementation.
+- Frontend setup/verification handling and OTP numeric input filtering are present.
+
+Treat this list as implementation inventory, not a substitute for reviewing current source and tests before changing the feature.
+
+## Known blocker / remaining work
+
+**Recovery codes are not complete.** Prior source review found a recovery-code table but no complete end-to-end flow for:
+- generating recovery codes;
+- showing them to the user safely once;
+- storing only a secure hash (not plaintext);
+- verifying a submitted code;
+- consuming each code atomically exactly once;
+- testing invalid, replayed, and concurrent use.
+
+Do not call MFA production-ready until this is implemented or explicitly removed from scope with an approved alternative recovery policy.
+
+## Next steps — recommended order
+
+1. Re-read the current branch/source and check the actual branch HEAD before edits.
+2. Implement the recovery-code lifecycle securely, including atomic one-time consumption and safe user-facing display.
+3. Add/verify tests for recovery codes (valid, invalid, one-time use, concurrent replay), TOTP replay rejection, challenge purpose/expiry, lockout/reset behavior, and relevant migration compatibility.
+4. Verify backend CI on the resulting commit.
+5. Verify Platform Owner Web CI against the latest feature branch state.
+6. Review the complete diff and document any remaining risks. Do not merge, open a PR, deploy, or run production migrations without explicit user approval.
+
+## Pull request / merge state
+
+- PR #6 was closed at the user's request and was **not merged**: https://github.com/MohammedAli01020/contractor-manager/pull/6
+- No merge to `main` or deployment was performed during the latest work.
