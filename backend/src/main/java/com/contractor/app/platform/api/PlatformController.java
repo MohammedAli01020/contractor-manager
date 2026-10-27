@@ -40,4 +40,6 @@ public class PlatformController {
  @PostMapping("/admin-activation")
  @ResponseStatus(HttpStatus.NO_CONTENT)
  public void activateAdmin(@Valid @RequestBody ActivateAdminRequest request){service.activateAdmin(request);}
+ @PostMapping("/tenants/{tenantId}/admin-activation/resend")
+ public CreateTenantResponse resendActivation(@PathVariable Long tenantId){return service.resendActivation(tenantId);}
 }
