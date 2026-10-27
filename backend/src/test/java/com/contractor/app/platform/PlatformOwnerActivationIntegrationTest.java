@@ -137,6 +137,9 @@ class PlatformOwnerActivationIntegrationTest extends AbstractIntegrationTest {
 
         String ownerToken = loginOwnerToken(ownerUsername, "StrongOwnerPass123");
 
+        // Login may update MFA-related state and increment the optimistic-lock version.
+        // Reload the managed state before disabling the owner to avoid saving a stale entity.
+        owner = owners.findById(owner.getId()).orElseThrow();
         owner.setActive(false);
         owners.saveAndFlush(owner);
 
