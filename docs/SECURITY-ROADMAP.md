@@ -202,3 +202,14 @@ Before each implementation phase, publish the exact affected files, API endpoint
 - Apply request throttling to reset, verification, and resend flows before production enablement. Do not claim a message was sent if mail is unconfigured or delivery fails. Keep raw tokens out of logs, audit payloads, and production responses.
 - Preserve current sign-in and existing user records during migration. Test migration from a populated pre-V12 schema and ensure old accounts are not automatically marked as email-verified.
 - Do not modify `main`; do not reset or delete the existing database. No application code has been changed as part of Phase A.
+
+
+## Phase B progress — 2026-10-27
+
+- Added V12 with nullable user email and an unverified-by-default flag; prior migrations remain unchanged.
+- Added configurable SMTP delivery using environment settings for Gmail and a Google App Password; no credentials are committed.
+- New tenant-admin creation now accepts an email and sends the activation link when email delivery is enabled. The raw activation URL is returned only when the explicit development fallback is enabled.
+- Added owner-authorized resend activation; reissuing revokes outstanding activation tokens. Existing users without email remain in the database and are not auto-verified.
+- **Still pending:** password reset, legacy-account email verification, tenant user list, rate limiting, focused tests and full CI. Do not treat this slice as production-ready until CI and security tests pass.
+
+Gmail setup: enable 2-Step Verification, create a Google App Password, set `MAIL_USERNAME`, `MAIL_APP_PASSWORD`, `MAIL_FROM`, `MAIL_HOST=smtp.gmail.com`, `MAIL_PORT=587`, and `APP_EMAIL_ENABLED=true` in the deployment secret environment. Keep `APP_PLATFORM_ACTIVATION_LINK_RETURN_ENABLED=false` in production and use an HTTPS activation URL.
