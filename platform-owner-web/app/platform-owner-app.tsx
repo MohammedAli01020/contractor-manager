@@ -311,7 +311,7 @@ export default function PlatformOwnerApp() {
             <span className="eyebrow">مرحبًا بعودتك</span>
             <h2>تسجيل دخول مالك المنصة</h2>
             <p className="muted">أدخل بيانات الحساب الرئيسي للمتابعة.</p>
-            <form onSubmit={login} className="form-stack">
+            <form onSubmit={mfaMode ? completeMfa : login} className="form-stack">
               {!mfaMode ? (
                 <>
                   <label htmlFor="owner-username">اسم المستخدم</label>
