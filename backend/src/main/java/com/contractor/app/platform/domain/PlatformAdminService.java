@@ -87,6 +87,23 @@ public class PlatformAdminService {
   return new CreateTenantResponse(tenant.getId(),tenant.getName(),admin.getId(),admin.getUsername(),emailSent?null:activationUrl,expiry.toString(),emailSent?"EMAIL_SENT":"DEV_LINK");
  }
  @Transactional
+ public CreateTenantResponse resendActivation(Long tenantId) {
+  User admin=users.findByTenantIdOrderByFullNameAsc(tenantId).stream()
+   .filter(user -> user.getRole()==Role.ADMIN && !user.isPasswordActivated()).findFirst()
+   .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,"حساب مدير غير مفعّل غير موجود"));
+  if(admin.getEmail()==null || admin.getEmail().trim().isEmpty()) throw new ResponseStatusException(HttpStatus.CONFLICT,"لا يوجد بريد إلكتروني محفوظ لهذا الحساب.");
+  if(!emailService.isEnabled()) throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,"خدمة البريد الإلكتروني غير مهيأة.");
+  tokens.revokeOutstandingForUser(admin.getId(),tenantId);
+  String raw=TokenHasher.newOpaqueToken();
+  LocalDateTime expiry=LocalDateTime.now(ZoneOffset.UTC).plusHours(activationHours);
+  tokens.save(new TenantAdminActivationToken(tenantId,admin.getId(),TokenHasher.sha256Hex(raw),expiry));
+  String sep=baseUrl.contains("?")?"&":"?";
+  String activationUrl=baseUrl+sep+"token="+java.net.URLEncoder.encode(raw,java.nio.charset.StandardCharsets.UTF_8);
+  emailService.sendActivation(admin.getEmail(),admin.getFullName(),activationUrl,expiry);
+  return new CreateTenantResponse(tenantId,"",admin.getId(),admin.getUsername(),null,expiry.toString(),"EMAIL_SENT");
+ }
+
+ @Transactional
  public void activateAdmin(ActivateAdminRequest req){
   TenantAdminActivationToken token=tokens.findByTokenHashForUpdate(TokenHasher.sha256Hex(req.getToken()))
    .orElseThrow(()->invalidToken());
