@@ -31,6 +31,18 @@ public class PlatformOwner {
     @Column(nullable = false)
     private boolean active = true;
 
+    @Column(name = "totp_secret", length = 64)
+    private String totpSecret;
+
+    @Column(name = "totp_enabled", nullable = false)
+    private boolean totpEnabled = false;
+
+    @Column(name = "totp_setup_expires_at")
+    private LocalDateTime totpSetupExpiresAt;
+
+    @Column(name = "totp_enabled_at")
+    private LocalDateTime totpEnabledAt;
+
     @Version
     @Column(nullable = false)
     private Long version;
@@ -66,6 +78,14 @@ public class PlatformOwner {
     public String getFullName() { return fullName; }
     public String getPasswordHash() { return passwordHash; }
     public boolean isActive() { return active; }
+    public String getTotpSecret() { return totpSecret; }
+    public boolean isTotpEnabled() { return totpEnabled; }
+    public LocalDateTime getTotpSetupExpiresAt() { return totpSetupExpiresAt; }
+    public LocalDateTime getTotpEnabledAt() { return totpEnabledAt; }
+    public void setTotpSecret(String totpSecret) { this.totpSecret = totpSecret; }
+    public void setTotpEnabled(boolean totpEnabled) { this.totpEnabled = totpEnabled; }
+    public void setTotpSetupExpiresAt(LocalDateTime totpSetupExpiresAt) { this.totpSetupExpiresAt = totpSetupExpiresAt; }
+    public void setTotpEnabledAt(LocalDateTime totpEnabledAt) { this.totpEnabledAt = totpEnabledAt; }
     public void setPasswordHash(String passwordHash) { this.passwordHash = passwordHash; }
     public void setActive(boolean active) { this.active = active; }
 }
