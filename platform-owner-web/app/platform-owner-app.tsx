@@ -328,10 +328,10 @@ export default function PlatformOwnerApp() {
                     {mfaUri && <div className="mfa-qr-frame" style={{ display: "flex", justifyContent: "center", padding: "16px", background: "#fff", borderRadius: "12px", width: "fit-content", margin: "12px auto" }}>
                       <QRCodeSVG
                         value={mfaUri}
-                        size={350}
+                        size={260}
                         level="M"
                         marginSize={4}
-                        style={{ display: "block", width: "350px", height: "350px", maxWidth: "none", flex: "0 0 350px" }}
+                        style={{ display: "block", width: "260px", height: "260px", maxWidth: "100%", flex: "0 1 260px" }}
                       />
                     </div>}
                     <details>
