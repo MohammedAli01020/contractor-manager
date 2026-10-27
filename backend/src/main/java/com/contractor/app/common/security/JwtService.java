@@ -18,6 +18,7 @@ public class JwtService {
     private static final String TENANT_CLAIM = "tid";
     private static final String TYPE_CLAIM = "typ";
     private static final String OWNER_TYPE = "platform_owner";
+    private static final String MFA_CHALLENGE_TYPE = "platform_owner_mfa_challenge";
     private final SecretKey key;
     private final String issuer;
     private final long accessTtlSeconds;
@@ -48,6 +49,42 @@ public class JwtService {
                 .claim(TYPE_CLAIM, OWNER_TYPE).setIssuedAt(Date.from(now))
                 .setExpiration(Date.from(now.plusSeconds(accessTtlSeconds)))
                 .signWith(key, SignatureAlgorithm.HS256).compact();
+    }
+
+    /** Short-lived token used only to complete Platform Owner MFA; it is not an access token. */
+    public String createPlatformMfaChallenge(Long ownerId, String purpose) {
+        if (!"setup".equals(purpose) && !"verify".equals(purpose)) {
+            throw new IllegalArgumentException("Unsupported MFA challenge purpose");
+        }
+        Instant now = Instant.now();
+        return Jwts.builder().setIssuer(issuer).setSubject(String.valueOf(ownerId))
+                .claim(TYPE_CLAIM, MFA_CHALLENGE_TYPE).claim("purpose", purpose)
+                .setIssuedAt(Date.from(now)).setExpiration(Date.from(now.plusSeconds(5 * 60L)))
+                .signWith(key, SignatureAlgorithm.HS256).compact();
+    }
+
+    public Optional<PlatformMfaChallenge> parsePlatformMfaChallenge(String token) {
+        try {
+            io.jsonwebtoken.Claims claims = parser.parseClaimsJws(token).getBody();
+            if (!MFA_CHALLENGE_TYPE.equals(claims.get(TYPE_CLAIM, String.class))
+                    || claims.containsKey(TENANT_CLAIM)) return Optional.empty();
+            String purpose = claims.get("purpose", String.class);
+            if (!"setup".equals(purpose) && !"verify".equals(purpose)) return Optional.empty();
+            return Optional.of(new PlatformMfaChallenge(Long.parseLong(claims.getSubject()), purpose));
+        } catch (JwtException | IllegalArgumentException e) {
+            return Optional.empty();
+        }
+    }
+
+    public static final class PlatformMfaChallenge {
+        private final Long ownerId;
+        private final String purpose;
+        public PlatformMfaChallenge(Long ownerId, String purpose) {
+            this.ownerId = ownerId;
+            this.purpose = purpose;
+        }
+        public Long getOwnerId() { return ownerId; }
+        public String getPurpose() { return purpose; }
     }
 
     public Optional<TokenClaims> parse(String token) {
