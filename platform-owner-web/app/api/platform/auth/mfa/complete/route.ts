@@ -13,9 +13,12 @@ function backendUrl() {
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null) as Record<string, unknown> | null;
   if (!body || typeof body.challengeToken !== "string" || !body.challengeToken ||
-      typeof body.code !== "string" || !/^\d{6}$/.test(body.code) ||
-      typeof body.setup !== "boolean") {
-    return NextResponse.json({ message: "أدخل رمز التحقق المكوّن من 6 أرقام." }, { status: 400 });
+      typeof body.setup !== "boolean" ||
+      (body.setup
+        ? typeof body.code !== "string" || !/^\d{6}$/.test(body.code)
+        : !((typeof body.code === "string" && /^\d{6}$/.test(body.code)) ||
+            (typeof body.recoveryCode === "string" && /^[A-Za-z0-9-]{8,40}$/.test(body.recoveryCode))))) {
+    return NextResponse.json({ message: body?.setup ? "أدخل رمز التحقق المكوّن من 6 أرقام." : "أدخل رمز المصادقة أو كود استرداد صالحًا." }, { status: 400 });
   }
 
   try {
@@ -23,7 +26,7 @@ export async function POST(request: NextRequest) {
     const upstream = await fetch(`${backendUrl()}/platform/auth/mfa/${endpoint}`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify({ challengeToken: body.challengeToken, code: body.code }),
+      body: JSON.stringify({ challengeToken: body.challengeToken, code: body.code || "", recoveryCode: body.recoveryCode || "" }),
       cache: "no-store",
       signal: AbortSignal.timeout(10_000),
     });
@@ -38,7 +41,7 @@ export async function POST(request: NextRequest) {
     }
 
     const ttl = Math.max(1, Math.min(Math.floor(payload.expiresInSeconds), MAX_TOKEN_TTL));
-    const response = NextResponse.json({ authenticated: true, username: payload.username });
+    const response = NextResponse.json({ authenticated: true, username: payload.username, recoveryCodes: body.setup && Array.isArray(payload.recoveryCodes) ? payload.recoveryCodes : undefined });
     const cookieOptions = {
       httpOnly: true,
       secure: request.nextUrl.protocol === "https:",
