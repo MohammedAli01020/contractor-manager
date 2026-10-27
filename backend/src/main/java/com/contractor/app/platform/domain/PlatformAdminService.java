@@ -9,6 +9,12 @@ import com.contractor.app.platform.api.dto.CreateTenantResponse;
 import com.contractor.app.platform.api.dto.PlatformAdminSummary;
 import com.contractor.app.platform.api.dto.PlatformLoginRequest;
 import com.contractor.app.platform.api.dto.PlatformLoginResponse;
+import com.contractor.app.platform.api.dto.PlatformMfaChallengeRequest;
+import com.contractor.app.platform.api.dto.PlatformMfaCodeRequest;
+import com.contractor.app.platform.api.dto.PlatformMfaSetupResponse;
+import com.contractor.app.platform.security.PlatformTotpService;
+import com.contractor.app.platform.security.PlatformTotpSecretCipher;
+import java.time.Instant;
 import com.contractor.app.platform.api.dto.PlatformTenantSummary;
 import com.contractor.app.platform.infra.PlatformOwnerRepository;
 import com.contractor.app.platform.infra.TenantAdminActivationTokenRepository;
@@ -37,16 +43,96 @@ public class PlatformAdminService {
  private final PlatformOwnerRepository owners; private final TenantRepository tenants; private final UserRepository users;
  private final TenantAdminActivationTokenRepository tokens; private final PasswordEncoder encoder; private final JwtService jwt;
  private final String baseUrl; private final long activationHours; private final boolean linkReturnEnabled; private final PlatformEmailService emailService;
+ private final PlatformTotpService totp; private final PlatformTotpSecretCipher totpCipher;
  public PlatformAdminService(PlatformOwnerRepository owners,TenantRepository tenants,UserRepository users,TenantAdminActivationTokenRepository tokens,PasswordEncoder encoder,JwtService jwt, PlatformEmailService emailService, Environment environment,
  @Value("${app.platform.activation-base-url:http://localhost:8081/activate-admin/index.html}") String baseUrl,
  @Value("${app.platform.activation-hours:24}") long activationHours,
- @Value("${app.platform.activation-link-return-enabled:false}") boolean linkReturnEnabled){this.owners=owners;this.tenants=tenants;this.users=users;this.tokens=tokens;this.encoder=encoder;this.jwt=jwt;this.emailService=emailService;this.baseUrl=baseUrl;this.activationHours=activationHours;this.linkReturnEnabled=linkReturnEnabled && environment.acceptsProfiles(Profiles.of("dev","test"));}
- @Transactional(readOnly=true)
+ @Value("${app.platform.activation-link-return-enabled:false}") boolean linkReturnEnabled, PlatformTotpService totp, PlatformTotpSecretCipher totpCipher){this.owners=owners;this.tenants=tenants;this.users=users;this.tokens=tokens;this.encoder=encoder;this.jwt=jwt;this.emailService=emailService;this.baseUrl=baseUrl;this.activationHours=activationHours;this.linkReturnEnabled=linkReturnEnabled && environment.acceptsProfiles(Profiles.of("dev","test"));this.totp=totp;this.totpCipher=totpCipher;}
+ @Transactional
  public PlatformLoginResponse login(PlatformLoginRequest req){
   String username=User.normalizeUsername(req.getUsername());
   PlatformOwner owner=owners.findByUsername(username).filter(PlatformOwner::isActive).filter(o->encoder.matches(req.getPassword(),o.getPasswordHash()))
    .orElseThrow(()->new ResponseStatusException(HttpStatus.UNAUTHORIZED,"بيانات الدخول غير صحيحة"));
-  return new PlatformLoginResponse(jwt.createPlatformOwnerAccessToken(owner.getId()),jwt.getAccessTtlSeconds(),owner.getId(),owner.getUsername());
+  String purpose = owner.isTotpEnabled() ? "verify" : "setup";
+  return new PlatformLoginResponse(owner.isTotpEnabled() ? "MFA_REQUIRED" : "MFA_SETUP_REQUIRED",
+    jwt.createPlatformMfaChallenge(owner.getId(), purpose), owner.getId(), owner.getUsername());
+ }
+
+ @Transactional
+ public PlatformMfaSetupResponse beginTotpSetup(PlatformMfaChallengeRequest req) {
+  JwtService.PlatformMfaChallenge challenge = requireChallenge(req.getChallengeToken(), "setup");
+  PlatformOwner owner = owners.findByIdForUpdate(challenge.getOwnerId())
+    .filter(PlatformOwner::isActive)
+    .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "انتهت صلاحية جلسة الإعداد."));
+  if (owner.isTotpEnabled()) throw new ResponseStatusException(HttpStatus.CONFLICT, "التحقق بخطوتين مفعّل بالفعل.");
+  LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+  String secret;
+  if (owner.getTotpSecret() != null && owner.getTotpSetupExpiresAt() != null
+      && owner.getTotpSetupExpiresAt().isAfter(now)) {
+   secret = totpCipher.decrypt(owner.getTotpSecret());
+  } else {
+   secret = totp.generateSecret();
+   owner.setTotpSecret(totpCipher.encrypt(secret));
+   owner.setTotpSetupExpiresAt(now.plusMinutes(10));
+  }
+  return new PlatformMfaSetupResponse(secret, totp.provisioningUri("Mimaar Platform", owner.getUsername(), secret));
+ }
+
+ @Transactional(noRollbackFor = ResponseStatusException.class)
+ public PlatformLoginResponse enableTotp(PlatformMfaCodeRequest req) {
+  JwtService.PlatformMfaChallenge challenge = requireChallenge(req.getChallengeToken(), "setup");
+  PlatformOwner owner = owners.findByIdForUpdate(challenge.getOwnerId()).filter(PlatformOwner::isActive)
+    .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "انتهت صلاحية جلسة الإعداد."));
+  LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+  if (owner.isTotpEnabled() || owner.getTotpSecret() == null || owner.getTotpSetupExpiresAt() == null
+      || !owner.getTotpSetupExpiresAt().isAfter(now)) {
+   throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "انتهت صلاحية إعداد التحقق بخطوتين. سجّل الدخول من جديد.");
+  }
+  String secret = totpCipher.decrypt(owner.getTotpSecret());
+  Long step = totp.matchingStep(secret, req.getCode(), Instant.now().getEpochSecond());
+  if (step == null) throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "رمز التحقق غير صحيح.");
+  owner.setTotpEnabled(true);
+  owner.setTotpEnabledAt(now);
+  owner.setTotpSetupExpiresAt(null);
+  owner.setTotpLastUsedStep(step);
+  owner.setTotpFailedAttempts(0);
+  owner.setTotpLockedUntil(null);
+  return new PlatformLoginResponse(jwt.createPlatformOwnerAccessToken(owner.getId()), jwt.getAccessTtlSeconds(),
+    owner.getId(), owner.getUsername());
+ }
+
+ @Transactional(noRollbackFor = ResponseStatusException.class)
+ public PlatformLoginResponse verifyTotp(PlatformMfaCodeRequest req) {
+  JwtService.PlatformMfaChallenge challenge = requireChallenge(req.getChallengeToken(), "verify");
+  PlatformOwner owner = owners.findByIdForUpdate(challenge.getOwnerId()).filter(PlatformOwner::isActive)
+    .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "انتهت صلاحية جلسة الدخول."));
+  LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+  if (!owner.isTotpEnabled() || owner.getTotpSecret() == null)
+   throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "التحقق بخطوتين غير مهيأ لهذا الحساب.");
+  if (owner.getTotpLockedUntil() != null && owner.getTotpLockedUntil().isAfter(now))
+   throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "تم إيقاف المحاولات مؤقتًا. حاول لاحقًا.");
+  Long step = totp.matchingStep(totpCipher.decrypt(owner.getTotpSecret()), req.getCode(), Instant.now().getEpochSecond());
+  if (step == null || (owner.getTotpLastUsedStep() != null && step <= owner.getTotpLastUsedStep())) {
+   int failures = owner.getTotpFailedAttempts() + 1;
+   owner.setTotpFailedAttempts(failures);
+   if (failures >= 5) {
+    owner.setTotpFailedAttempts(0);
+    owner.setTotpLockedUntil(now.plusMinutes(15));
+   }
+   throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "رمز التحقق غير صحيح أو سبق استخدامه.");
+  }
+  owner.setTotpLastUsedStep(step);
+  owner.setTotpFailedAttempts(0);
+  owner.setTotpLockedUntil(null);
+  return new PlatformLoginResponse(jwt.createPlatformOwnerAccessToken(owner.getId()), jwt.getAccessTtlSeconds(),
+    owner.getId(), owner.getUsername());
+ }
+
+ private JwtService.PlatformMfaChallenge requireChallenge(String token, String purpose) {
+  JwtService.PlatformMfaChallenge challenge = jwt.parsePlatformMfaChallenge(token)
+    .filter(value -> purpose.equals(value.getPurpose()))
+    .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "رمز جلسة التحقق غير صالح أو منتهي."));
+  return challenge;
  }
  @Transactional(readOnly=true)
  public List<PlatformTenantSummary> listTenants(){
