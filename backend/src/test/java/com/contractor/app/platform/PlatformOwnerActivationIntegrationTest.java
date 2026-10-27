@@ -266,6 +266,61 @@ class PlatformOwnerActivationIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(status().isBadRequest());
     }
 
+    @Test
+    void recoveryCodeIsIssuedOnceAndCanOnlyBeConsumedOnce() throws Exception {
+        String ownerUsername = uniqueName("recovery_owner_");
+        owners.saveAndFlush(new PlatformOwner(ownerUsername, "Recovery Owner", encoder.encode("StrongOwnerPass123")));
+
+        Map<String, Object> login = new HashMap<>();
+        login.put("username", ownerUsername);
+        login.put("password", "StrongOwnerPass123");
+        MvcResult loginResult = mockMvc.perform(post("/api/v1/platform/auth/login")
+                .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(login)))
+                .andExpect(status().isOk()).andReturn();
+        JsonNode challengeBody = objectMapper.readTree(loginResult.getResponse().getContentAsString());
+        String challenge = challengeBody.path("challengeToken").asText();
+
+        Map<String, Object> setupRequest = new HashMap<>();
+        setupRequest.put("challengeToken", challenge);
+        MvcResult setupResult = mockMvc.perform(post("/api/v1/platform/auth/mfa/setup")
+                .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(setupRequest)))
+                .andExpect(status().isOk()).andReturn();
+        String secret = objectMapper.readTree(setupResult.getResponse().getContentAsString()).path("secret").asText();
+
+        Map<String, Object> enableRequest = new HashMap<>();
+        enableRequest.put("challengeToken", challenge);
+        enableRequest.put("code", totp.codeAt(secret, Instant.now().getEpochSecond() / 30L));
+        MvcResult enabled = mockMvc.perform(post("/api/v1/platform/auth/mfa/enable")
+                .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(enableRequest)))
+                .andExpect(status().isOk()).andReturn();
+        JsonNode enabledBody = objectMapper.readTree(enabled.getResponse().getContentAsString());
+        assertEquals(10, enabledBody.path("recoveryCodes").size());
+        String recoveryCode = enabledBody.path("recoveryCodes").get(0).asText();
+        assertTrue(recoveryCode.matches("[A-Z2-9]{12}"));
+
+        MvcResult secondLogin = mockMvc.perform(post("/api/v1/platform/auth/login")
+                .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(login)))
+                .andExpect(status().isOk()).andReturn();
+        String verifyChallenge = objectMapper.readTree(secondLogin.getResponse().getContentAsString())
+                .path("challengeToken").asText();
+
+        Map<String, Object> recoveryRequest = new HashMap<>();
+        recoveryRequest.put("challengeToken", verifyChallenge);
+        recoveryRequest.put("recoveryCode", recoveryCode);
+        mockMvc.perform(post("/api/v1/platform/auth/mfa/verify")
+                .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(recoveryRequest)))
+                .andExpect(status().isOk());
+
+        MvcResult thirdLogin = mockMvc.perform(post("/api/v1/platform/auth/login")
+                .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(login)))
+                .andExpect(status().isOk()).andReturn();
+        recoveryRequest.put("challengeToken", objectMapper.readTree(thirdLogin.getResponse().getContentAsString())
+                .path("challengeToken").asText());
+        mockMvc.perform(post("/api/v1/platform/auth/mfa/verify")
+                .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(recoveryRequest)))
+                .andExpect(status().isUnauthorized());
+    }
+
     private String loginOwnerToken(String username, String password) throws Exception {
         Map<String, Object> login = new HashMap<>();
         login.put("username", username);
