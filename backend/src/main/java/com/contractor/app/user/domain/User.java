@@ -48,6 +48,12 @@ public class User {
     @Column(name = "password_activated", nullable = false)
     private boolean passwordActivated = true;
 
+    @Column(length = 254)
+    private String email;
+
+    @Column(name = "email_verified", nullable = false)
+    private boolean emailVerified = false;
+
     @Version
     @Column(nullable = false)
     private Long version;
@@ -134,6 +140,13 @@ public class User {
     public boolean isPasswordActivated() {
         return passwordActivated;
     }
+
+    public String getEmail() { return email; }
+    public void setEmail(String email) {
+        this.email = email == null || email.trim().isEmpty() ? null : email.trim().toLowerCase(Locale.ROOT);
+    }
+    public boolean isEmailVerified() { return emailVerified; }
+    public void setEmailVerified(boolean emailVerified) { this.emailVerified = emailVerified; }
 
     public void setPasswordActivated(boolean passwordActivated) {
         this.passwordActivated = passwordActivated;
