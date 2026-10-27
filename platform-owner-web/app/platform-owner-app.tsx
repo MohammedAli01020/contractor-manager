@@ -37,6 +37,11 @@ export default function PlatformOwnerApp() {
   const [password, setPassword] = useState("");
   const [loginBusy, setLoginBusy] = useState(false);
   const [loginError, setLoginError] = useState("");
+  const [mfaChallenge, setMfaChallenge] = useState("");
+  const [mfaMode, setMfaMode] = useState<"setup" | "verify" | null>(null);
+  const [mfaSecret, setMfaSecret] = useState("");
+  const [mfaUri, setMfaUri] = useState("");
+  const [mfaCode, setMfaCode] = useState("");
   const [form, setForm] = useState(initialForm);
   const [createBusy, setCreateBusy] = useState(false);
   const [createError, setCreateError] = useState("");
@@ -114,10 +119,54 @@ export default function PlatformOwnerApp() {
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.message || "تعذر تسجيل الدخول. راجع البيانات وحالة الخادم.");
       setPassword("");
+      if (data.challengeToken && (data.setupRequired || data.mfaRequired)) {
+        setMfaChallenge(data.challengeToken);
+        setMfaMode(data.setupRequired ? "setup" : "verify");
+        setLoginError("");
+        if (data.setupRequired) {
+          const setupResponse = await fetch("/api/platform/auth/mfa/setup", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ challengeToken: data.challengeToken }),
+          });
+          const setupData = await setupResponse.json().catch(() => ({}));
+          if (!setupResponse.ok) throw new Error(setupData.message || "تعذر إعداد التحقق بخطوتين.");
+          setMfaSecret(setupData.secret || "");
+          setMfaUri(setupData.provisioningUri || "");
+        }
+        return;
+      }
       setSession({ authenticated: true, username: data.username || username.trim() });
       setActiveView("overview");
     } catch (error) {
       setLoginError(error instanceof Error ? error.message : "حدث خطأ غير متوقع.");
+    } finally {
+      setLoginBusy(false);
+    }
+  }
+
+  async function completeMfa(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!mfaChallenge || !mfaMode) return;
+    setLoginBusy(true);
+    setLoginError("");
+    try {
+      const response = await fetch("/api/platform/auth/mfa/complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ challengeToken: mfaChallenge, code: mfaCode, setup: mfaMode === "setup" }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.message || "تعذر التحقق من الرمز.");
+      setMfaChallenge("");
+      setMfaMode(null);
+      setMfaSecret("");
+      setMfaUri("");
+      setMfaCode("");
+      setSession({ authenticated: true, username: data.username || username.trim() });
+      setActiveView("overview");
+    } catch (error) {
+      setLoginError(error instanceof Error ? error.message : "حدث خطأ أثناء التحقق.");
     } finally {
       setLoginBusy(false);
     }
@@ -129,6 +178,11 @@ export default function PlatformOwnerApp() {
     setCreated(null);
     setForm(initialForm);
     setLoginError("");
+    setMfaChallenge("");
+    setMfaMode(null);
+    setMfaSecret("");
+    setMfaUri("");
+    setMfaCode("");
     setCreateError("");
   }
 
@@ -251,12 +305,30 @@ export default function PlatformOwnerApp() {
             <h2>تسجيل دخول مالك المنصة</h2>
             <p className="muted">أدخل بيانات الحساب الرئيسي للمتابعة.</p>
             <form onSubmit={login} className="form-stack">
-              <label htmlFor="owner-username">اسم المستخدم</label>
-              <input id="owner-username" name="username" autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="أدخل اسم المستخدم" required />
-              <label htmlFor="owner-password">كلمة المرور</label>
-              <input id="owner-password" name="password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="أدخل كلمة المرور" required />
+              {!mfaMode ? (
+                <>
+                  <label htmlFor="owner-username">اسم المستخدم</label>
+                  <input id="owner-username" name="username" autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="أدخل اسم المستخدم" required />
+                  <label htmlFor="owner-password">كلمة المرور</label>
+                  <input id="owner-password" name="password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="أدخل كلمة المرور" required />
+                </>
+              ) : (
+                <>
+                  <h2>{mfaMode === "setup" ? "تفعيل التحقق بخطوتين" : "التحقق بخطوتين"}</h2>
+                  <p>{mfaMode === "setup" ? "افتح تطبيق مصادقة مثل Google Authenticator أو Microsoft Authenticator، وأضف الحساب يدويًا باستخدام المفتاح التالي." : "أدخل الرمز الحالي الظاهر في تطبيق المصادقة."}</p>
+                  {mfaMode === "setup" && <div className="mfa-setup-details">
+                    <label htmlFor="mfa-secret">المفتاح السري للتطبيق</label>
+                    <input id="mfa-secret" value={mfaSecret} readOnly onFocus={(e) => e.currentTarget.select()} />
+                    <small>أدخل المفتاح يدويًا في تطبيق المصادقة. لا تشاركه مع أي شخص.</small>
+                    {mfaUri && <details><summary>رابط إعداد الحساب</summary><textarea value={mfaUri} readOnly rows={3} /></details>}
+                  </div>}
+                  <label htmlFor="mfa-code">رمز التحقق (6 أرقام)</label>
+                  <input id="mfa-code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} pattern="[0-9]{6}" value={mfaCode} onChange={(e) => setMfaCode(e.target.value.replace(/\\D/g, "").slice(0, 6))} placeholder="000000" required />
+                </>
+              )}
               {loginError && <div className="alert alert-error" role="alert">{loginError}</div>}
-              <button className="button button-primary button-full" type="submit" disabled={loginBusy}>{loginBusy ? "جارٍ التحقق..." : "دخول آمن"} <Icon name="arrow" /></button>
+              <button className="button button-primary button-full" type="submit" disabled={loginBusy}>{loginBusy ? "جارٍ التحقق..." : mfaMode === "setup" ? "تفعيل التحقق والدخول" : mfaMode === "verify" ? "تحقق ودخول" : "دخول آمن"} <Icon name="arrow" /></button>
+              {mfaMode && <button className="button button-ghost button-full" type="button" disabled={loginBusy} onClick={() => { setMfaMode(null); setMfaChallenge(""); setMfaSecret(""); setMfaUri(""); setMfaCode(""); setLoginError(""); }}>العودة لتسجيل الدخول</button>}
             </form>
             <div className="login-foot"><span className="status-dot" /> الاتصال يتم عبر الخادم المحلي</div>
           </div>
