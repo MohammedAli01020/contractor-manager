@@ -88,9 +88,19 @@ public class PlatformAdminService {
       || !owner.getTotpSetupExpiresAt().isAfter(now)) {
    throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "انتهت صلاحية إعداد التحقق بخطوتين. سجّل الدخول من جديد.");
   }
+  if (owner.getTotpLockedUntil() != null && owner.getTotpLockedUntil().isAfter(now))
+   throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "تم إيقاف المحاولات مؤقتًا. حاول لاحقًا.");
   String secret = totpCipher.decrypt(owner.getTotpSecret());
   Long step = totp.matchingStep(secret, req.getCode(), Instant.now().getEpochSecond());
-  if (step == null) throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "رمز التحقق غير صحيح.");
+  if (step == null) {
+   int failures = owner.getTotpFailedAttempts() + 1;
+   owner.setTotpFailedAttempts(failures);
+   if (failures >= 5) {
+    owner.setTotpFailedAttempts(0);
+    owner.setTotpLockedUntil(now.plusMinutes(15));
+   }
+   throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "رمز التحقق غير صحيح.");
+  }
   owner.setTotpEnabled(true);
   owner.setTotpEnabledAt(now);
   owner.setTotpSetupExpiresAt(null);
