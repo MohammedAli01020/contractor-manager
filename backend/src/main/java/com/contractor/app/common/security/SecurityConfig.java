@@ -36,7 +36,7 @@ public class SecurityConfig {
                 .and().authorizeRequests()
                 .antMatchers("/activate-admin/**", "/api/v1/health", "/api/v1/auth/register-tenant", "/api/v1/auth/login",
                         "/api/v1/auth/refresh", "/api/v1/auth/logout",
-                        "/api/v1/platform/auth/login", "/api/v1/platform/admin-activation").permitAll()
+                        "/api/v1/platform/auth/login", "/api/v1/platform/auth/mfa/setup", "/api/v1/platform/auth/mfa/enable", "/api/v1/platform/auth/mfa/verify", "/api/v1/platform/admin-activation").permitAll()
                 .antMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
                 .antMatchers("/api/v1/platform/**").hasRole("PLATFORM_OWNER")
                 .anyRequest().authenticated()
