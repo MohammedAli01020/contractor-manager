@@ -326,7 +326,13 @@ export default function PlatformOwnerApp() {
                   {mfaMode === "setup" && <div className="mfa-setup-details">
                     <p>امسح رمز QR باستخدام Google Authenticator أو Microsoft Authenticator لإضافة الحساب. يظهر الرمز أثناء الإعداد فقط.</p>
                     {mfaUri && <div className="mfa-qr-frame" style={{ display: "flex", justifyContent: "center", padding: "16px", background: "#fff", borderRadius: "12px", width: "fit-content", margin: "12px auto" }}>
-                      <QRCodeSVG value={mfaUri} size={220} level="M" marginSize={4} />
+                      <QRCodeSVG
+                        value={mfaUri}
+                        size={350}
+                        level="M"
+                        marginSize={4}
+                        style={{ display: "block", width: "350px", height: "350px", maxWidth: "none", flex: "0 0 350px" }}
+                      />
                     </div>}
                     <details>
                       <summary>تعذّر مسح الرمز؟ عرض المفتاح يدويًا</summary>
