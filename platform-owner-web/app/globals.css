@@ -19,7 +19,7 @@ button { cursor: pointer; }
 button:disabled { cursor: not-allowed; opacity: .7; }
 button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px solid #b8b2ff; outline-offset: 2px; }
 svg { width: 20px; height: 20px; flex: 0 0 auto; }
-.mfa-qr-frame svg { width: 350px !important; height: 350px !important; max-width: none !important; flex: 0 0 350px !important; display: block; }
+.mfa-qr-frame svg { width: 260px !important; height: 260px !important; max-width: 100% !important; flex: 0 1 260px !important; display: block; }
 .loading-screen { min-height: 100vh; display: grid; align-content: center; justify-items: center; gap: 14px; color: var(--muted); }
 .loading-mark { display: grid; place-items: center; width: 52px; height: 52px; border-radius: 17px; background: var(--purple); color: white; font-size: 25px; font-weight: 800; }
 .login-layout { min-height: 100vh; display: grid; grid-template-columns: minmax(300px, 43%) 1fr; background: #fff; }
