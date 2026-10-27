@@ -11,6 +11,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.contractor.app.AbstractIntegrationTest;
 import com.contractor.app.platform.domain.PlatformOwner;
 import com.contractor.app.platform.domain.PlatformBootstrapService;
+import com.contractor.app.platform.security.PlatformTotpService;
+import java.time.Instant;
 import com.contractor.app.platform.domain.TenantAdminActivationToken;
 import com.contractor.app.platform.infra.TenantAdminActivationTokenRepository;
 import com.contractor.app.common.security.TokenHasher;
@@ -33,11 +35,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.context.TestPropertySource;
 
+@TestPropertySource(properties = "app.platform.totp-encryption-key=integration-test-only-key-for-platform-mfa-1234567890")
 class PlatformOwnerActivationIntegrationTest extends AbstractIntegrationTest {
     @Autowired private PlatformOwnerRepository owners;
     @Autowired private PlatformBootstrapService bootstrap;
     @Autowired private PasswordEncoder encoder;
+    @Autowired private PlatformTotpService totp;
     @Autowired private TenantRepository tenants;
     @Autowired private UserRepository users;
     @Autowired private TenantAdminActivationTokenRepository activationTokens;
@@ -52,13 +57,7 @@ class PlatformOwnerActivationIntegrationTest extends AbstractIntegrationTest {
         String ownerUsername = uniqueName("platform_");
         owners.saveAndFlush(new PlatformOwner(ownerUsername, "Platform Owner", encoder.encode("StrongOwnerPass123")));
 
-        Map<String, Object> login = new HashMap<>();
-        login.put("username", ownerUsername);
-        login.put("password", "StrongOwnerPass123");
-        MvcResult ownerLogin = mockMvc.perform(post("/api/v1/platform/auth/login")
-                .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(login)))
-                .andExpect(status().isOk()).andReturn();
-        String ownerToken = objectMapper.readTree(ownerLogin.getResponse().getContentAsString()).path("accessToken").asText();
+        String ownerToken = loginOwnerToken(ownerUsername, "StrongOwnerPass123");
 
         String adminUsername = uniqueName("admin_");
         Map<String, Object> create = new HashMap<>();
@@ -136,14 +135,7 @@ class PlatformOwnerActivationIntegrationTest extends AbstractIntegrationTest {
         PlatformOwner owner = owners.saveAndFlush(
                 new PlatformOwner(ownerUsername, "Platform Owner", encoder.encode("StrongOwnerPass123")));
 
-        Map<String, Object> login = new HashMap<>();
-        login.put("username", ownerUsername);
-        login.put("password", "StrongOwnerPass123");
-        MvcResult ownerLogin = mockMvc.perform(post("/api/v1/platform/auth/login")
-                .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(login)))
-                .andExpect(status().isOk()).andReturn();
-        String ownerToken = objectMapper.readTree(ownerLogin.getResponse().getContentAsString())
-                .path("accessToken").asText();
+        String ownerToken = loginOwnerToken(ownerUsername, "StrongOwnerPass123");
 
         owner.setActive(false);
         owners.saveAndFlush(owner);
@@ -234,14 +226,7 @@ class PlatformOwnerActivationIntegrationTest extends AbstractIntegrationTest {
         String ownerUsername = uniqueName("status_owner_");
         owners.saveAndFlush(new PlatformOwner(ownerUsername, "Status Owner", encoder.encode("StrongOwnerPass123")));
 
-        Map<String, Object> login = new HashMap<>();
-        login.put("username", ownerUsername);
-        login.put("password", "StrongOwnerPass123");
-        MvcResult ownerLogin = mockMvc.perform(post("/api/v1/platform/auth/login")
-                .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(login)))
-                .andExpect(status().isOk()).andReturn();
-        String ownerToken = objectMapper.readTree(ownerLogin.getResponse().getContentAsString())
-                .path("accessToken").asText();
+        String ownerToken = loginOwnerToken(ownerUsername, "StrongOwnerPass123");
 
         Map<String, Object> suspend = new HashMap<>();
         suspend.put("status", "SUSPENDED");
@@ -277,5 +262,33 @@ class PlatformOwnerActivationIntegrationTest extends AbstractIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(invalid)))
                 .andExpect(status().isBadRequest());
     }
+
+    private String loginOwnerToken(String username, String password) throws Exception {
+        Map<String, Object> login = new HashMap<>();
+        login.put("username", username);
+        login.put("password", password);
+        MvcResult loginResult = mockMvc.perform(post("/api/v1/platform/auth/login")
+                .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(login)))
+                .andExpect(status().isOk()).andReturn();
+        JsonNode loginBody = objectMapper.readTree(loginResult.getResponse().getContentAsString());
+        String challenge = loginBody.path("challengeToken").asText();
+        if ("MFA_SETUP_REQUIRED".equals(loginBody.path("status").asText())) {
+            Map<String, Object> setupRequest = new HashMap<>();
+            setupRequest.put("challengeToken", challenge);
+            MvcResult setupResult = mockMvc.perform(post("/api/v1/platform/auth/mfa/setup")
+                    .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(setupRequest)))
+                    .andExpect(status().isOk()).andReturn();
+            String secret = objectMapper.readTree(setupResult.getResponse().getContentAsString()).path("secret").asText();
+            Map<String, Object> codeRequest = new HashMap<>();
+            codeRequest.put("challengeToken", challenge);
+            codeRequest.put("code", totp.codeAt(secret, Instant.now().getEpochSecond() / 30L));
+            MvcResult enabled = mockMvc.perform(post("/api/v1/platform/auth/mfa/enable")
+                    .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(codeRequest)))
+                    .andExpect(status().isOk()).andReturn();
+            return objectMapper.readTree(enabled.getResponse().getContentAsString()).path("accessToken").asText();
+        }
+        throw new IllegalStateException("Unexpected MFA state for test owner");
+    }
+
 
 }
