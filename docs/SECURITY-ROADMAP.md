@@ -57,7 +57,7 @@ Tenant isolation is a security invariant, not a UI feature:
 **Exit criteria:** reviewed implementation plan, list of affected files/endpoints, migration strategy, threat cases, and tests approved before code changes.
 
 ### Security Phase B — Tenant-admin email, activation and recovery
-**Status: Not started**
+**Status: In progress — activation email and resend source implemented; password recovery and legacy-email verification remain pending**
 
 - Add tenant-admin email capture to the company/first-admin workflow and a safe migration strategy for existing accounts with no email.
 - Verify email ownership before enabling recovery.
@@ -163,7 +163,7 @@ This section consolidates the approved security roadmap with the Platform Owner 
 ### 6.3 Delivery sequence and status
 
 1. **Phase A — Baseline review:** complete for the source areas listed below. The latest feature branch head is `7bbd41d2ddc17327cb02fd9a29b53343ab0c2202`; compared with the previously reported local commit `ff2b567f15ebb41adfd6519d697225cc5d3de685`, it is ahead by two documentation-only commits and has no application-code diff. The branch contains migrations V1–V11, with V11 as the latest migration. `User` has no email field; `AuthService` has login, refresh, logout, and authenticated password change but no reset flow; `PlatformAdminService` creates activation links but has no resend/reset flow; activation tokens are hash-only, expiring, single-use and locked on consumption. `SecurityConfig` disables CSRF and permits auth/activation routes; this is a hardening review item, not by itself proof of an exploitable issue. The tenant repository has tenant-scoped user lookups, and existing integration tests cover activation lifecycle, disabled owners, and tenant/role separation. Email delivery is not configured in the inspected `application.yml` or backend dependencies. No application tests were run during this source-only review; the latest commit is documentation-only and has no reported status checks.
-2. **Phase B — Tenant-admin email, activation and password recovery:** implementation design prepared below; application code has not changed. Use a new forward-only Flyway migration (V12 unless a fresh branch check reveals a later migration), keep email nullable for existing accounts, and require verified email before recovery.
+2. **Phase B — Tenant-admin email, activation and password recovery:** in progress. V12 adds nullable email and an unverified-by-default flag; new tenant admins provide an email, activation is sent by configured SMTP, and owner-triggered resend invalidates prior tokens. Password reset, legacy-account email verification, tenant user listing, rate limiting, focused tests, and full CI remain pending.
 3. **Phase C — Platform Owner mandatory TOTP 2FA and recovery codes:** pending.
 4. **Phase D — Tenant-admin TOTP 2FA and central enforcement policy:** pending.
 5. **Phase E — Account administration, tenant isolation, sessions, rate limits, CSRF/origin review, and audit hardening:** pending; includes the user-list view and controlled resend-activation/reset actions.
