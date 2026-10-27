@@ -31,7 +31,7 @@ public class PlatformOwner {
     @Column(nullable = false)
     private boolean active = true;
 
-    @Column(name = "totp_secret", length = 64)
+    @Column(name = "totp_secret", length = 128)
     private String totpSecret;
 
     @Column(name = "totp_enabled", nullable = false)
@@ -42,6 +42,15 @@ public class PlatformOwner {
 
     @Column(name = "totp_enabled_at")
     private LocalDateTime totpEnabledAt;
+
+    @Column(name = "totp_last_used_step")
+    private Long totpLastUsedStep;
+
+    @Column(name = "totp_failed_attempts", nullable = false)
+    private int totpFailedAttempts = 0;
+
+    @Column(name = "totp_locked_until")
+    private LocalDateTime totpLockedUntil;
 
     @Version
     @Column(nullable = false)
@@ -82,10 +91,16 @@ public class PlatformOwner {
     public boolean isTotpEnabled() { return totpEnabled; }
     public LocalDateTime getTotpSetupExpiresAt() { return totpSetupExpiresAt; }
     public LocalDateTime getTotpEnabledAt() { return totpEnabledAt; }
+    public Long getTotpLastUsedStep() { return totpLastUsedStep; }
+    public int getTotpFailedAttempts() { return totpFailedAttempts; }
+    public LocalDateTime getTotpLockedUntil() { return totpLockedUntil; }
     public void setTotpSecret(String totpSecret) { this.totpSecret = totpSecret; }
     public void setTotpEnabled(boolean totpEnabled) { this.totpEnabled = totpEnabled; }
     public void setTotpSetupExpiresAt(LocalDateTime totpSetupExpiresAt) { this.totpSetupExpiresAt = totpSetupExpiresAt; }
     public void setTotpEnabledAt(LocalDateTime totpEnabledAt) { this.totpEnabledAt = totpEnabledAt; }
+    public void setTotpLastUsedStep(Long totpLastUsedStep) { this.totpLastUsedStep = totpLastUsedStep; }
+    public void setTotpFailedAttempts(int totpFailedAttempts) { this.totpFailedAttempts = totpFailedAttempts; }
+    public void setTotpLockedUntil(LocalDateTime totpLockedUntil) { this.totpLockedUntil = totpLockedUntil; }
     public void setPasswordHash(String passwordHash) { this.passwordHash = passwordHash; }
     public void setActive(boolean active) { this.active = active; }
 }
