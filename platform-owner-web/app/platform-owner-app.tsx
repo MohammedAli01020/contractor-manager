@@ -361,7 +361,7 @@ export default function PlatformOwnerApp() {
             <div className="mfa-setup-details" dir="ltr" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
               {recoveryCodes.map((code) => <code key={code} style={{ padding: 10, border: "1px solid var(--border, #ddd)", borderRadius: 8, textAlign: "center" }}>{code}</code>)}
             </div>
-            <button className="button button-primary button-full" type="button" onClick={() => { void navigator.clipboard.writeText(recoveryCodes.join("\\n")); }}>نسخ الأكواد</button>
+            <button className="button button-primary button-full" type="button" onClick={() => { void navigator.clipboard.writeText(recoveryCodes.join("\n")); }}>نسخ الأكواد</button>
             <button className="button button-ghost button-full" type="button" onClick={() => setRecoveryCodes([])}>حفظت الأكواد — متابعة</button>
           </div>
         </section>
