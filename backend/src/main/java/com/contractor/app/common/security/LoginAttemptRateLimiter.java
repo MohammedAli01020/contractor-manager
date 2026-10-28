@@ -8,6 +8,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.util.Locale;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -24,9 +25,12 @@ public class LoginAttemptRateLimiter {
     private static final int MAX_FAILURES_PER_IDENTITY_AND_IP = 5;
     private static final int MAX_FAILURES_PER_IP = 100;
     private static final long WINDOW_MILLIS = Duration.ofMinutes(15).toMillis();
+    private static final long PRUNE_INTERVAL_MILLIS = Duration.ofMinutes(1).toMillis();
+    private static final int MAX_BUCKETS = 50_000;
 
     private final ConcurrentHashMap<String, Bucket> buckets = new ConcurrentHashMap<>();
     private final Clock clock;
+    private final AtomicLong lastPruneAt = new AtomicLong();
 
     public LoginAttemptRateLimiter() {
         this(Clock.systemUTC());
