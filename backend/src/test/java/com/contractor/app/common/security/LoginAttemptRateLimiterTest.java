@@ -110,6 +110,34 @@ class LoginAttemptRateLimiterTest {
                         .isEqualTo(HttpStatus.TOO_MANY_REQUESTS));
     }
 
+
+    @Test
+    void evictsOldestIdentityBucketInsteadOfRejectingNewIdentitiesAtCapacity() {
+        LoginAttemptRateLimiter limiter = new LoginAttemptRateLimiter(
+                Clock.fixed(Instant.parse("2026-10-28T08:00:00Z"), ZoneOffset.UTC), 2, 2);
+
+        limiter.recordFailure("192.0.2.20", "first", "tenant_login");
+        limiter.recordFailure("192.0.2.20", "second", "tenant_login");
+        limiter.recordFailure("192.0.2.20", "third", "tenant_login");
+
+        // New identities remain serviceable at capacity, and the IP-wide bucket is preserved.
+        limiter.checkAllowed("192.0.2.20", "fourth");
+        for (int attempt = 0; attempt < 97; attempt++) {
+            limiter.recordFailure("192.0.2.20", "ip-user-" + attempt, "tenant_login");
+        }
+        assertThatThrownBy(() -> limiter.checkAllowed("192.0.2.20", "last-user"))
+                .isInstanceOf(ApiException.class)
+                .satisfies(error -> assertThat(((ApiException) error).getStatus())
+                        .isEqualTo(HttpStatus.TOO_MANY_REQUESTS));
+    }
+
+    @Test
+    void bucketCapacityIsValidated() {
+        assertThatThrownBy(() -> new LoginAttemptRateLimiter(
+                Clock.systemUTC(), 0, 1))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
     private static final class MutableClock extends Clock {
         private final AtomicLong millis;
 
