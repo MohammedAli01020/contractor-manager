@@ -9,7 +9,7 @@ Review of the accounting journal posting path on `fix/accounting-concurrency-har
 2. Reversal posting uses a check-then-insert flow. The database uniqueness constraint must remain the authoritative protection against concurrent attempts to reverse the same entry.
 3. Existing `JournalPostingServiceTest` coverage is Mockito-based and does not prove behavior under real MySQL concurrency or transaction rollback.
 4. `GlobalExceptionHandler` already maps the known posting-key and reversal unique-constraint names to deterministic HTTP 409 responses. This does not itself make identical concurrent retries idempotent.
-5. `.github/workflows/backend-ci.yml` does not currently list `fix/accounting-concurrency-hardening` in the push branch filters. Its pull-request branch filters also do not include this new review branch as a base target. Confirm intended PR base before adjusting the workflow.
+5. `.github/workflows/backend-ci.yml` now lists `fix/accounting-concurrency-hardening` in the push branch filters. The pull-request branch filters were left unchanged because they filter the target/base branch, not the source branch.
 
 ## Database constraint verification
 
@@ -27,8 +27,11 @@ These constraints provide the final database-level protection against duplicate 
 - Inspect the actual Flyway migrations and repository constraints to confirm exact unique index names and tenant scoping.
 - Add an integration test against MySQL/Testcontainers for concurrent identical posting-key requests and rollback when line persistence fails.
 - Define whether a concurrent identical retry should return the existing journal or a deterministic 409; preserve conflicts for a reused key with a different payload.
-- Add the review branch to CI push filters (and only add it to PR base filters if it is intended to be a target branch).
-- Run the backend test suite and inspect the resulting CI run before proposing a merge.
+- Baseline CI run on this branch completed successfully: [Backend CI run #149](https://github.com/MohammedAli01020/contractor-manager/actions/runs/40733388161), commit `dd12425fec1c8363d66f8b7778771b957d6165c7`.
+- The captured Maven log reports **135 tests, 0 failures, 0 errors, 0 skipped; BUILD SUCCESS**. These are the existing tests only; no concurrency or rollback regression test has been added yet.
+- Add an integration test against MySQL/Testcontainers for concurrent identical posting-key requests and rollback when line persistence fails.
 
 ## Status
-Review notes only. No production code or test behavior was changed by this document. No test run is claimed.
+- Review documentation and CI push-trigger configuration are committed on the review branch.
+- Baseline CI has been verified as passing (135 tests; 0 failures/errors/skips).
+- No production code or accounting concurrency tests have been changed yet. Passing baseline tests do not prove concurrent idempotency or rollback atomicity.
