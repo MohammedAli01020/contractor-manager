@@ -37,8 +37,6 @@ public class LoginAttemptRateLimiter {
     private final int maxIpBuckets;
     private final AtomicLong lastPruneAt = new AtomicLong();
     private final Object reservationLock = new Object();
-    private final Object[] identityLocks = new Object[256];
-    private final Object[] ipLocks = new Object[256];
 
     public LoginAttemptRateLimiter() {
         this(Clock.systemUTC());
@@ -53,22 +51,8 @@ public class LoginAttemptRateLimiter {
             throw new IllegalArgumentException("Bucket limits must be positive");
         }
         this.clock = clock;
-        for (int index = 0; index < identityLocks.length; index++) {
-            identityLocks[index] = new Object();
-            ipLocks[index] = new Object();
-        }
         this.maxIdentityBuckets = maxIdentityBuckets;
         this.maxIpBuckets = maxIpBuckets;
-    }
-
-    /** A fixed lock stripe serializes login attempts from the same IP without unbounded lock allocation. */
-    public Object ipLock(String clientIp) {
-        return ipLocks[Math.floorMod(ipKey(clientIp).hashCode(), ipLocks.length)];
-    }
-
-    /** A fixed lock stripe serializes authentication attempts for the same identity without unbounded lock allocation. */
-    public Object identityLock(String clientIp, String username) {
-        return identityLocks[Math.floorMod(identityKey(clientIp, username).hashCode(), identityLocks.length)];
     }
 
     /**
@@ -90,7 +74,7 @@ public class LoginAttemptRateLimiter {
             }
             ip.reserve();
             identity.reserve();
-            return new Attempt(ip, identity, clientIp, username);
+            return new Attempt(ip, identity);
         }
     }
 
@@ -130,7 +114,7 @@ public class LoginAttemptRateLimiter {
         private final Bucket identity;
         private boolean completed;
 
-        private Attempt(Bucket ip, Bucket identity, String clientIp, String username) {
+        private Attempt(Bucket ip, Bucket identity) {
             this.ip = ip;
             this.identity = identity;
         }
@@ -201,27 +185,26 @@ public class LoginAttemptRateLimiter {
                 // Capacity pressure is the exceptional path: reclaim expired entries
                 // before evicting a still-active bucket.
                 removeExpired(target, now);
-                if (target.size() >= maxBuckets) {
-                    evictOldest(target);
+                if (target.size() >= maxBuckets && !evictOldest(target)) {
+                    rejectThrottled();
                 }
             }
             target.put(key, new Bucket(now, 1));
         }
     }
 
-    private void evictOldest(ConcurrentHashMap<String, Bucket> target) {
+    private boolean evictOldest(ConcurrentHashMap<String, Bucket> target) {
         String oldestKey = null;
         long oldestStart = Long.MAX_VALUE;
         for (Map.Entry<String, Bucket> entry : target.entrySet()) {
-            long startedAt = entry.getValue().windowStartedAt();
-            if (startedAt < oldestStart) {
+            Bucket bucket = entry.getValue();
+            long startedAt = bucket.windowStartedAt();
+            if (!bucket.hasReservations() && startedAt < oldestStart) {
                 oldestStart = startedAt;
                 oldestKey = entry.getKey();
             }
         }
-        if (oldestKey != null) {
-            target.remove(oldestKey);
-        }
+        return oldestKey != null && target.remove(oldestKey) != null;
     }
 
     private void rejectThrottled() {
@@ -300,6 +283,10 @@ public class LoginAttemptRateLimiter {
 
         private synchronized void reserve() {
             inFlight++;
+        }
+
+        private synchronized boolean hasReservations() {
+            return inFlight > 0;
         }
 
         private synchronized void releaseReservation() {
