@@ -8,7 +8,7 @@
 - Throttled requests return HTTP 429 with code `TOO_MANY_REQUESTS`.
 - The username is SHA-256 hashed in the in-memory identity key. Authentication logs include the request ID from MDC, endpoint label, event, and status; they do not log the username, password, or client IP.
 - Existing tenant-user dummy BCrypt verification and Platform Owner MFA challenge/setup behavior are unchanged. Existing TOTP lockout logic is untouched.
-- Added unit tests for the per-identity threshold, reset after successful login, separation between client IPs, expiry after 15 minutes, the 100-failure IP ceiling, and concurrent failures. Added integration coverage for both tenant and platform login throttling.
+- Added unit tests for the per-identity threshold, reset after successful login, separation between client IPs, expiry after 15 minutes, the 100-failure IP ceiling, and concurrent failures. Added integration coverage for both tenant and platform login throttling, including concurrent HTTP requests asserting exactly five authentication attempts and HTTP 429 for the remainder.
 - Expired buckets are swept at most once per minute instead of scanning the maps on every login check. Identity counters and IP counters are stored separately with independent caps (50,000 identity buckets and 10,000 IP buckets); when a cap is reached, the oldest bucket is evicted instead of broadly rejecting new identities. This bounds memory but means high-cardinality abuse can evict older counters, so shared-store/rate-limit design still needs review before production.
 - Platform login performs a dummy BCrypt password check when an account is missing or inactive, reducing the username-enumeration timing difference. The platform MFA challenge and TOTP behavior remain unchanged.
 
