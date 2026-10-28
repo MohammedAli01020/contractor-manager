@@ -42,8 +42,8 @@ class ChartOfAccountsTenantIsolationIntegrationTest extends AbstractIntegrationT
         JsonNode accountsA = body(getJson(CHART_ENDPOINT, tokenA).andExpect(status().isOk()));
         JsonNode accountsB = body(getJson(CHART_ENDPOINT, tokenB).andExpect(status().isOk()));
 
-        assertThat(accountsA).hasSize(14);
-        assertThat(accountsB).hasSize(13);
+        assertThat(accountsA.size()).isEqualTo(14);
+        assertThat(accountsB.size()).isEqualTo(13);
         assertThat(accountsA.get(0).path("accountCode").asText()).isEqualTo("1000");
         assertThat(accountsA.get(13).path("accountCode").asText()).isEqualTo("9900");
         assertThat(accountsA.toString()).contains("Tenant A private account");
