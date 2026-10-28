@@ -1,6 +1,7 @@
 package com.contractor.app.platform.api;
 
 import com.contractor.app.common.security.LoginAttemptRateLimiter;
+import com.contractor.app.common.web.RequestTrackingFilter;
 import com.contractor.app.common.error.ApiException;
 import com.contractor.app.platform.api.dto.ActivateAdminRequest;
 import com.contractor.app.platform.api.dto.CreateTenantRequest;
@@ -52,7 +53,7 @@ public class PlatformController {
     public PlatformLoginResponse login(@Valid @RequestBody PlatformLoginRequest request,
                                        HttpServletRequest servletRequest) {
         String clientIp = servletRequest.getRemoteAddr();
-        String requestId = servletRequest.getHeader("X-Request-ID");
+        String requestId = (String) servletRequest.getAttribute(RequestTrackingFilter.REQUEST_ID_ATTRIBUTE);
         try {
             try (LoginAttemptRateLimiter.Attempt attempt =
                          loginRateLimiter.beginAttempt(clientIp, request.getUsername())) {
