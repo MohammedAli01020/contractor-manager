@@ -78,17 +78,6 @@ public class LoginAttemptRateLimiter {
         }
     }
 
-    public void checkAllowed(String clientIp, String username) {
-        long now = clock.millis();
-        pruneExpiredPeriodically(now);
-        Bucket ip = ipBuckets.get(ipKey(clientIp));
-        Bucket identity = identityBuckets.get(identityKey(clientIp, username));
-        if (isLimited(ip, now, MAX_FAILURES_PER_IP)
-                || isLimited(identity, now, MAX_FAILURES_PER_IDENTITY_AND_IP)) {
-            rejectThrottled();
-        }
-    }
-
     private Bucket getOrCreateBucket(ConcurrentHashMap<String, Bucket> target, String key,
                                      long now, int maxBuckets) {
         Bucket current = target.get(key);
@@ -149,47 +138,6 @@ public class LoginAttemptRateLimiter {
                 identity.releaseReservation();
                 completed = true;
             }
-        }
-    }
-
-    public void recordFailure(String clientIp, String username, String endpoint) {
-        long now = clock.millis();
-        increment(ipBuckets, ipKey(clientIp), now, maxIpBuckets);
-        increment(identityBuckets, identityKey(clientIp, username), now, maxIdentityBuckets);
-        log.warn("Security event=login_failed requestId={} endpoint={} status=401",
-                MDC.get("requestId"), endpoint);
-    }
-
-    public void recordSuccess(String clientIp, String username, String endpoint) {
-        identityBuckets.remove(identityKey(clientIp, username));
-        log.info("Security event=login_succeeded requestId={} endpoint={} status=200",
-                MDC.get("requestId"), endpoint);
-    }
-
-    private boolean isLimited(Bucket bucket, long now, int limit) {
-        return bucket != null && bucket.isLimited(now, limit);
-    }
-
-    private void increment(ConcurrentHashMap<String, Bucket> target, String key, long now,
-                           int maxBuckets) {
-        synchronized (target) {
-            Bucket current = target.get(key);
-            if (current != null && !current.isExpired(now)) {
-                current.increment();
-                return;
-            }
-            if (current != null) {
-                target.remove(key, current);
-            }
-            if (target.size() >= maxBuckets) {
-                // Capacity pressure is the exceptional path: reclaim expired entries
-                // before evicting a still-active bucket.
-                removeExpired(target, now);
-                if (target.size() >= maxBuckets && !evictOldest(target)) {
-                    rejectThrottled();
-                }
-            }
-            target.put(key, new Bucket(now, 1));
         }
     }
 
@@ -265,20 +213,12 @@ public class LoginAttemptRateLimiter {
             this.failures = failures;
         }
 
-        private synchronized boolean isLimited(long now, int limit) {
-            return !isExpired(now) && failures >= limit;
-        }
-
         private synchronized boolean isLimitedIncludingInFlight(long now, int limit) {
             return !isExpired(now) && failures + inFlight >= limit;
         }
 
         private synchronized boolean isExpired(long now) {
             return inFlight == 0 && now - windowStartedAt >= WINDOW_MILLIS;
-        }
-
-        private synchronized void increment() {
-            failures++;
         }
 
         private synchronized void reserve() {
