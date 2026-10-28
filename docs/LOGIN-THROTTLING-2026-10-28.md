@@ -16,7 +16,7 @@
 
 - The current limiter is **in-memory and per JVM**. It is appropriate as an initial single-instance guard, but it is not cluster-wide and resets when the process restarts. Before running multiple backend replicas, move counters to a shared atomic store such as Redis.
 - The limiter uses the servlet remote address and intentionally does not trust arbitrary `X-Forwarded-For` values. If deployed behind a reverse proxy, configure a trusted-proxy strategy before enabling client-IP-based limits; otherwise requests may appear to originate from the proxy address.
-- **IP concurrency follow-up (code committed; Maven CI success reported):** the login controllers serialize the complete login flow first by client-IP lock stripe and then by normalized username/IP identity lock stripe. This closes the race where concurrent attempts using different usernames from the same IP could all pass the IP-wide check before failures were recorded. Locks are fixed-size (256 stripes per lock type), avoiding unbounded lock allocation; hash collisions can serialize unrelated IPs or identities. **Trade-off:** concurrent logins from the same IP are serialized, including password verification, which can add latency for users behind shared NAT/proxies. Benchmark and revisit this trade-off before production; a shared atomic rate-limit store/reservation design may scale better.
+- **Login concurrency reservation follow-up (code updated; verification pending):** both login controllers now reserve a slot under a short synchronized section, then perform password verification, database work, and token creation without holding that lock. In-flight reservations count toward the identity/IP thresholds, preventing a concurrent burst from passing the check before failures are recorded. A failed attempt converts its reservation into a failure; a successful attempt releases the IP reservation and clears the identity failure count; other exceptions release reservations through try-with-resources. Active reservations are not evicted to make room for new buckets. Under bucket-capacity pressure, a new attempt can receive HTTP 429 if no inactive bucket can be evicted. This removes the previous whole-login per-IP serialization, but it is not a benchmark and needs Maven/CI verification before acceptance.
 - **CI verification (user-provided):** the Maven test step succeeded for IP-lock code commit `204332a1cb20d5a0424d8a5588f59255de36536b`. The subsequent concurrent HTTP integration tests also passed the Maven test step on commit `cea8748cbdd6cd47fb222d79ffe75e0cdbe72083` (user-provided result). These test results do not establish load/performance behavior or production deployment readiness.
 - No database schema, Flyway migration, deployment, or merge to `main` was made as part of this increment.
 
@@ -33,3 +33,12 @@
 - **Test:** added a capacity-pressure test that verifies expired entries are reclaimed and an active identity bucket remains subject to the configured throttle.
 - **Scope:** branch `feature/request-tracking` only. No database/Flyway changes, deployment, or merge to `main`.
 - **Still outstanding:** no load benchmark was run. The per-IP lock still serializes complete login flows sharing the same lock stripe, and counters remain per-process.
+
+
+## Short-lived reservation implementation — 2026-10-28
+
+- Replaced controller-level IP/identity lock holding with `beginAttempt(...)` reservations in `LoginAttemptRateLimiter`.
+- Added unit coverage for five simultaneous reservations for one identity and the 100-reservation IP-wide ceiling across different usernames, including releasing an unfinished reservation.
+- Removed tests for the old lock-stripe approach. Existing HTTP concurrency integration tests still cover both login endpoints.
+- **Verification status:** GitHub workflow-run lookup did not return a run for the latest test commit during this update. Do not treat the code as CI-verified until a Maven test run succeeds.
+- No database/Flyway changes, deployment, or merge to `main`.
