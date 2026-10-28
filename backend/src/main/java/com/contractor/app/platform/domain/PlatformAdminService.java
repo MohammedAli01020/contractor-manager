@@ -51,6 +51,8 @@ public class PlatformAdminService {
  private final PlatformTotpService totp; private final PlatformTotpSecretCipher totpCipher;
  private final PlatformOwnerRecoveryCodeRepository recoveryCodes;
  private static final SecureRandom RECOVERY_RANDOM = new SecureRandom();
+ // A fixed BCrypt hash keeps the password-check cost similar when the account is absent or inactive.
+ private static final String DUMMY_PASSWORD_HASH = "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy";
  private static final char[] RECOVERY_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789".toCharArray();
  public PlatformAdminService(PlatformOwnerRepository owners,TenantRepository tenants,UserRepository users,TenantAdminActivationTokenRepository tokens,PasswordEncoder encoder,JwtService jwt, PlatformEmailService emailService, Environment environment,
  @Value("${app.platform.activation-base-url:http://localhost:8081/activate-admin/index.html}") String baseUrl,
@@ -59,8 +61,14 @@ public class PlatformAdminService {
  @Transactional
  public PlatformLoginResponse login(PlatformLoginRequest req){
   String username=User.normalizeUsername(req.getUsername());
-  PlatformOwner owner=owners.findByUsername(username).filter(PlatformOwner::isActive).filter(o->encoder.matches(req.getPassword(),o.getPasswordHash()))
-   .orElseThrow(()->new ResponseStatusException(HttpStatus.UNAUTHORIZED,"بيانات الدخول غير صحيحة"));
+  PlatformOwner found=owners.findByUsername(username).orElse(null);
+  boolean active = found != null && found.isActive();
+  String passwordHash = active ? found.getPasswordHash() : DUMMY_PASSWORD_HASH;
+  boolean passwordMatches = encoder.matches(req.getPassword(), passwordHash);
+  if (!active || !passwordMatches) {
+   throw new ResponseStatusException(HttpStatus.UNAUTHORIZED,"بيانات الدخول غير صحيحة");
+  }
+  PlatformOwner owner = found;
   String purpose = owner.isTotpEnabled() ? "verify" : "setup";
   return new PlatformLoginResponse(owner.isTotpEnabled() ? "MFA_REQUIRED" : "MFA_SETUP_REQUIRED",
     jwt.createPlatformMfaChallenge(owner.getId(), purpose), owner.getId(), owner.getUsername());
