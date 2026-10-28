@@ -36,6 +36,7 @@ public class LoginAttemptRateLimiter {
     private final int maxIdentityBuckets;
     private final int maxIpBuckets;
     private final AtomicLong lastPruneAt = new AtomicLong();
+    private final Object reservationLock = new Object();
     private final Object[] identityLocks = new Object[256];
     private final Object[] ipLocks = new Object[256];
 
@@ -70,6 +71,29 @@ public class LoginAttemptRateLimiter {
         return identityLocks[Math.floorMod(identityKey(clientIp, username).hashCode(), identityLocks.length)];
     }
 
+    /**
+     * Reserves a failure slot under a short lock, then lets password verification run
+     * without holding a lock. In-flight attempts count against both limits so a burst
+     * cannot all pass the threshold check before failures are recorded.
+     */
+    public Attempt beginAttempt(String clientIp, String username) {
+        synchronized (reservationLock) {
+            long now = clock.millis();
+            pruneExpiredPeriodically(now);
+            String ipKey = ipKey(clientIp);
+            String identityKey = identityKey(clientIp, username);
+            Bucket ip = getOrCreateBucket(ipBuckets, ipKey, now, maxIpBuckets);
+            Bucket identity = getOrCreateBucket(identityBuckets, identityKey, now, maxIdentityBuckets);
+            if (ip.isLimitedIncludingInFlight(now, MAX_FAILURES_PER_IP)
+                    || identity.isLimitedIncludingInFlight(now, MAX_FAILURES_PER_IDENTITY_AND_IP)) {
+                rejectThrottled();
+            }
+            ip.reserve();
+            identity.reserve();
+            return new Attempt(ip, identity, clientIp, username);
+        }
+    }
+
     public void checkAllowed(String clientIp, String username) {
         long now = clock.millis();
         pruneExpiredPeriodically(now);
@@ -78,6 +102,69 @@ public class LoginAttemptRateLimiter {
         if (isLimited(ip, now, MAX_FAILURES_PER_IP)
                 || isLimited(identity, now, MAX_FAILURES_PER_IDENTITY_AND_IP)) {
             rejectThrottled();
+        }
+    }
+
+    private Bucket getOrCreateBucket(ConcurrentHashMap<String, Bucket> target, String key,
+                                     long now, int maxBuckets) {
+        Bucket current = target.get(key);
+        if (current != null && !current.isExpired(now)) {
+            return current;
+        }
+        if (current != null) {
+            target.remove(key, current);
+        }
+        if (target.size() >= maxBuckets) {
+            removeExpired(target, now);
+            if (target.size() >= maxBuckets) {
+                evictOldest(target);
+            }
+        }
+        Bucket created = new Bucket(now, 0);
+        target.put(key, created);
+        return created;
+    }
+
+    public final class Attempt implements AutoCloseable {
+        private final Bucket ip;
+        private final Bucket identity;
+        private boolean completed;
+
+        private Attempt(Bucket ip, Bucket identity, String clientIp, String username) {
+            this.ip = ip;
+            this.identity = identity;
+        }
+
+        public void failure(String endpoint) {
+            synchronized (reservationLock) {
+                if (completed) return;
+                ip.completeFailure();
+                identity.completeFailure();
+                completed = true;
+            }
+            log.warn("Security event=login_failed requestId={} endpoint={} status=401",
+                    MDC.get("requestId"), endpoint);
+        }
+
+        public void success(String endpoint) {
+            synchronized (reservationLock) {
+                if (completed) return;
+                ip.releaseReservation();
+                identity.completeSuccess();
+                completed = true;
+            }
+            log.info("Security event=login_succeeded requestId={} endpoint={} status=200",
+                    MDC.get("requestId"), endpoint);
+        }
+
+        @Override
+        public void close() {
+            synchronized (reservationLock) {
+                if (completed) return;
+                ip.releaseReservation();
+                identity.releaseReservation();
+                completed = true;
+            }
         }
     }
 
@@ -188,6 +275,7 @@ public class LoginAttemptRateLimiter {
     private static final class Bucket {
         private final long windowStartedAt;
         private int failures;
+        private int inFlight;
 
         private Bucket(long windowStartedAt, int failures) {
             this.windowStartedAt = windowStartedAt;
@@ -198,12 +286,34 @@ public class LoginAttemptRateLimiter {
             return !isExpired(now) && failures >= limit;
         }
 
+        private synchronized boolean isLimitedIncludingInFlight(long now, int limit) {
+            return !isExpired(now) && failures + inFlight >= limit;
+        }
+
         private synchronized boolean isExpired(long now) {
-            return now - windowStartedAt >= WINDOW_MILLIS;
+            return inFlight == 0 && now - windowStartedAt >= WINDOW_MILLIS;
         }
 
         private synchronized void increment() {
             failures++;
+        }
+
+        private synchronized void reserve() {
+            inFlight++;
+        }
+
+        private synchronized void releaseReservation() {
+            if (inFlight > 0) inFlight--;
+        }
+
+        private synchronized void completeFailure() {
+            if (inFlight > 0) inFlight--;
+            failures++;
+        }
+
+        private synchronized void completeSuccess() {
+            if (inFlight > 0) inFlight--;
+            failures = 0;
         }
 
         private long windowStartedAt() {
