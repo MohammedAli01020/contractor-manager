@@ -188,3 +188,11 @@ Follow this order. Continue on `feature/platform-owner-activation`; do not merge
 - **CI verification (user-provided):** Maven test step **success** for code commit `204332a1cb20d5a0424d8a5588f59255de36536b`. This verifies the reported Maven step for the IP-lock code; it does not establish deployment, load/performance behavior, or multi-replica behavior.
 - **Remaining production caveats:** in-memory counters reset on restart and are not shared across replicas; configure trusted proxy client-IP handling; bounded eviction can let high-cardinality abuse evict older counters.
 - **Safety:** no database/schema/Flyway changes, no deployment, and no merge to `main`.
+
+
+## Concurrent login integration coverage — 2026-10-28 (CI pending)
+
+- Added concurrent MockMvc integration tests for both `POST /api/v1/auth/login` and `POST /api/v1/platform/auth/login`.
+- Each test releases 12 requests simultaneously from a unique synthetic client IP and asserts exactly 5 authentication failures (HTTP 401) and 7 throttled responses (HTTP 429). This checks the controller/IP-lock path rather than only concurrently incrementing the limiter directly.
+- Performance assessment: the IP lock is held for the complete authentication flow, including password verification. This prevents the IP-wide check/record race but serializes logins sharing the same IP stripe, potentially reducing throughput for users behind NAT/proxies. No benchmark has been run; production review should measure latency/throughput under realistic BCrypt cost and consider a shared atomic reservation/store design.
+- CI must pass for the new test commit before considering this addition verified. No database schema changes, deployment, or merge to `main`.
