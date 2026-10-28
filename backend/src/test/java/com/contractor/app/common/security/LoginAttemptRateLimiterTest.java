@@ -171,6 +171,49 @@ class LoginAttemptRateLimiterTest {
     }
 
     @Test
+    void reservationsPreventConcurrentIdentityAttemptsFromPassingTheThreshold() {
+        LoginAttemptRateLimiter limiter = new LoginAttemptRateLimiter(
+                Clock.fixed(Instant.parse("2026-10-28T08:00:00Z"), ZoneOffset.UTC));
+        java.util.List<LoginAttemptRateLimiter.Attempt> attempts = new java.util.ArrayList<>();
+
+        try {
+            for (int attempt = 0; attempt < 5; attempt++) {
+                attempts.add(limiter.beginAttempt("192.0.2.50", "same-user"));
+            }
+
+            assertThatThrownBy(() -> limiter.beginAttempt("192.0.2.50", "same-user"))
+                    .isInstanceOf(ApiException.class)
+                    .satisfies(error -> assertThat(((ApiException) error).getStatus())
+                            .isEqualTo(HttpStatus.TOO_MANY_REQUESTS));
+
+            attempts.remove(0).close();
+            attempts.add(limiter.beginAttempt("192.0.2.50", "same-user"));
+        } finally {
+            attempts.forEach(LoginAttemptRateLimiter.Attempt::close);
+        }
+    }
+
+    @Test
+    void reservationsEnforceIpLimitAcrossDifferentConcurrentUsernames() {
+        LoginAttemptRateLimiter limiter = new LoginAttemptRateLimiter(
+                Clock.fixed(Instant.parse("2026-10-28T08:00:00Z"), ZoneOffset.UTC));
+        java.util.List<LoginAttemptRateLimiter.Attempt> attempts = new java.util.ArrayList<>();
+
+        try {
+            for (int attempt = 0; attempt < 100; attempt++) {
+                attempts.add(limiter.beginAttempt("192.0.2.51", "user-" + attempt));
+            }
+
+            assertThatThrownBy(() -> limiter.beginAttempt("192.0.2.51", "another-user"))
+                    .isInstanceOf(ApiException.class)
+                    .satisfies(error -> assertThat(((ApiException) error).getStatus())
+                            .isEqualTo(HttpStatus.TOO_MANY_REQUESTS));
+        } finally {
+            attempts.forEach(LoginAttemptRateLimiter.Attempt::close);
+        }
+    }
+
+    @Test
     void bucketCapacityIsValidated() {
         assertThatThrownBy(() -> new LoginAttemptRateLimiter(
                 Clock.systemUTC(), 0, 1))
