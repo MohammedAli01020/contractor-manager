@@ -148,6 +148,29 @@ class LoginAttemptRateLimiterTest {
     }
 
     @Test
+    void prunesExpiredBucketsAtCapacityWithoutEvictingActiveIdentity() {
+        MutableClock clock = new MutableClock(Instant.parse("2026-10-28T08:00:00Z"));
+        LoginAttemptRateLimiter limiter = new LoginAttemptRateLimiter(clock, 2, 2);
+
+        limiter.recordFailure("192.0.2.40", "expired-user", "tenant_login");
+        clock.advance(Duration.ofMinutes(14));
+        limiter.recordFailure("192.0.2.41", "active-user", "tenant_login");
+
+        // The first bucket has expired; the second is still active when capacity is reached.
+        clock.advance(Duration.ofMinutes(1).plusMillis(1));
+        limiter.recordFailure("192.0.2.42", "new-user", "tenant_login");
+
+        for (int attempt = 0; attempt < 4; attempt++) {
+            limiter.recordFailure("192.0.2.41", "active-user", "tenant_login");
+        }
+
+        assertThatThrownBy(() -> limiter.checkAllowed("192.0.2.41", "active-user"))
+                .isInstanceOf(ApiException.class)
+                .satisfies(error -> assertThat(((ApiException) error).getStatus())
+                        .isEqualTo(HttpStatus.TOO_MANY_REQUESTS));
+    }
+
+    @Test
     void bucketCapacityIsValidated() {
         assertThatThrownBy(() -> new LoginAttemptRateLimiter(
                 Clock.systemUTC(), 0, 1))
