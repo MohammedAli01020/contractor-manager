@@ -120,6 +120,7 @@ export default function PlatformOwnerApp() {
   const loadLoginEvents = useCallback(async () => {
     setLoginEventsLoading(true);
     setLoginEventsError("");
+    setLoginEvents(null);
     try {
       const query = new URLSearchParams({
         type: loginEventType,
