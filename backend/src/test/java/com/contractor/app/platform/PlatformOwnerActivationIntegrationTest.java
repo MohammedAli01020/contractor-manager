@@ -233,6 +233,16 @@ class PlatformOwnerActivationIntegrationTest extends AbstractIntegrationTest {
         admin.setEmailVerified(true);
         users.saveAndFlush(admin);
 
+        User inactiveUser = new User(tenant.getId(), uniqueName("inactive_user_"), "Inactive User",
+                null, encoder.encode("NotARealLoginPass123"), Role.OPERATOR);
+        inactiveUser.setActive(false);
+        users.saveAndFlush(inactiveUser);
+
+        User pendingUser = new User(tenant.getId(), uniqueName("pending_user_"), "Pending User",
+                null, encoder.encode("NotARealLoginPass123"), Role.VIEWER);
+        pendingUser.setPasswordActivated(false);
+        users.saveAndFlush(pendingUser);
+
         String ownerUsername = uniqueName("details_owner_");
         owners.saveAndFlush(new PlatformOwner(ownerUsername, "Details Owner", encoder.encode("StrongOwnerPass123")));
         String ownerToken = loginOwnerToken(ownerUsername, "StrongOwnerPass123");
@@ -251,6 +261,9 @@ class PlatformOwnerActivationIntegrationTest extends AbstractIntegrationTest {
 
         assertTrue(company != null, "The created company should be present in the Platform Owner list");
         assertTrue(company.path("updatedAt").isTextual(), "Company update timestamp should be exposed");
+        assertEquals(3, company.path("totalUsers").asInt(), "All tenant accounts should be counted");
+        assertEquals(1, company.path("activeUsers").asInt(),
+                "Only enabled accounts with activated passwords should count as active");
         assertEquals(admin.getPhone(), company.path("admin").path("phone").asText());
         assertEquals(admin.getEmail(), company.path("admin").path("email").asText());
         assertTrue(company.path("admin").path("emailVerified").asBoolean());
