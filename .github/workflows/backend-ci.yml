@@ -8,6 +8,7 @@ on:
       - feature/platform-owner-totp-2fa
       - feature/request-tracking
       - fix/multi-instance-accounting-safety
+      - fix/accounting-concurrency-hardening
     paths:
       - "backend/**"
       - ".github/workflows/backend-ci.yml"
