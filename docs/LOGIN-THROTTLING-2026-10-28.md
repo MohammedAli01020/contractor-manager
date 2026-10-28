@@ -23,3 +23,13 @@
 ## Concurrent login integration tests — verification update
 
 - **Concurrent HTTP integration tests (user-provided CI result):** Maven test step **success** for commit `cea8748cbdd6cd47fb222d79ffe75e0cdbe72083`. The added tests send 12 simultaneous MockMvc requests to each login endpoint from a synthetic client IP and assert five HTTP 401 responses followed by seven HTTP 429 responses. This confirms the test step for that commit; it is not a load/performance benchmark or production deployment check.
+
+
+## Bucket-pruning performance fix — CI verified (2026-10-28)
+
+- **Code commit:** `f87cb0d54d81219c7f0238e71ab70a90ae2b2a82`; **test commit:** `5e82a0632f54ae018be2980c823609de57cd799d`.
+- **Verification:** GitHub Actions [Backend CI run 40675857991](https://github.com/MohammedAli01020/contractor-manager/actions/runs/40675857991) completed successfully for test commit `5e82a0632f54ae018be2980c823609de57cd799d`; the Maven test step was also confirmed successful by the user.
+- **Change:** new bucket creation no longer scans the entire target map on every insertion. Expired-entry removal during insertion now runs only when that map reaches its configured capacity, before any oldest-entry eviction.
+- **Test:** added a capacity-pressure test that verifies expired entries are reclaimed and an active identity bucket remains subject to the configured throttle.
+- **Scope:** branch `feature/request-tracking` only. No database/Flyway changes, deployment, or merge to `main`.
+- **Still outstanding:** no load benchmark was run. The per-IP lock still serializes complete login flows sharing the same lock stripe, and counters remain per-process.
