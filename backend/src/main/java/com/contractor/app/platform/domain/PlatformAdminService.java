@@ -169,7 +169,6 @@ public class PlatformAdminService {
   owner.setTotpFailedAttempts(0);
   owner.setTotpLockedUntil(null);
   owner.setLastLoginAt(now);
-  loginSecurityEvents.recordPlatformSuccess(owner.getId(), owner.getUsername(), null, null);
   return new PlatformLoginResponse(jwt.createPlatformOwnerAccessToken(owner.getId()), jwt.getAccessTtlSeconds(),
     owner.getId(), owner.getUsername());
  }
