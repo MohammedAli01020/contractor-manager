@@ -2,7 +2,7 @@
 
 ## Repository and working scope
 - Repository: https://github.com/MohammedAli01020/contractor-manager
-- Working branch: `fix/multi-instance-accounting-safety`
+- Current review branch: `feature/financial-foundation` (the earlier implementation work originated on `fix/multi-instance-accounting-safety`).
 - Tracking issue: https://github.com/MohammedAli01020/contractor-manager/issues/8
 - Do not merge to or modify `main` as part of this work.
 - Preserve the user's local-only `.gitignore` change; verify local Git status before any commands that could overwrite or discard changes.
@@ -47,3 +47,20 @@ These results verify the reported unit-test/CI runs only. They do **not** establ
 - The unique reversal reference protects integrity but the losing concurrent request still needs deterministic error/replay handling.
 - Confirm the journal header and all lines are committed or rolled back in one transaction.
 - Do not claim multi-instance readiness, full concurrency safety, or migration safety based only on unit-test success.
+
+
+## Follow-up review — 2026-10-28
+
+- Latest Backend CI run on `feature/financial-foundation`: [run 40745882282](https://github.com/MohammedAli01020/contractor-manager/actions/runs/40745882282), commit `28a05b53d571db16ccd068de23e8d311242d071a`; overall result **success**.
+- The run's Maven test step and `Require MySQL accounting integration tests to execute` guard both passed. `JournalPostingConcurrencyIntegrationTest` contains database-backed scenarios for concurrent identical posting, concurrent reversals, and rollback when journal-line persistence fails.
+- `JournalPostingService` uses a transaction template, normalizes payloads for idempotent replay, and handles posting-key/reversal integrity races after rollback. The migration defines tenant-scoped unique keys and foreign keys. `application.yml` uses Hibernate `ddl-auto: validate`; Flyway owns schema changes.
+- `LoginAttemptRateLimiter` documents that it is **per-process**. Shared/Redis throttling and multi-instance deployment remain explicitly deferred while the deployment target is one backend instance.
+- Repository review found no production caller of `JournalPostingService.post()` and no current expense/income source workflow in the accounting package. This is not evidence of a failing test; it means the service is currently a foundation, not yet integrated into a source-document workflow.
+
+## Required before integrating source workflows
+
+When an expense, receipt, invoice, or other source workflow begins calling `JournalPostingService.post()`, add an integration test proving the source-document write and journal posting have the intended atomicity: a failure must not leave a source document without its required journal, or a journal without its source. Choose the transaction boundary based on the actual caller and propagation requirements; do not add `REQUIRES_NEW` without evidence. This integration criterion remains a prerequisite for wiring production source workflows, rather than a claim that such a workflow currently exists.
+
+## Current review disposition
+
+Issue #8 has been updated with the latest CI evidence and the source-workflow caveat. Do not claim multi-instance readiness or close the issue solely on the basis of CI success; close it only after confirming the remaining issue acceptance criteria and explicitly deciding whether source-workflow atomicity is deferred until a source workflow exists. No changes to `main`; preserve the user's local-only `.gitignore` change and never run migrations against a real database without approval.
