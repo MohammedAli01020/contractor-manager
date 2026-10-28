@@ -9,6 +9,7 @@ on:
       - feature/request-tracking
       - fix/multi-instance-accounting-safety
       - fix/accounting-concurrency-hardening
+      - feature/financial-foundation
     paths:
       - "backend/**"
       - ".github/workflows/backend-ci.yml"
