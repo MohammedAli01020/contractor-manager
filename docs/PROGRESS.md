@@ -228,3 +228,13 @@ Follow this order. Continue on `feature/platform-owner-activation`; do not merge
 - **Capacity handling:** bucket eviction skips buckets with active reservations; if the map is full and no inactive bucket can be evicted, the new attempt is throttled. This should be reviewed as an operational trade-off under extreme load.
 - **Verification:** no workflow run was returned for the latest test commit at the time of this note. Run Maven tests/CI and fix any failures before treating the refactor as verified. No load benchmark has been run.
 - **Safety:** no database/Flyway changes, deployment, or merge to `main`.
+
+
+## Login throttling reservation refactor — local Maven suite passed (2026-10-28)
+
+- **Branch:** `feature/request-tracking`.
+- **User-provided result:** after updating to the latest branch changes, `mvn test` reported `BUILD SUCCESS`: 129 tests, 0 failures, 0 errors, 0 skipped; runtime about five minutes.
+- The result closes the previously pending local test verification for the reservation-based login limiter and removal of the legacy counter-mutation API.
+- This is a local test result; do not imply that a separate latest-commit GitHub Actions run or production load benchmark has passed.
+- Next proposed work: inspect and implement persistent login-attempt audit records for tenant and Platform Owner authentication, then review tenant details and trustworthy company last-activity data.
+- No database/Flyway changes, deployment, or merge to `main` was performed as part of this verification. The user's local `.gitignore` modification remains outside the repository commit.
