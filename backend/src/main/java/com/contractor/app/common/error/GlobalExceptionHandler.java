@@ -1,5 +1,7 @@
 package com.contractor.app.common.error;
 
+import com.contractor.app.common.web.RequestTrackingFilter;
+
 import java.util.List;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
@@ -179,10 +181,15 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     private static ResponseEntity<Object> build(HttpStatus status, String code, String message,
                                                 WebRequest request, List<ApiError.FieldIssue> issues,
                                                 java.util.Map<String, Object> details) {
-        String path = request instanceof ServletWebRequest
-                ? ((ServletWebRequest) request).getRequest().getRequestURI()
-                : null;
+        String path = null;
+        String requestId = null;
+        if (request instanceof ServletWebRequest) {
+            javax.servlet.http.HttpServletRequest servletRequest =
+                    ((ServletWebRequest) request).getRequest();
+            path = servletRequest.getRequestURI();
+            requestId = servletRequest.getHeader(RequestTrackingFilter.HEADER_NAME);
+        }
         return new ResponseEntity<Object>(
-                new ApiError(status.value(), code, message, path, issues, details), status);
+                new ApiError(status.value(), code, message, path, issues, details, requestId), status);
     }
 }
