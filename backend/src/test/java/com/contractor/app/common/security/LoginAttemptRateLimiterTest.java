@@ -19,6 +19,14 @@ import org.springframework.http.HttpStatus;
 class LoginAttemptRateLimiterTest {
 
     @Test
+    void identityLockIsStableForCaseInsensitiveUsernameAndSameIp() {
+        LoginAttemptRateLimiter limiter = new LoginAttemptRateLimiter(Clock.systemUTC());
+
+        assertThat(limiter.identityLock("192.0.2.30", "Admin"))
+                .isSameAs(limiter.identityLock("192.0.2.30", " admin "));
+    }
+
+    @Test
     void throttlesTheSixthFailureForSameIdentityAndIp() {
         LoginAttemptRateLimiter limiter = new LoginAttemptRateLimiter(
                 Clock.fixed(Instant.parse("2026-10-28T08:00:00Z"), ZoneOffset.UTC));
