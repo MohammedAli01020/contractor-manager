@@ -1,6 +1,7 @@
 package com.contractor.app.platform.api;
 
 import com.contractor.app.common.security.LoginAttemptRateLimiter;
+import com.contractor.app.common.error.ApiException;
 import com.contractor.app.platform.api.dto.ActivateAdminRequest;
 import com.contractor.app.platform.api.dto.CreateTenantRequest;
 import com.contractor.app.platform.api.dto.CreateTenantResponse;
@@ -69,6 +70,11 @@ public class PlatformController {
                 }
             }
         } catch (ResponseStatusException ex) {
+            if (ex.getStatus() == HttpStatus.TOO_MANY_REQUESTS) {
+                loginSecurityEvents.recordPlatformFailure(request.getUsername(), "RATE_LIMITED", clientIp, requestId);
+            }
+            throw ex;
+        } catch (ApiException ex) {
             if (ex.getStatus() == HttpStatus.TOO_MANY_REQUESTS) {
                 loginSecurityEvents.recordPlatformFailure(request.getUsername(), "RATE_LIMITED", clientIp, requestId);
             }
