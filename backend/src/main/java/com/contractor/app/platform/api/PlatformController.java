@@ -2,6 +2,7 @@ package com.contractor.app.platform.api;
 
 import com.contractor.app.common.security.LoginAttemptRateLimiter;
 import com.contractor.app.common.error.ApiException;
+import org.slf4j.MDC;
 import com.contractor.app.platform.api.dto.ActivateAdminRequest;
 import com.contractor.app.platform.api.dto.CreateTenantRequest;
 import com.contractor.app.platform.api.dto.CreateTenantResponse;
@@ -52,7 +53,7 @@ public class PlatformController {
     public PlatformLoginResponse login(@Valid @RequestBody PlatformLoginRequest request,
                                        HttpServletRequest servletRequest) {
         String clientIp = servletRequest.getRemoteAddr();
-        String requestId = servletRequest.getHeader("X-Request-ID");
+        String requestId = MDC.get("requestId");
         try {
             try (LoginAttemptRateLimiter.Attempt attempt =
                          loginRateLimiter.beginAttempt(clientIp, request.getUsername())) {
@@ -91,7 +92,7 @@ public class PlatformController {
     public PlatformLoginResponse enableMfa(@Valid @RequestBody PlatformMfaCodeRequest request,
                                            HttpServletRequest servletRequest) {
         String clientIp = servletRequest.getRemoteAddr();
-        String requestId = servletRequest.getHeader("X-Request-ID");
+        String requestId = MDC.get("requestId");
         try {
             PlatformLoginResponse response = service.enableTotp(request);
             loginSecurityEvents.recordPlatformSuccess(response.getOwnerId(), response.getUsername(), clientIp, requestId);
@@ -110,14 +111,14 @@ public class PlatformController {
     public PlatformLoginResponse verifyMfa(@Valid @RequestBody PlatformMfaCodeRequest request,
                                            HttpServletRequest servletRequest) {
         String clientIp = servletRequest.getRemoteAddr();
-        String requestId = servletRequest.getHeader("X-Request-ID");
+        String requestId = MDC.get("requestId");
         try {
             PlatformLoginResponse response = service.verifyTotp(request);
             loginSecurityEvents.recordPlatformSuccess(response.getOwnerId(), response.getUsername(), clientIp, requestId);
             return response;
         } catch (ResponseStatusException ex) {
             if (ex.getStatus() == HttpStatus.UNAUTHORIZED || ex.getStatus() == HttpStatus.TOO_MANY_REQUESTS) {
-                loginSecurityEvents.recordPlatformFailure("platform-owner-mfa",
+                loginSecurityEvents.recordPlatformMfaFailure(request.getChallengeToken(),
                         ex.getStatus() == HttpStatus.TOO_MANY_REQUESTS ? "RATE_LIMITED" : "MFA_INVALID_OR_EXPIRED",
                         clientIp, requestId);
             }
