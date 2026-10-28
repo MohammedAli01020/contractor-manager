@@ -12,6 +12,14 @@ import com.contractor.app.platform.api.dto.PlatformMfaSetupResponse;
 import com.contractor.app.platform.api.dto.UpdateTenantStatusRequest;
 import com.contractor.app.platform.api.dto.PlatformTenantSummary;
 import com.contractor.app.platform.domain.PlatformAdminService;
+import com.contractor.app.securityaudit.domain.LoginPrincipalType;
+import com.contractor.app.securityaudit.domain.LoginSecurityEventService;
+import com.contractor.app.securityaudit.api.dto.LoginSecurityEventResponse;
+import com.contractor.app.common.api.PageParams;
+import com.contractor.app.common.api.PageResponse;
+import java.util.function.Function;
+import org.springframework.data.domain.Sort;
+import org.springframework.web.bind.annotation.RequestParam;
 import java.util.List;
 import javax.servlet.http.HttpServletRequest;
 import javax.validation.Valid;
@@ -31,28 +39,40 @@ import org.springframework.web.server.ResponseStatusException;
 public class PlatformController {
     private final PlatformAdminService service;
     private final LoginAttemptRateLimiter loginRateLimiter;
+    private final LoginSecurityEventService loginSecurityEvents;
 
-    public PlatformController(PlatformAdminService service, LoginAttemptRateLimiter loginRateLimiter) {
+    public PlatformController(PlatformAdminService service, LoginAttemptRateLimiter loginRateLimiter, LoginSecurityEventService loginSecurityEvents) {
         this.service = service;
         this.loginRateLimiter = loginRateLimiter;
+        this.loginSecurityEvents = loginSecurityEvents;
     }
 
     @PostMapping("/auth/login")
     public PlatformLoginResponse login(@Valid @RequestBody PlatformLoginRequest request,
                                        HttpServletRequest servletRequest) {
         String clientIp = servletRequest.getRemoteAddr();
-        try (LoginAttemptRateLimiter.Attempt attempt =
-                     loginRateLimiter.beginAttempt(clientIp, request.getUsername())) {
-            try {
-                PlatformLoginResponse response = service.login(request);
-                attempt.success("platform_login");
-                return response;
-            } catch (ResponseStatusException ex) {
-                if (ex.getStatus() == HttpStatus.UNAUTHORIZED) {
-                    attempt.failure("platform_login");
+        String requestId = servletRequest.getHeader("X-Request-ID");
+        try {
+            try (LoginAttemptRateLimiter.Attempt attempt =
+                         loginRateLimiter.beginAttempt(clientIp, request.getUsername())) {
+                try {
+                    PlatformLoginResponse response = service.login(request);
+                    attempt.success("platform_login");
+                    loginSecurityEvents.recordPlatformChallenge(response.getOwnerId(), response.getUsername(), clientIp, requestId);
+                    return response;
+                } catch (ResponseStatusException ex) {
+                    if (ex.getStatus() == HttpStatus.UNAUTHORIZED) {
+                        attempt.failure("platform_login");
+                        loginSecurityEvents.recordPlatformFailure(request.getUsername(), "INVALID_CREDENTIALS", clientIp, requestId);
+                    }
+                    throw ex;
                 }
-                throw ex;
             }
+        } catch (ResponseStatusException ex) {
+            if (ex.getStatus() == HttpStatus.TOO_MANY_REQUESTS) {
+                loginSecurityEvents.recordPlatformFailure(request.getUsername(), "RATE_LIMITED", clientIp, requestId);
+            }
+            throw ex;
         }
     }
 
@@ -62,18 +82,55 @@ public class PlatformController {
     }
 
     @PostMapping("/auth/mfa/enable")
-    public PlatformLoginResponse enableMfa(@Valid @RequestBody PlatformMfaCodeRequest request) {
-        return service.enableTotp(request);
+    public PlatformLoginResponse enableMfa(@Valid @RequestBody PlatformMfaCodeRequest request,
+                                           HttpServletRequest servletRequest) {
+        String clientIp = servletRequest.getRemoteAddr();
+        String requestId = servletRequest.getHeader("X-Request-ID");
+        try {
+            PlatformLoginResponse response = service.enableTotp(request);
+            loginSecurityEvents.recordPlatformSuccess(response.getOwnerId(), response.getUsername(), clientIp, requestId);
+            return response;
+        } catch (ResponseStatusException ex) {
+            if (ex.getStatus() == HttpStatus.UNAUTHORIZED || ex.getStatus() == HttpStatus.TOO_MANY_REQUESTS) {
+                loginSecurityEvents.recordPlatformFailure("platform-owner-mfa",
+                        ex.getStatus() == HttpStatus.TOO_MANY_REQUESTS ? "RATE_LIMITED" : "MFA_INVALID_OR_EXPIRED",
+                        clientIp, requestId);
+            }
+            throw ex;
+        }
     }
 
     @PostMapping("/auth/mfa/verify")
-    public PlatformLoginResponse verifyMfa(@Valid @RequestBody PlatformMfaCodeRequest request) {
-        return service.verifyTotp(request);
+    public PlatformLoginResponse verifyMfa(@Valid @RequestBody PlatformMfaCodeRequest request,
+                                           HttpServletRequest servletRequest) {
+        String clientIp = servletRequest.getRemoteAddr();
+        String requestId = servletRequest.getHeader("X-Request-ID");
+        try {
+            PlatformLoginResponse response = service.verifyTotp(request);
+            loginSecurityEvents.recordPlatformSuccess(response.getOwnerId(), response.getUsername(), clientIp, requestId);
+            return response;
+        } catch (ResponseStatusException ex) {
+            if (ex.getStatus() == HttpStatus.UNAUTHORIZED || ex.getStatus() == HttpStatus.TOO_MANY_REQUESTS) {
+                loginSecurityEvents.recordPlatformFailure("platform-owner-mfa",
+                        ex.getStatus() == HttpStatus.TOO_MANY_REQUESTS ? "RATE_LIMITED" : "MFA_INVALID_OR_EXPIRED",
+                        clientIp, requestId);
+            }
+            throw ex;
+        }
     }
 
     @GetMapping("/tenants")
     public List<PlatformTenantSummary> listTenants() {
         return service.listTenants();
+    }
+
+    @GetMapping("/security/login-events")
+    public PageResponse<LoginSecurityEventResponse> loginEvents(
+            @RequestParam(defaultValue = "TENANT_USER") LoginPrincipalType type,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "25") int size) {
+        return PageResponse.of(loginSecurityEvents.list(type, PageParams.of(page, size,
+                Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id")))), Function.identity());
     }
 
     @PatchMapping("/tenants/{tenantId}/status")
