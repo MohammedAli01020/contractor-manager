@@ -41,19 +41,17 @@ public class PlatformController {
     public PlatformLoginResponse login(@Valid @RequestBody PlatformLoginRequest request,
                                        HttpServletRequest servletRequest) {
         String clientIp = servletRequest.getRemoteAddr();
-        synchronized (loginRateLimiter.ipLock(clientIp)) {
-            synchronized (loginRateLimiter.identityLock(clientIp, request.getUsername())) {
-                loginRateLimiter.checkAllowed(clientIp, request.getUsername());
-                try {
-                    PlatformLoginResponse response = service.login(request);
-                    loginRateLimiter.recordSuccess(clientIp, request.getUsername(), "platform_login");
-                    return response;
-                } catch (ResponseStatusException ex) {
-                    if (ex.getStatus() == HttpStatus.UNAUTHORIZED) {
-                        loginRateLimiter.recordFailure(clientIp, request.getUsername(), "platform_login");
-                    }
-                    throw ex;
+        try (LoginAttemptRateLimiter.Attempt attempt =
+                     loginRateLimiter.beginAttempt(clientIp, request.getUsername())) {
+            try {
+                PlatformLoginResponse response = service.login(request);
+                attempt.success("platform_login");
+                return response;
+            } catch (ResponseStatusException ex) {
+                if (ex.getStatus() == HttpStatus.UNAUTHORIZED) {
+                    attempt.failure("platform_login");
                 }
+                throw ex;
             }
         }
     }
