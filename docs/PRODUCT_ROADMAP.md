@@ -202,9 +202,9 @@ The roadmap below is the only source of truth for phase order and overall status
 **Exit criteria:** contractor can manage master data and run the agreed shift workflow reliably.
 
 ### Phase 2 — Financial foundation, driver ledger, equipment expenses and monthly closing
-**Status:** In progress — design baseline recorded on `feature/financial-foundation`; accounting-core implementation not yet verified.  
+**Status:** In progress — V17 accounting schema and initial journal posting service added on `feature/financial-foundation`; test and MySQL migration verification pending.  
 **Detailed plan:** [PHASE-02-FINANCIALS.md](phases/PHASE-02-FINANCIALS.md).  
-- Define and test the exact accounting rules first, including sign conventions for positive/negative balances and the period in which each transaction is recognized.
+- Define and test the exact accounting rules first, including sign conventions for positive/negative balances and the period in which each transaction is recognized. Initial chart/journal schema and posting-service validation code now exist; run backend tests and Flyway against MySQL before proceeding.
 - Implement driver ledger movements: opening balance, shift wages, advances, approved deductions, bonuses/allowances, actual payments, adjustments and reversals.
 - Implement configurable equipment expense categories and expense entries that can be linked to an equipment or a specific shift; support unpaid, partially paid and fully paid status.
 - Model equipment ownership (company-owned or third-party/partner-owned) and, when applicable, owner/partner settlements separately from operating result and cash movement.
