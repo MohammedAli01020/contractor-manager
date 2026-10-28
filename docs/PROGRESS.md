@@ -259,3 +259,17 @@ Follow this order. Continue on `feature/platform-owner-activation`; do not merge
 - **Database safety:** no schema or Flyway migration changes. No database reset, deployment, or merge to `main`.
 - **Verification pending:** GitHub Actions was triggered by the code commits; do not consider this increment verified until the latest backend CI completes successfully. Frontend lint/build and manual browser checks are also pending.
 - **Next local steps:** check `git status -sb` before pulling. If the worktree is clean, run `git pull --ff-only origin feature/request-tracking`; then run `mvn test` from `D:\\contractor-manager\\backend`, and `npm run lint` plus `npm run build` from `D:\\contractor-manager\\platform-owner-web`. Preserve any local changes and the existing database.
+
+
+## Persistent login security audit — implementation added, verification pending (2026-10-28)
+
+- **Branch:** `feature/request-tracking`. This increment remains unmerged; no deployment was performed.
+- Added `last_login_at` to tenant users and Platform Owner records. Tenant-user timestamps update after successful password authentication; Platform Owner timestamps update only after the MFA setup/verification step returns an access token.
+- Added an append-only `login_security_events` table and repository/service for `SUCCESS`, `FAILURE`, and `MFA_CHALLENGE` outcomes. Events record principal type, known principal/tenant IDs, normalized attempted username, UTC timestamp, safe reason code, client IP, and request ID. Passwords, MFA codes, access tokens, and refresh tokens are not written to the event table.
+- Failed tenant login events include invalid credentials, disabled/pending accounts, and throttled attempts. Platform Owner events distinguish password-stage MFA challenges from completed MFA logins; invalid/expired MFA and throttled outcomes are recorded separately.
+- Added a Platform Owner-only endpoint `GET /api/v1/platform/security/login-events?type=TENANT_USER|PLATFORM_OWNER&page=0&size=25`, with bounded pagination, plus a Next.js proxy and a dashboard view with separate tabs for company-user and Platform Owner events.
+- Company details now show the tenant Admin's last successful login when available. A null timestamp means the account has not completed a successful login since this feature was introduced; existing history is not backfilled.
+- Added a new Flyway migration `V999__login_security_audit.sql`; no previous migration was edited. **Do not run the migration or reset the database as part of review.** Confirm that the migration version is higher than all existing migrations before applying it to any database.
+- Added integration assertions for last-login timestamps, successful and failed event persistence, and both event-list scopes.
+- **Verification pending:** latest Maven tests, Flyway validation/schema validation, frontend lint/build, and GitHub Actions have not yet been observed for this increment. Do not describe it as passing until results are confirmed.
+- **Privacy/operations review before production:** IP addresses are personal/security data; define retention and access policies. Behind a reverse proxy, configure trusted client-IP handling. The new endpoint is intended for Platform Owner sessions only; company users do not receive access to cross-tenant security logs.
