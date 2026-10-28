@@ -5,7 +5,7 @@ import type { FormEvent } from "react";
 import { QRCodeSVG } from "qrcode.react";
 
 type Session = { authenticated: boolean; username?: string };
-type TenantSummary = { tenantId: number; tenantName: string; status: "ACTIVE" | "SUSPENDED" | string; createdAt: string; updatedAt?: string | null; admin: { userId: number; fullName: string; username: string; active: boolean; passwordActivated: boolean; phone?: string | null; email?: string | null; emailVerified?: boolean } | null };
+type TenantSummary = { tenantId: number; tenantName: string; status: "ACTIVE" | "SUSPENDED" | string; createdAt: string; updatedAt?: string | null; totalUsers?: number; activeUsers?: number; admin: { userId: number; fullName: string; username: string; active: boolean; passwordActivated: boolean; phone?: string | null; email?: string | null; emailVerified?: boolean } | null };
 type CreatedTenant = {
   tenantId: number;
   tenantName: string;
@@ -456,6 +456,8 @@ export default function PlatformOwnerApp() {
                   <article><span>رقم الشركة</span><strong>#{selectedTenant.tenantId}</strong></article>
                   <article><span>تاريخ الإنشاء</span><strong>{selectedTenant.createdAt ? new Date(selectedTenant.createdAt).toLocaleString("ar-EG") : "غير متاح"}</strong></article>
                   <article><span>آخر تحديث لبيانات الشركة</span><strong>{selectedTenant.updatedAt ? new Date(selectedTenant.updatedAt).toLocaleString("ar-EG") : "غير متاح"}</strong></article>
+                  <article><span>إجمالي حسابات المستخدمين</span><strong>{selectedTenant.totalUsers ?? "غير متاح"}</strong></article>
+                  <article><span>الحسابات النشطة والمفعّلة</span><strong>{selectedTenant.activeUsers ?? "غير متاح"}</strong></article>
                   <article><span>حالة الشركة</span><strong>{selectedTenant.status === "ACTIVE" ? "نشطة" : selectedTenant.status === "SUSPENDED" ? "موقوفة" : selectedTenant.status}</strong></article>
                   <article><span>حساب المدير</span><strong>{selectedTenant.admin ? (selectedTenant.admin.active ? "نشط" : "معطّل") : "لا يوجد مدير مسجل"}</strong></article>
                   <article><span>حالة كلمة المرور</span><strong>{selectedTenant.admin ? (selectedTenant.admin.passwordActivated ? "تم التفعيل" : "بانتظار التفعيل") : "غير متاح"}</strong></article>
