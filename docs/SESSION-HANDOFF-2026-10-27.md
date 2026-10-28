@@ -127,3 +127,10 @@ This section supersedes any earlier next-step notes above where they conflict.
 - The user confirmed that the Platform Owner tenant list, search, and filtering are present in the UI. This is not yet a full verification of edge cases or tenant data isolation.
 - Next: test tenant creation and first-admin activation with a **dedicated test tenant only after explicit user approval**. Do not create a real tenant or alter an existing tenant's status without approval.
 - After the approved test, verify activation-link display/copy and the tenant Admin login/access boundary; then test suspend/reactivate only against an explicitly selected test tenant.
+
+## Roadmap correction — tenant onboarding already completed (2026-10-28)
+
+- The user clarified that tenant creation and first-admin activation were already completed; do not ask to repeat that workflow or create another tenant.
+- The user has also confirmed the tenant list/search/filter UI is present and working.
+- **Next pending Platform Owner regression item:** verify tenant suspend/reactivate behavior and the resulting access restrictions. Status changes can affect real data, so use an explicitly designated test tenant and obtain approval before changing its status.
+- After this, verify tenant Admin login/access separation and cross-tenant isolation, then proceed to Phase 00/01 core and master-data acceptance checks.
