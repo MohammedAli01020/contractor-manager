@@ -9,6 +9,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import java.util.HashMap;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.MediaType;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 class AuthFlowIntegrationTest extends AbstractIntegrationTest {
 
@@ -58,6 +60,22 @@ class AuthFlowIntegrationTest extends AbstractIntegrationTest {
         postJson("/api/v1/auth/login", unknownUser, null)
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+    }
+
+    @Test
+    void requestIdIsReturnedInResponseHeaderAndApiErrorBody() throws Exception {
+        Map<String, Object> credentials = new HashMap<>();
+        credentials.put("username", uniqueName("missing"));
+        credentials.put("password", "WrongPass123");
+
+        mockMvc.perform(post("/api/v1/auth/login")
+                        .header("X-Request-ID", "test-request-42")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(credentials)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .header().string("X-Request-ID", "test-request-42"))
+                .andExpect(jsonPath("$.requestId").value("test-request-42"));
     }
 
     @Test
