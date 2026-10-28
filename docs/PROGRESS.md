@@ -238,3 +238,13 @@ Follow this order. Continue on `feature/platform-owner-activation`; do not merge
 - This is a local test result; do not imply that a separate latest-commit GitHub Actions run or production load benchmark has passed.
 - Next proposed work: inspect and implement persistent login-attempt audit records for tenant and Platform Owner authentication, then review tenant details and trustworthy company last-activity data.
 - No database/Flyway changes, deployment, or merge to `main` was performed as part of this verification. The user's local `.gitignore` modification remains outside the repository commit.
+
+## Company details expansion — implementation added, verification pending (2026-10-28)
+
+- **Branch:** `feature/request-tracking`; changes remain isolated from `main`.
+- Expanded the Platform Owner company-list response with the tenant's existing `updatedAt` timestamp and the company Admin's existing phone, email, and email-verification state. The company details screen now displays those values alongside the existing company status, creation date, and Admin activation/account state.
+- Added an integration test asserting that the authenticated Platform Owner tenant-list response contains the update timestamp and Admin contact/verification fields.
+- **Terminology:** `updatedAt` is labeled **last update to company data**, not **last activity**. The current schema does not track a trustworthy last-user-activity timestamp; do not infer one from company-row updates or login-attempt logs. A real activity indicator needs a separately defined, privacy-aware business-activity signal.
+- **Database safety:** no schema or Flyway migration changes. No database reset, deployment, or merge to `main`.
+- **Verification pending:** GitHub Actions was triggered by the code commits; do not consider this increment verified until the latest backend CI completes successfully. Frontend lint/build and manual browser checks are also pending.
+- **Next local steps:** check `git status -sb` before pulling. If the worktree is clean, run `git pull --ff-only origin feature/request-tracking`; then run `mvn test` from `D:\\contractor-manager\\backend`, and `npm run lint` plus `npm run build` from `D:\\contractor-manager\\platform-owner-web`. Preserve any local changes and the existing database.
