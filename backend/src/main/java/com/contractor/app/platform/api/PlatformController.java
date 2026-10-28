@@ -41,7 +41,8 @@ public class PlatformController {
     public PlatformLoginResponse login(@Valid @RequestBody PlatformLoginRequest request,
                                        HttpServletRequest servletRequest) {
         String clientIp = servletRequest.getRemoteAddr();
-        synchronized (loginRateLimiter.identityLock(clientIp, request.getUsername())) {
+        synchronized (loginRateLimiter.ipLock(clientIp)) {
+            synchronized (loginRateLimiter.identityLock(clientIp, request.getUsername())) {
             loginRateLimiter.checkAllowed(clientIp, request.getUsername());
             try {
                 PlatformLoginResponse response = service.login(request);
@@ -52,6 +53,7 @@ public class PlatformController {
                     loginRateLimiter.recordFailure(clientIp, request.getUsername(), "platform_login");
                 }
                 throw ex;
+            }
             }
         }
     }
