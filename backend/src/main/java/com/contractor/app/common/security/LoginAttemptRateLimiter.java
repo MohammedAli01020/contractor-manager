@@ -100,8 +100,8 @@ public class LoginAttemptRateLimiter {
         }
         if (target.size() >= maxBuckets) {
             removeExpired(target, now);
-            if (target.size() >= maxBuckets) {
-                evictOldest(target);
+            if (target.size() >= maxBuckets && !evictOldest(target)) {
+                rejectThrottled();
             }
         }
         Bucket created = new Bucket(now, 0);
