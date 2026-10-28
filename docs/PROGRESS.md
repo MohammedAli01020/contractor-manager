@@ -217,3 +217,14 @@ Follow this order. Continue on `feature/platform-owner-activation`; do not merge
 - **Implemented:** avoid sweeping the entire bucket map for every new identity; prune expired entries during insertion only when capacity pressure is reached, before evicting an older entry. Added a test for expired-entry pruning while preserving an active identity throttle.
 - **Limitations:** no load/performance benchmark has been run. Login flows sharing an IP lock stripe remain serialized, and counters remain in-memory per JVM.
 - **Safety:** no database/Flyway changes, deployment, or merge to `main`.
+
+
+## Login reservation refactor — verification pending (2026-10-28)
+
+- **Branch:** `feature/request-tracking`.
+- **Implementation:** replaced whole-login IP/identity lock holding in both login controllers with short critical-section reservations. BCrypt, database operations, and token creation now run outside the reservation lock.
+- **Protection:** reservations count toward both the 5-attempt identity threshold and the 100-attempt IP-wide ceiling while requests are in flight. Failure commits a reservation as a failure; success releases the IP reservation and resets identity failures; try-with-resources releases reservations for other exception paths.
+- **Tests added:** unit tests verify five in-flight attempts exhaust an identity allowance, releasing a reservation permits another attempt, and 100 in-flight attempts across distinct usernames exhaust the IP-wide allowance. Existing concurrent HTTP integration tests remain in place for both login endpoints.
+- **Capacity handling:** bucket eviction skips buckets with active reservations; if the map is full and no inactive bucket can be evicted, the new attempt is throttled. This should be reviewed as an operational trade-off under extreme load.
+- **Verification:** no workflow run was returned for the latest test commit at the time of this note. Run Maven tests/CI and fix any failures before treating the refactor as verified. No load benchmark has been run.
+- **Safety:** no database/Flyway changes, deployment, or merge to `main`.
