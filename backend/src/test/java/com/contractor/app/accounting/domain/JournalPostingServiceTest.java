@@ -23,14 +23,16 @@ class JournalPostingServiceTest {
 
     private JournalPostingService service;
     private JournalEntryRepository entries;
+    private JournalLineRepository lines;
 
     @BeforeEach
     void setUp() {
         entries = mock(JournalEntryRepository.class);
+        lines = mock(JournalLineRepository.class);
         service = new JournalPostingService(
                 mock(ChartAccountRepository.class),
                 entries,
-                mock(JournalLineRepository.class),
+                lines,
                 mock(DriverRepository.class),
                 mock(EquipmentRepository.class));
     }
@@ -62,6 +64,34 @@ class JournalPostingServiceTest {
         assertThrows(ApiException.class, () -> service.post(1L, 7L, request));
     }
 
+
+    @Test
+    void returnsExistingJournalForIdenticalRetry() {
+        LocalDate accountingDate = LocalDate.of(2026, 10, 28);
+        JournalEntry existing = mock(JournalEntry.class);
+        when(existing.getId()).thenReturn(22L);
+        when(existing.getSourceType()).thenReturn("TEST");
+        when(existing.getSourceId()).thenReturn(1L);
+        when(existing.getAccountingDate()).thenReturn(accountingDate);
+        when(existing.getDescription()).thenReturn("Automated journal validation test");
+        when(existing.getReversalOfEntryId()).thenReturn(null);
+        when(entries.findByTenantIdAndPostingKey(1L, "test-posting-key"))
+                .thenReturn(Optional.of(existing));
+        JournalLine debit = new JournalLine(1L, 22L, 1, 10L, null,
+                new BigDecimal("100.00"), new BigDecimal("0.00"), null, null);
+        JournalLine credit = new JournalLine(1L, 22L, 2, 20L, null,
+                new BigDecimal("0.00"), new BigDecimal("100.00"), null, null);
+        when(lines.findByTenantIdAndJournalEntryIdOrderByLineNumberAsc(1L, 22L))
+                .thenReturn(Arrays.asList(debit, credit));
+
+        JournalEntry result = service.post(1L, 7L, request(
+                line(10L, "100.00", "0.00"),
+                line(20L, "0.00", "100.00")));
+
+        org.junit.jupiter.api.Assertions.assertSame(existing, result);
+        verify(entries, never()).saveAndFlush(org.mockito.ArgumentMatchers.any(JournalEntry.class));
+        verify(lines, never()).saveAll(org.mockito.ArgumentMatchers.anyList());
+    }
 
     @Test
     void rejectsReusingPostingKeyForDifferentPayload() {
