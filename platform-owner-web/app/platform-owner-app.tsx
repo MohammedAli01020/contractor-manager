@@ -5,7 +5,10 @@ import type { FormEvent } from "react";
 import { QRCodeSVG } from "qrcode.react";
 
 type Session = { authenticated: boolean; username?: string };
-type TenantSummary = { tenantId: number; tenantName: string; status: "ACTIVE" | "SUSPENDED" | string; createdAt: string; updatedAt?: string | null; totalUsers?: number; activeUsers?: number; admin: { userId: number; fullName: string; username: string; active: boolean; passwordActivated: boolean; phone?: string | null; email?: string | null; emailVerified?: boolean } | null };
+type TenantSummary = { tenantId: number; tenantName: string; status: "ACTIVE" | "SUSPENDED" | string; createdAt: string; updatedAt?: string | null; totalUsers?: number; activeUsers?: number; admin: { userId: number; fullName: string; username: string; active: boolean; passwordActivated: boolean; phone?: string | null; email?: string | null; emailVerified?: boolean; lastLoginAt?: string | null } | null };
+type LoginEventType = "TENANT_USER" | "PLATFORM_OWNER";
+type LoginEvent = { id: number; principalType: LoginEventType; principalId: number | null; tenantId: number | null; username: string; outcome: "SUCCESS" | "FAILURE" | "MFA_CHALLENGE"; reason: string | null; clientIp: string | null; requestId: string | null; createdAt: string };
+type LoginEventPage = { items: LoginEvent[]; page: number; size: number; totalElements: number; totalPages: number };
 type CreatedTenant = {
   tenantId: number;
   tenantName: string;
@@ -50,7 +53,12 @@ export default function PlatformOwnerApp() {
   const [createError, setCreateError] = useState("");
   const [created, setCreated] = useState<CreatedTenant | null>(null);
   const [copied, setCopied] = useState(false);
-  const [activeView, setActiveView] = useState<"overview" | "create" | "details">("overview");
+  const [activeView, setActiveView] = useState<"overview" | "create" | "details" | "security">("overview");
+  const [loginEventType, setLoginEventType] = useState<LoginEventType>("TENANT_USER");
+  const [loginEvents, setLoginEvents] = useState<LoginEventPage | null>(null);
+  const [loginEventsPage, setLoginEventsPage] = useState(0);
+  const [loginEventsLoading, setLoginEventsLoading] = useState(false);
+  const [loginEventsError, setLoginEventsError] = useState("");
   const [selectedTenant, setSelectedTenant] = useState<TenantSummary | null>(null);
   const [tenants, setTenants] = useState<TenantSummary[]>([]);
   const [tenantsLoading, setTenantsLoading] = useState(false);
@@ -108,6 +116,38 @@ export default function PlatformOwnerApp() {
   useEffect(() => {
     if (session?.authenticated) Promise.resolve().then(() => loadTenants());
   }, [session?.authenticated, loadTenants]);
+
+  const loadLoginEvents = useCallback(async () => {
+    setLoginEventsLoading(true);
+    setLoginEventsError("");
+    try {
+      const query = new URLSearchParams({
+        type: loginEventType,
+        page: String(loginEventsPage),
+        size: "25",
+      });
+      const response = await fetch(`/api/platform/security/login-events?${query.toString()}`, { cache: "no-store" });
+      const data = await response.json().catch(() => ({}));
+      if (response.status === 401 || response.status === 403) {
+        setSession({ authenticated: false });
+        throw new Error("انتهت صلاحية الجلسة. سجّل الدخول مرة أخرى.");
+      }
+      if (!response.ok || !Array.isArray(data.items)) {
+        throw new Error(data.message || "تعذر تحميل سجل محاولات الدخول.");
+      }
+      setLoginEvents(data as LoginEventPage);
+    } catch (error) {
+      setLoginEventsError(error instanceof Error ? error.message : "حدث خطأ أثناء تحميل سجل الدخول.");
+    } finally {
+      setLoginEventsLoading(false);
+    }
+  }, [loginEventType, loginEventsPage]);
+
+  useEffect(() => {
+    if (session?.authenticated && activeView === "security") {
+      Promise.resolve().then(() => loadLoginEvents());
+    }
+  }, [session?.authenticated, activeView, loadLoginEvents]);
 
   async function login(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -389,10 +429,11 @@ export default function PlatformOwnerApp() {
         <div className="side-label">القائمة الرئيسية</div>
         <button className={activeView === "overview" ? "nav-item active" : "nav-item"} onClick={() => setActiveView("overview")}><Icon name="grid" /> نظرة عامة</button>
         <button className={activeView === "create" ? "nav-item active" : "nav-item"} onClick={() => setActiveView("create")}><Icon name="building" /> إنشاء شركة</button>
+        <button className={activeView === "security" ? "nav-item active" : "nav-item"} onClick={() => { setActiveView("security"); setLoginEventsPage(0); }}><Icon name="shield" /> سجل الدخول</button>
         <div className="sidebar-bottom"><div className="sidebar-help"><span className="help-icon"><Icon name="shield" /></span><strong>حساب مالك المنصة</strong><p>صلاحيات الإدارة الرئيسية منفصلة عن حسابات الشركات.</p></div><button className="nav-item logout-button" onClick={logout}><Icon name="logout" /> تسجيل الخروج</button></div>
       </aside>
       <section className="workspace">
-        <header className="topbar"><div><span className="breadcrumb">المنصة <span>/</span> {activeView === "overview" ? "نظرة عامة" : activeView === "create" ? "إنشاء شركة" : "تفاصيل الشركة"}</span><h1>{activeView === "overview" ? "لوحة التحكم" : activeView === "create" ? "إضافة شركة جديدة" : "تفاصيل الشركة"}</h1></div><div className="profile"><span className="profile-avatar">{(session.username || "م").slice(0, 1).toUpperCase()}</span><span><strong>{session.username || "مالك المنصة"}</strong><small>مالك المنصة</small></span><span className="online-dot" title="الجلسة نشطة" /></div></header>
+        <header className="topbar"><div><span className="breadcrumb">المنصة <span>/</span> {activeView === "overview" ? "نظرة عامة" : activeView === "create" ? "إنشاء شركة" : activeView === "security" ? "سجل الدخول" : "تفاصيل الشركة"}</span><h1>{activeView === "overview" ? "لوحة التحكم" : activeView === "create" ? "إضافة شركة جديدة" : activeView === "security" ? "سجل محاولات الدخول" : "تفاصيل الشركة"}</h1></div><div className="profile"><span className="profile-avatar">{(session.username || "م").slice(0, 1).toUpperCase()}</span><span><strong>{session.username || "مالك المنصة"}</strong><small>مالك المنصة</small></span><span className="online-dot" title="الجلسة نشطة" /></div></header>
         {activeView === "overview" ? (
           <div className="content-area">
             <section className="welcome-banner"><div><span className="eyebrow light-eyebrow">مساحة الإدارة الرئيسية</span><h2>أهلًا بك في مِعمار 👋</h2><p>من هنا تقدر تنشئ شركة جديدة وتجهّز حساب مديرها.</p><button className="button button-white" onClick={() => setActiveView("create")}>إنشاء شركة جديدة <Icon name="arrow" /></button></div><div className="banner-art"><div className="art-orbit orbit-one" /><div className="art-orbit orbit-two" /><div className="art-building"><Icon name="building" /></div><span className="art-spark spark-one">✦</span><span className="art-spark spark-two">✧</span></div></section>
@@ -438,7 +479,7 @@ export default function PlatformOwnerApp() {
             </div>
             {created && <section className="panel success-panel" aria-live="polite"><div className="success-heading"><span className="success-icon">✓</span><div><h3>تم إنشاء الشركة بنجاح</h3><p>{created.deliveryStatus === "EMAIL_SENT" ? "تم إرسال رابط التفعيل إلى البريد الإلكتروني المسجل." : "وضع التطوير: احفظ رابط التفعيل وشاركه مع المدير المقصود فقط."}</p></div></div><div className="result-grid"><div><small>الشركة</small><strong>{created.tenantName}</strong></div><div><small>رقم الشركة</small><strong>#{created.tenantId}</strong></div><div><small>اسم دخول المدير</small><strong>{created.adminUsername}</strong></div><div><small>انتهاء رابط التفعيل</small><strong>{created.expiresAt ? new Date(created.expiresAt).toLocaleString("ar-EG") : "حسب إعداد الخادم"}</strong></div></div>{created.activationUrl && <><label className="activation-label" htmlFor="activation-link">رابط التفعيل الخاص (وضع التطوير فقط)</label><textarea id="activation-link" className="activation-url" value={created.activationUrl} readOnly rows={3} onFocus={(e) => e.currentTarget.select()} /><div className="activation-actions"><button className="button button-primary" onClick={copyActivationLink} type="button"><Icon name="copy" /> {copied ? "تم النسخ" : "نسخ رابط التفعيل"}</button><button className="button button-ghost" type="button" onClick={() => { setCreated(null); setCopied(false); }}>إخفاء الرابط</button></div><p className="secret-warning">تنبيه: لا تنشر الرابط في مكان عام أو داخل صور الشاشة.</p></>}</section>}
           </div>
-        ) : (
+        ) : activeView === "details" ? (
           <div className="content-area create-area">
             <div className="section-heading">
               <div><h2>تفاصيل الشركة</h2><p>ملخص بيانات الشركة وحساب مديرها من آخر قائمة تم تحميلها.</p></div>
@@ -461,6 +502,7 @@ export default function PlatformOwnerApp() {
                   <article><span>حالة الشركة</span><strong>{selectedTenant.status === "ACTIVE" ? "نشطة" : selectedTenant.status === "SUSPENDED" ? "موقوفة" : selectedTenant.status}</strong></article>
                   <article><span>حساب المدير</span><strong>{selectedTenant.admin ? (selectedTenant.admin.active ? "نشط" : "معطّل") : "لا يوجد مدير مسجل"}</strong></article>
                   <article><span>حالة كلمة المرور</span><strong>{selectedTenant.admin ? (selectedTenant.admin.passwordActivated ? "تم التفعيل" : "بانتظار التفعيل") : "غير متاح"}</strong></article>
+                  <article><span>آخر دخول ناجح للمدير</span><strong>{selectedTenant.admin?.lastLoginAt ? new Date(selectedTenant.admin.lastLoginAt).toLocaleString("ar-EG") : "لم يسجل دخولًا ناجحًا بعد"}</strong></article>
                 </div>
                 <div className="tenant-admin-details">
                   <h3>مدير الشركة (Admin)</h3>
@@ -488,6 +530,45 @@ export default function PlatformOwnerApp() {
                 </div>
               </section>
             )}
+          </div>
+        ) : (
+          <div className="content-area create-area">
+            <div className="section-heading">
+              <div><h2>سجل محاولات الدخول</h2><p>سجلات أمنية دائمة، مع فصل حساب مالك المنصة عن حسابات مستخدمي الشركات.</p></div>
+              <button className="button button-ghost" type="button" onClick={() => void loadLoginEvents()} disabled={loginEventsLoading}>تحديث السجل</button>
+            </div>
+            <div className="tenant-filters">
+              <label className="tenant-status-filter"><span>نوع السجل</span>
+                <select value={loginEventType} onChange={(event) => { setLoginEventType(event.target.value as LoginEventType); setLoginEventsPage(0); }} aria-label="نوع سجل الدخول">
+                  <option value="TENANT_USER">مستخدمو الشركات</option>
+                  <option value="PLATFORM_OWNER">مالك المنصة</option>
+                </select>
+              </label>
+            </div>
+            {loginEventsError && <div className="alert alert-error" role="alert">{loginEventsError}</div>}
+            {loginEventsLoading ? <div className="panel tenants-message">جارٍ تحميل سجل الدخول...</div> :
+              !loginEvents || loginEvents.items.length === 0 ? <div className="panel tenants-message">لا توجد محاولات دخول مسجلة في هذا القسم حتى الآن.</div> :
+              <section className="panel tenants-panel">
+                <div className="tenants-heading"><div><h2>{loginEventType === "TENANT_USER" ? "محاولات دخول مستخدمي الشركات" : "محاولات دخول مالك المنصة"}</h2><p>عدد السجلات المطابقة: {loginEvents.totalElements}</p></div><span className="tenant-count">صفحة {loginEvents.page + 1} من {Math.max(1, loginEvents.totalPages)}</span></div>
+                <div className="table-wrap"><table><thead><tr><th>التاريخ والوقت</th><th>اسم المستخدم</th><th>النتيجة</th><th>الشركة</th><th>عنوان IP</th><th>سبب الفشل / الحالة</th><th>معرّف الطلب</th></tr></thead>
+                  <tbody>{loginEvents.items.map((event) => <tr key={event.id}>
+                    <td>{event.createdAt ? new Date(event.createdAt).toLocaleString("ar-EG") : "—"}</td>
+                    <td dir="ltr">{event.username}</td>
+                    <td><span className={event.outcome === "SUCCESS" ? "tenant-status status-active" : event.outcome === "FAILURE" ? "tenant-status status-suspended" : "tenant-status"}>{event.outcome === "SUCCESS" ? "ناجح" : event.outcome === "FAILURE" ? "فاشل" : "بانتظار التحقق"}</span></td>
+                    <td>{event.tenantId == null ? (event.principalType === "PLATFORM_OWNER" ? "مالك المنصة" : "غير محددة") : `#${event.tenantId}`}</td>
+                    <td dir="ltr">{event.clientIp || "—"}</td>
+                    <td>{event.reason || "—"}</td>
+                    <td dir="ltr">{event.requestId || "—"}</td>
+                  </tr>)}</tbody>
+                </table></div>
+                <div className="tenants-footer"><span className="muted">عرض {loginEvents.items.length} من {loginEvents.totalElements} سجل</span>
+                  <div className="form-actions">
+                    <button className="button button-ghost" type="button" onClick={() => setLoginEventsPage((page) => Math.max(0, page - 1))} disabled={loginEventsLoading || loginEvents.page <= 0}>السابق</button>
+                    <button className="button button-ghost" type="button" onClick={() => setLoginEventsPage((page) => page + 1)} disabled={loginEventsLoading || loginEvents.page + 1 >= loginEvents.totalPages}>التالي</button>
+                  </div>
+                </div>
+              </section>}
+            <div className="bottom-note"><Icon name="shield" /><span>لا يسجّل النظام كلمات المرور أو رموز الجلسات. عنوان IP ومعرّف الطلب مخصصان للمراجعة الأمنية.</span></div>
           </div>
         )}
       </section>
