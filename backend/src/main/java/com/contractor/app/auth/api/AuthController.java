@@ -59,7 +59,7 @@ public class AuthController {
             try (LoginAttemptRateLimiter.Attempt attempt =
                          loginRateLimiter.beginAttempt(clientIp, request.getUsername())) {
                 try {
-                    AuthResponse response = authService.login(request, clientIp, requestId);
+                    AuthResponse response = authService.login(request);
                     attempt.success("tenant_login");
                     return response;
                 } catch (ApiException ex) {
