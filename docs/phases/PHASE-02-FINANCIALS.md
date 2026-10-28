@@ -1,7 +1,7 @@
 # Phase 02 — Financial foundation and monthly close
 
 **Roadmap:** [PRODUCT_ROADMAP.md](../PRODUCT_ROADMAP.md#phase-2--financial-foundation-driver-ledger-equipment-expenses-and-monthly-closing)  
-**Status:** Not started.
+**Status:** In progress — accounting/inventory architecture documented; implementation and tests not yet verified.
 
 ## Goal
 Build auditable financial ledgers and monthly closing without double-counting shift wages, expenses, payments, or inventory consumption.
@@ -46,5 +46,11 @@ Build auditable financial ledgers and monthly closing without double-counting sh
 - [ ] Example cases reconcile across driver ledger, equipment result, owner/partner amounts due, unpaid liabilities and monthly closing.
 - [ ] No double deduction and no duplicated transaction when a request is retried.
 
+## Implementation plan and current evidence
+- Design baseline: [FINANCIAL-FOUNDATION-DESIGN.md](FINANCIAL-FOUNDATION-DESIGN.md).
+- First coding step: inspect the actual tenant/base entity, money conventions, migration version, and any existing accounting or inventory implementation on this branch before creating additive migrations.
+- Implement journal/account core first; then driver ledger and expense categories/documents; then cash/bank and close; inventory follows with shared posting rules.
+- This phase is **not implemented or tested yet** merely because the design is documented. Update each checklist item only after code and tests provide evidence.
+
 ## Dependencies and next action
-Depends on stable Phase 0/1 behavior and explicit agreement on balance sign conventions, recognition-period rules, and monthly close/reopen policy. Before implementation, inspect current code/schema/migrations and propose the entity model, API, migrations, and tests for approval.
+Depends on stable Phase 0/1 behavior and a verified schema baseline. Balance sign convention is defined in the design as positive = amount payable to driver; payment/advance/deduction reduce the payable. Recognition date is separate from payment date. Monthly close/reopen is controlled and audited. Before schema changes, inspect the current code, migrations and tests, then implement the smallest reviewable accounting-core slice.
