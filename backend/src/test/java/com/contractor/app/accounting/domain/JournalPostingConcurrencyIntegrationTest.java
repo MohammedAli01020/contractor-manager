@@ -2,6 +2,7 @@ package com.contractor.app.accounting.domain;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.doThrow;
 
@@ -10,6 +11,7 @@ import com.contractor.app.accounting.infra.ChartAccountRepository;
 import com.contractor.app.accounting.infra.JournalEntryRepository;
 import com.contractor.app.accounting.infra.JournalLineRepository;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.contractor.app.common.error.ApiException;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Arrays;
@@ -71,6 +73,42 @@ class JournalPostingConcurrencyIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void concurrentReversalsCreateAtMostOneReversal() throws Exception {
+        JournalEntry original = postingService.post(tenantId, actorUserId, request(uniqueName("original")));
+        JournalPostingRequest firstRequest = reversalRequest(uniqueName("reversal-a"), original.getId());
+        JournalPostingRequest secondRequest = reversalRequest(uniqueName("reversal-b"), original.getId());
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            Future<JournalEntry> first = pool.submit(() -> postTogether(firstRequest, ready, start));
+            Future<JournalEntry> second = pool.submit(() -> postTogether(secondRequest, ready, start));
+            assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+
+            int successes = 0;
+            int conflicts = 0;
+            for (Future<JournalEntry> result : Arrays.asList(first, second)) {
+                try {
+                    JournalEntry reversal = result.get(30, TimeUnit.SECONDS);
+                    successes++;
+                    assertThat(reversal.getReversalOfEntryId()).isEqualTo(original.getId());
+                } catch (java.util.concurrent.ExecutionException ex) {
+                    assertThat(ex.getCause()).isInstanceOf(ApiException.class);
+                    assertThat(((ApiException) ex.getCause()).getStatus().value()).isEqualTo(409);
+                    conflicts++;
+                }
+            }
+            assertThat(successes).isEqualTo(1);
+            assertThat(conflicts).isEqualTo(1);
+            assertThat(entries.existsByTenantIdAndReversalOfEntryId(tenantId, original.getId())).isTrue();
+        } finally {
+            start.countDown();
+            pool.shutdownNow();
+        }
+    }
+
+    @Test
     void failedLinePersistenceRollsBackEntryHeader() {
         String key = uniqueName("rollback");
         doThrow(new IllegalStateException("simulated persistence failure"))
@@ -96,5 +134,15 @@ class JournalPostingConcurrencyIntegrationTest extends AbstractIntegrationTest {
                         BigDecimal.ZERO.setScale(2), null, null),
                 new JournalLineRequest(creditAccountId, "Credit", BigDecimal.ZERO.setScale(2),
                         new BigDecimal("100.00"), null, null)));
+    }
+
+    private JournalPostingRequest reversalRequest(String key, Long originalEntryId) {
+        return new JournalPostingRequest(key, "INTEGRATION_TEST_REVERSAL", 2L,
+                LocalDate.of(2026, 10, 28), "Accounting integration reversal", originalEntryId,
+                Arrays.asList(
+                new JournalLineRequest(debitAccountId, "Debit", BigDecimal.ZERO.setScale(2),
+                        new BigDecimal("100.00"), null, null),
+                new JournalLineRequest(creditAccountId, "Credit", new BigDecimal("100.00"),
+                        BigDecimal.ZERO.setScale(2), null, null)));
     }
 }
