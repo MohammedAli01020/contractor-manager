@@ -102,9 +102,10 @@ public class AuthService {
         if (!user.isActive() || !user.isPasswordActivated() || tenant.getStatus() != TenantStatus.ACTIVE) {
             throw ApiException.forbidden("الحساب معطّل. تواصل مع مسؤول النظام.");
         }
+        AuthResponse response = issueTokens(user);
         user.setLastLoginAt(LocalDateTime.now(ZoneOffset.UTC));
         loginSecurityEvents.recordTenantSuccess(user.getId(), user.getTenantId(), user.getUsername(), clientIp, requestId);
-        return issueTokens(user);
+        return response;
     }
 
     /**
