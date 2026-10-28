@@ -165,3 +165,15 @@ Follow this order. Continue on `feature/platform-owner-activation`; do not merge
 - **Remaining concurrency caveat:** requests for different usernames from the same IP are not serialized around the shared IP-wide threshold; simultaneous requests may race at that threshold. Do not claim all concurrent limiter races are eliminated.
 - **Production caveats:** counters remain per-process and reset on restart; multiple replicas need a shared atomic rate-limit store. Behind a reverse proxy, configure trusted client-IP handling. Bounded eviction can allow high-cardinality traffic to evict older counters, so abuse/availability behavior still needs production review.
 - **Safety:** no database schema/Flyway changes, deployment, or merge to `main`.
+
+
+## Login throttling IP-wide concurrency follow-up — 2026-10-28 (CI pending)
+
+- **Branch:** `feature/request-tracking`.
+- **Finding addressed:** previously, different usernames from the same client IP could concurrently pass the IP-wide failure check before any of those requests recorded their failures.
+- **Change:** added a second fixed 256-stripe lock set for client IPs and wrapped both tenant and Platform Owner login flows with the IP lock first, then the existing identity lock. This serializes the full login/authentication attempt for requests mapped to the same IP stripe and keeps lock allocation bounded.
+- **Test added:** confirms the IP lock is stable for the same IP and distinct for the two selected test IPs. This is a lock-selection unit test; it is not a full concurrent HTTP/controller integration test.
+- **Trade-off:** requests from the same IP are serialized while password verification runs; users sharing NAT/proxy IPs may see increased login latency. Evaluate performance and consider a shared atomic reservation/rate-limit design before production.
+- **CI:** GitHub Actions run [40673134508](https://github.com/MohammedAli01020/contractor-manager/actions/runs/40673134508) was pending when this note was written. Do not claim this increment passes until its Maven test step completes successfully.
+- **Other production caveats remain:** the limiter is process-local and resets on restart; multi-replica deployments need a shared atomic store; proxy client-IP handling must be configured safely; bounded bucket eviction can let high-cardinality abuse evict older counters.
+- **Safety:** no database/schema/Flyway changes, no deployment, and no merge to `main`.
