@@ -92,7 +92,7 @@ public class PlatformController {
             return response;
         } catch (ResponseStatusException ex) {
             if (ex.getStatus() == HttpStatus.UNAUTHORIZED || ex.getStatus() == HttpStatus.TOO_MANY_REQUESTS) {
-                loginSecurityEvents.recordPlatformFailure("platform-owner-mfa",
+                loginSecurityEvents.recordPlatformMfaFailure(request.getChallengeToken(),
                         ex.getStatus() == HttpStatus.TOO_MANY_REQUESTS ? "RATE_LIMITED" : "MFA_INVALID_OR_EXPIRED",
                         clientIp, requestId);
             }
