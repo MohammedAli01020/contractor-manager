@@ -1,3 +1,16 @@
+## Login observability — implementation committed, final verification pending (2026-10-28)
+
+- Added `last_login_at` for tenant users and Platform Owners through additive migration `V16__login_security_events_and_last_login.sql`. Tenant users update this timestamp after successful password login; Platform Owner timestamps update only after successful MFA setup/verification.
+- Added the append-only `login_security_events` table and service. Events distinguish `TENANT_USER` from `PLATFORM_OWNER`, and record success, failure, or an MFA challenge, with timestamp, username, optional tenant/principal IDs, reason, client IP, and request ID. Credentials, passwords, access tokens, and MFA codes are not stored.
+- Tenant and Platform Owner login endpoints record failures, throttling, and successful authentication separately. Platform Owner MFA failures are also recorded against the owner when the challenge can be resolved.
+- Added the Platform Owner-only endpoint `GET /api/v1/platform/security/login-events?type=TENANT_USER|PLATFORM_OWNER&page=0&size=25`; the existing `/api/v1/platform/**` authorization prevents tenant users from reading it.
+- Added a Platform Owner dashboard section with separate scope selection for company users versus Platform Owner, paginated history, outcome, timestamp, tenant, client IP, reason, and request ID. The Next.js proxy uses the HttpOnly Platform Owner cookie and does not expose the bearer token to browser JavaScript.
+- Regression coverage checks successful last-login timestamps, persisted success/failure events, separation of the two principal types, and rejection of tenant-user access to the Platform Owner audit endpoint.
+- **Verification boundary:** GitHub Actions [Backend CI run 40687811647](https://github.com/MohammedAli01020/contractor-manager/actions/runs/40687811647) passed for backend commit `4b39c7cc239de19952cb5607c695db2fe32c3c43). A follow-up fix now passes the normalized request ID from `RequestTrackingFilter` into audit events and adds a regression assertion for request ID/client IP; that newest fix still needs CI/local test confirmation. Frontend lint/build and a manual browser check of the new security screen also remain to be confirmed for this increment.
+- **Deployment note:** migration `V16` must be applied by the normal Flyway startup/deployment path before the new entity fields and audit endpoint can work against an existing database. Do not reset the database or edit applied migrations. This work remains on `feature/request-tracking`; `main` is untouched.
+
+---
+
 ## Platform Owner company user counts — implementation added, verification pending (2026-10-28)
 
 - Added `totalUsers` and `activeUsers` to the Platform Owner company-list response and company details view.
