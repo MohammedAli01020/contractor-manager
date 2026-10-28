@@ -39,7 +39,7 @@ class LoginAttemptRateLimiterTest {
         LoginAttemptRateLimiter limiter = new LoginAttemptRateLimiter(
                 Clock.fixed(Instant.parse("2026-10-28T08:00:00Z"), ZoneOffset.UTC));
 
-        for (int attempt = 0; attempt < 5; attempt++) {
+        for (int attempt = 0; attempt < 4; attempt++) {
             recordFailure(limiter, "192.0.2.11", "Admin", "tenant_login");
         }
         recordSuccess(limiter, "192.0.2.11", "Admin", "tenant_login");
@@ -90,24 +90,43 @@ class LoginAttemptRateLimiterTest {
     }
 
     @Test
-    void concurrentFailuresStillTriggerTheIdentityLimit() throws Exception {
+    void concurrentFailuresNeverAllowMoreThanFiveAuthenticationAttempts() throws Exception {
         LoginAttemptRateLimiter limiter = new LoginAttemptRateLimiter(
                 Clock.fixed(Instant.parse("2026-10-28T08:00:00Z"), ZoneOffset.UTC));
         ExecutorService executor = Executors.newFixedThreadPool(8);
+        java.util.concurrent.CountDownLatch start = new java.util.concurrent.CountDownLatch(1);
+        java.util.List<java.util.concurrent.Future<Boolean>> outcomes = new java.util.ArrayList<>();
+
         try {
             for (int attempt = 0; attempt < 40; attempt++) {
-                executor.submit(() -> recordFailure(limiter, 
-                        "192.0.2.16", "ConcurrentAdmin", "tenant_login"));
+                outcomes.add(executor.submit(() -> {
+                    start.await();
+                    try {
+                        recordFailure(limiter, "192.0.2.16", "ConcurrentAdmin", "tenant_login");
+                        return true;
+                    } catch (ApiException throttled) {
+                        return false;
+                    }
+                }));
             }
+            start.countDown();
+
+            int allowed = 0;
+            int throttled = 0;
+            for (java.util.concurrent.Future<Boolean> outcome : outcomes) {
+                if (outcome.get(5, TimeUnit.SECONDS)) {
+                    allowed++;
+                } else {
+                    throttled++;
+                }
+            }
+            assertThat(allowed).isEqualTo(5);
+            assertThat(throttled).isEqualTo(35);
         } finally {
-            executor.shutdown();
+            start.countDown();
+            executor.shutdownNow();
             assertThat(executor.awaitTermination(5, TimeUnit.SECONDS)).isTrue();
         }
-
-        assertThatThrownBy(() -> assertAllowed(limiter, "192.0.2.16", "ConcurrentAdmin"))
-                .isInstanceOf(ApiException.class)
-                .satisfies(error -> assertThat(((ApiException) error).getStatus())
-                        .isEqualTo(HttpStatus.TOO_MANY_REQUESTS));
     }
 
 
