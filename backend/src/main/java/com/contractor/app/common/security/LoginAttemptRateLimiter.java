@@ -42,15 +42,17 @@ public class LoginAttemptRateLimiter {
 
     public void checkAllowed(String clientIp, String username) {
         long now = clock.millis();
-        pruneExpired(now);
-        Bucket ip = buckets.get(ipKey(clientIp));
-        Bucket identity = buckets.get(identityKey(clientIp, username));
+        pruneExpiredPeriodically(now);
+        String ipKey = ipKey(clientIp);
+        String identityKey = identityKey(clientIp, username);
+        Bucket ip = buckets.get(ipKey);
+        Bucket identity = buckets.get(identityKey);
+        if (buckets.size() >= MAX_BUCKETS && (ip == null || identity == null)) {
+            rejectThrottled();
+        }
         if (isLimited(ip, now, MAX_FAILURES_PER_IP)
                 || isLimited(identity, now, MAX_FAILURES_PER_IDENTITY_AND_IP)) {
-            log.warn("Security event=login_throttled requestId={} endpoint=login status=429",
-                    MDC.get("requestId"));
-            throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "TOO_MANY_REQUESTS",
-                    "محاولات تسجيل الدخول كثيرة. حاول مرة أخرى بعد 15 دقيقة.");
+            rejectThrottled();
         }
     }
 
@@ -82,8 +84,19 @@ public class LoginAttemptRateLimiter {
         });
     }
 
-    private void pruneExpired(long now) {
-        buckets.entrySet().removeIf(entry -> entry.getValue().isExpired(now));
+    private void rejectThrottled() {
+        log.warn("Security event=login_throttled requestId={} endpoint=login status=429",
+                MDC.get("requestId"));
+        throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "TOO_MANY_REQUESTS",
+                "محاولات تسجيل الدخول كثيرة. حاول مرة أخرى بعد 15 دقيقة.");
+    }
+
+    private void pruneExpiredPeriodically(long now) {
+        long previous = lastPruneAt.get();
+        if (now - previous >= PRUNE_INTERVAL_MILLIS
+                && lastPruneAt.compareAndSet(previous, now)) {
+            buckets.entrySet().removeIf(entry -> entry.getValue().isExpired(now));
+        }
     }
 
     private String ipKey(String clientIp) {
