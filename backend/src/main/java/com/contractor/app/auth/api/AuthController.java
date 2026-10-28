@@ -51,7 +51,8 @@ public class AuthController {
     @Operation(summary = "تسجيل الدخول")
     public AuthResponse login(@Valid @RequestBody LoginRequest request, HttpServletRequest servletRequest) {
         String clientIp = servletRequest.getRemoteAddr();
-        synchronized (loginRateLimiter.identityLock(clientIp, request.getUsername())) {
+        synchronized (loginRateLimiter.ipLock(clientIp)) {
+            synchronized (loginRateLimiter.identityLock(clientIp, request.getUsername())) {
             loginRateLimiter.checkAllowed(clientIp, request.getUsername());
             try {
                 AuthResponse response = authService.login(request);
@@ -62,6 +63,7 @@ public class AuthController {
                     loginRateLimiter.recordFailure(clientIp, request.getUsername(), "tenant_login");
                 }
                 throw ex;
+            }
             }
         }
     }
