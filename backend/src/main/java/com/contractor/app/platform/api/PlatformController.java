@@ -58,7 +58,7 @@ public class PlatformController {
         }
     }
 
-        @PostMapping("/auth/mfa/setup")
+    @PostMapping("/auth/mfa/setup")
     public PlatformMfaSetupResponse beginMfaSetup(@Valid @RequestBody PlatformMfaChallengeRequest request) {
         return service.beginTotpSetup(request);
     }
