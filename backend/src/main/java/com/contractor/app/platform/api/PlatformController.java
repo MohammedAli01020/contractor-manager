@@ -2,7 +2,6 @@ package com.contractor.app.platform.api;
 
 import com.contractor.app.common.security.LoginAttemptRateLimiter;
 import com.contractor.app.common.error.ApiException;
-import org.slf4j.MDC;
 import com.contractor.app.platform.api.dto.ActivateAdminRequest;
 import com.contractor.app.platform.api.dto.CreateTenantRequest;
 import com.contractor.app.platform.api.dto.CreateTenantResponse;
@@ -53,7 +52,7 @@ public class PlatformController {
     public PlatformLoginResponse login(@Valid @RequestBody PlatformLoginRequest request,
                                        HttpServletRequest servletRequest) {
         String clientIp = servletRequest.getRemoteAddr();
-        String requestId = MDC.get("requestId");
+        String requestId = servletRequest.getHeader("X-Request-ID");
         try {
             try (LoginAttemptRateLimiter.Attempt attempt =
                          loginRateLimiter.beginAttempt(clientIp, request.getUsername())) {
@@ -92,7 +91,7 @@ public class PlatformController {
     public PlatformLoginResponse enableMfa(@Valid @RequestBody PlatformMfaCodeRequest request,
                                            HttpServletRequest servletRequest) {
         String clientIp = servletRequest.getRemoteAddr();
-        String requestId = MDC.get("requestId");
+        String requestId = servletRequest.getHeader("X-Request-ID");
         try {
             PlatformLoginResponse response = service.enableTotp(request);
             loginSecurityEvents.recordPlatformSuccess(response.getOwnerId(), response.getUsername(), clientIp, requestId);
@@ -111,7 +110,7 @@ public class PlatformController {
     public PlatformLoginResponse verifyMfa(@Valid @RequestBody PlatformMfaCodeRequest request,
                                            HttpServletRequest servletRequest) {
         String clientIp = servletRequest.getRemoteAddr();
-        String requestId = MDC.get("requestId");
+        String requestId = servletRequest.getHeader("X-Request-ID");
         try {
             PlatformLoginResponse response = service.verifyTotp(request);
             loginSecurityEvents.recordPlatformSuccess(response.getOwnerId(), response.getUsername(), clientIp, requestId);
