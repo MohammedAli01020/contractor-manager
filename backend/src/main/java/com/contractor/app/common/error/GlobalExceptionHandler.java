@@ -187,7 +187,8 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             javax.servlet.http.HttpServletRequest servletRequest =
                     ((ServletWebRequest) request).getRequest();
             path = servletRequest.getRequestURI();
-            requestId = servletRequest.getHeader(RequestTrackingFilter.HEADER_NAME);
+            Object requestIdAttribute = servletRequest.getAttribute(RequestTrackingFilter.REQUEST_ID_ATTRIBUTE);
+            requestId = requestIdAttribute instanceof String ? (String) requestIdAttribute : null;
         }
         return new ResponseEntity<Object>(
                 new ApiError(status.value(), code, message, path, issues, details, requestId), status);
