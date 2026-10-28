@@ -66,6 +66,20 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                     "السائق أو المعدة مستخدم بالفعل في وردية نشطة.", request, null);
         }
 
+        // Accounting idempotency/reversal keys are enforced by MySQL as the final
+        // guard against concurrent requests. Return a deterministic conflict instead
+        // of exposing a database exception as an internal-server error.
+        if (causeMessage.contains("uq_journal_entries_posting_key")) {
+            return build(HttpStatus.CONFLICT, "JOURNAL_POSTING_KEY_CONFLICT",
+                    "مفتاح الترحيل مستخدم بالفعل. أعد تحميل القيد وتحقق من نتيجته قبل إعادة المحاولة.",
+                    request, null);
+        }
+        if (causeMessage.contains("uq_journal_entries_reversal")) {
+            return build(HttpStatus.CONFLICT, "JOURNAL_ALREADY_REVERSED",
+                    "تم عكس القيد الأصلي بالفعل. حدّث البيانات قبل إعادة المحاولة.",
+                    request, null);
+        }
+
         // Map only known business uniqueness constraints. Unknown integrity failures may
         // indicate a schema, foreign-key, CHECK, or data problem and must not masquerade
         // as an ordinary business conflict.
