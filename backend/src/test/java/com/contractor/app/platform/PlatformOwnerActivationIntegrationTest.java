@@ -377,6 +377,12 @@ class PlatformOwnerActivationIntegrationTest extends AbstractIntegrationTest {
         MvcResult enabled = mockMvc.perform(post("/api/v1/platform/auth/mfa/enable")
                 .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(enableRequest)))
                 .andExpect(status().isOk()).andReturn();
+        String enableRequestId = enabled.getResponse().getHeader("X-Request-ID");
+        assertNotNull(enableRequestId, "MFA setup completion response should include a generated request ID");
+        assertTrue(loginSecurityEvents.findByUsernameOrderByCreatedAtDescIdDesc(ownerUsername).stream().anyMatch(event ->
+                        event.getOutcome() == LoginEventOutcome.SUCCESS
+                                && enableRequestId.equals(event.getRequestId())),
+                "Successful MFA setup audit event should use the generated request ID");
         JsonNode enabledBody = objectMapper.readTree(enabled.getResponse().getContentAsString());
         assertEquals(10, enabledBody.path("recoveryCodes").size());
         String recoveryCode = enabledBody.path("recoveryCodes").get(0).asText();
@@ -391,18 +397,31 @@ class PlatformOwnerActivationIntegrationTest extends AbstractIntegrationTest {
         Map<String, Object> recoveryRequest = new HashMap<>();
         recoveryRequest.put("challengeToken", verifyChallenge);
         recoveryRequest.put("recoveryCode", recoveryCode);
-        mockMvc.perform(post("/api/v1/platform/auth/mfa/verify")
+        MvcResult verified = mockMvc.perform(post("/api/v1/platform/auth/mfa/verify")
                 .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(recoveryRequest)))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk()).andReturn();
+        String verifyRequestId = verified.getResponse().getHeader("X-Request-ID");
+        assertNotNull(verifyRequestId, "MFA verification response should include a generated request ID");
+        assertTrue(loginSecurityEvents.findByUsernameOrderByCreatedAtDescIdDesc(ownerUsername).stream().anyMatch(event ->
+                        event.getOutcome() == LoginEventOutcome.SUCCESS
+                                && verifyRequestId.equals(event.getRequestId())),
+                "Successful MFA verification audit event should use the generated request ID");
 
         MvcResult thirdLogin = mockMvc.perform(post("/api/v1/platform/auth/login")
                 .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(login)))
                 .andExpect(status().isOk()).andReturn();
         recoveryRequest.put("challengeToken", objectMapper.readTree(thirdLogin.getResponse().getContentAsString())
                 .path("challengeToken").asText());
-        mockMvc.perform(post("/api/v1/platform/auth/mfa/verify")
+        MvcResult rejectedRecovery = mockMvc.perform(post("/api/v1/platform/auth/mfa/verify")
                 .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(recoveryRequest)))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isUnauthorized()).andReturn();
+        String failedVerifyRequestId = rejectedRecovery.getResponse().getHeader("X-Request-ID");
+        assertNotNull(failedVerifyRequestId, "Failed MFA verification response should include a generated request ID");
+        assertTrue(loginSecurityEvents.findByUsernameOrderByCreatedAtDescIdDesc(ownerUsername).stream().anyMatch(event ->
+                        event.getOutcome() == LoginEventOutcome.FAILURE
+                                && "MFA_INVALID_OR_EXPIRED".equals(event.getReason())
+                                && failedVerifyRequestId.equals(event.getRequestId())),
+                "Failed MFA verification audit event should use the generated request ID");
     }
 
     private String loginOwnerToken(String username, String password) throws Exception {
