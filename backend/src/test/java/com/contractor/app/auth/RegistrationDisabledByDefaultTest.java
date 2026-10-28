@@ -12,6 +12,7 @@ import com.contractor.app.auth.domain.AuthService;
 import com.contractor.app.auth.infra.RefreshTokenRepository;
 import com.contractor.app.common.error.ApiException;
 import com.contractor.app.common.security.JwtService;
+import com.contractor.app.securityaudit.domain.LoginSecurityEventService;
 import com.contractor.app.tenant.infra.TenantRepository;
 import com.contractor.app.user.infra.UserRepository;
 import org.junit.jupiter.api.Test;
@@ -29,10 +30,11 @@ class RegistrationDisabledByDefaultTest {
         PasswordEncoder encoder = mock(PasswordEncoder.class);
         JwtService jwt = mock(JwtService.class);
         AuditService audit = mock(AuditService.class);
+        LoginSecurityEventService loginSecurityEvents = mock(LoginSecurityEventService.class);
         when(encoder.encode(anyString())).thenReturn("test-hash");
 
         AuthService service = new AuthService(
-                tenants, users, refreshTokens, encoder, jwt, audit, false, 30L, new StandardEnvironment());
+                tenants, users, refreshTokens, encoder, jwt, audit, false, 30L, new StandardEnvironment(), loginSecurityEvents);
 
         assertThatThrownBy(() -> service.registerTenant(mock(RegisterTenantRequest.class)))
                 .isInstanceOf(ApiException.class)
@@ -47,10 +49,11 @@ class RegistrationDisabledByDefaultTest {
         PasswordEncoder encoder = mock(PasswordEncoder.class);
         JwtService jwt = mock(JwtService.class);
         AuditService audit = mock(AuditService.class);
+        LoginSecurityEventService loginSecurityEvents = mock(LoginSecurityEventService.class);
         when(encoder.encode(anyString())).thenReturn("test-hash");
 
         AuthService service = new AuthService(
-                tenants, users, refreshTokens, encoder, jwt, audit, true, 30L, new StandardEnvironment());
+                tenants, users, refreshTokens, encoder, jwt, audit, true, 30L, new StandardEnvironment(), loginSecurityEvents);
 
         assertThatThrownBy(() -> service.registerTenant(mock(RegisterTenantRequest.class)))
                 .isInstanceOf(ApiException.class)
