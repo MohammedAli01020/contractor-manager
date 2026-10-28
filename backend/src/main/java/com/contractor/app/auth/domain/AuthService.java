@@ -104,7 +104,6 @@ public class AuthService {
         }
         AuthResponse response = issueTokens(user);
         user.setLastLoginAt(LocalDateTime.now(ZoneOffset.UTC));
-        loginSecurityEvents.recordTenantSuccess(user.getId(), user.getTenantId(), user.getUsername(), clientIp, requestId);
         return response;
     }
 
