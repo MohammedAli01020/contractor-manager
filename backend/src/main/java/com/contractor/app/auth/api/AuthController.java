@@ -61,6 +61,8 @@ public class AuthController {
                 try {
                     AuthResponse response = authService.login(request, clientIp, requestId);
                     attempt.success("tenant_login");
+                    loginSecurityEvents.recordTenantSuccess(response.getUser().getId(), response.getUser().getTenantId(),
+                            response.getUser().getUsername(), clientIp, requestId);
                     return response;
                 } catch (ApiException ex) {
                     if (ex.getStatus() == HttpStatus.UNAUTHORIZED || ex.getStatus() == HttpStatus.FORBIDDEN) {
