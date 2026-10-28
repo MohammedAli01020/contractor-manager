@@ -24,11 +24,11 @@ class LoginAttemptRateLimiterTest {
                 Clock.fixed(Instant.parse("2026-10-28T08:00:00Z"), ZoneOffset.UTC));
 
         for (int attempt = 0; attempt < 5; attempt++) {
-            limiter.checkAllowed("192.0.2.10", "Admin");
-            limiter.recordFailure("192.0.2.10", "Admin", "tenant_login");
+            assertAllowed(limiter, "192.0.2.10", "Admin");
+            recordFailure(limiter, "192.0.2.10", "Admin", "tenant_login");
         }
 
-        assertThatThrownBy(() -> limiter.checkAllowed("192.0.2.10", "Admin"))
+        assertThatThrownBy(() -> assertAllowed(limiter, "192.0.2.10", "Admin"))
                 .isInstanceOf(ApiException.class)
                 .satisfies(error -> assertThat(((ApiException) error).getStatus())
                         .isEqualTo(HttpStatus.TOO_MANY_REQUESTS));
@@ -40,11 +40,11 @@ class LoginAttemptRateLimiterTest {
                 Clock.fixed(Instant.parse("2026-10-28T08:00:00Z"), ZoneOffset.UTC));
 
         for (int attempt = 0; attempt < 5; attempt++) {
-            limiter.recordFailure("192.0.2.11", "Admin", "tenant_login");
+            recordFailure(limiter, "192.0.2.11", "Admin", "tenant_login");
         }
-        limiter.recordSuccess("192.0.2.11", "Admin", "tenant_login");
+        recordSuccess(limiter, "192.0.2.11", "Admin", "tenant_login");
 
-        limiter.checkAllowed("192.0.2.11", "Admin");
+        assertAllowed(limiter, "192.0.2.11", "Admin");
     }
 
     @Test
@@ -53,10 +53,10 @@ class LoginAttemptRateLimiterTest {
                 Clock.fixed(Instant.parse("2026-10-28T08:00:00Z"), ZoneOffset.UTC));
 
         for (int attempt = 0; attempt < 5; attempt++) {
-            limiter.recordFailure("192.0.2.12", "Admin", "tenant_login");
+            recordFailure(limiter, "192.0.2.12", "Admin", "tenant_login");
         }
 
-        limiter.checkAllowed("192.0.2.13", "Admin");
+        assertAllowed(limiter, "192.0.2.13", "Admin");
     }
 
     @Test
@@ -65,13 +65,13 @@ class LoginAttemptRateLimiterTest {
         LoginAttemptRateLimiter limiter = new LoginAttemptRateLimiter(clock);
 
         for (int attempt = 0; attempt < 5; attempt++) {
-            limiter.recordFailure("192.0.2.14", "Admin", "tenant_login");
+            recordFailure(limiter, "192.0.2.14", "Admin", "tenant_login");
         }
-        assertThatThrownBy(() -> limiter.checkAllowed("192.0.2.14", "Admin"))
+        assertThatThrownBy(() -> assertAllowed(limiter, "192.0.2.14", "Admin"))
                 .isInstanceOf(ApiException.class);
 
         clock.advance(Duration.ofMinutes(15).plusMillis(1));
-        limiter.checkAllowed("192.0.2.14", "Admin");
+        assertAllowed(limiter, "192.0.2.14", "Admin");
     }
 
     @Test
@@ -80,10 +80,10 @@ class LoginAttemptRateLimiterTest {
                 Clock.fixed(Instant.parse("2026-10-28T08:00:00Z"), ZoneOffset.UTC));
 
         for (int attempt = 0; attempt < 100; attempt++) {
-            limiter.recordFailure("192.0.2.15", "user" + attempt, "tenant_login");
+            recordFailure(limiter, "192.0.2.15", "user" + attempt, "tenant_login");
         }
 
-        assertThatThrownBy(() -> limiter.checkAllowed("192.0.2.15", "another-user"))
+        assertThatThrownBy(() -> assertAllowed(limiter, "192.0.2.15", "another-user"))
                 .isInstanceOf(ApiException.class)
                 .satisfies(error -> assertThat(((ApiException) error).getStatus())
                         .isEqualTo(HttpStatus.TOO_MANY_REQUESTS));
@@ -96,7 +96,7 @@ class LoginAttemptRateLimiterTest {
         ExecutorService executor = Executors.newFixedThreadPool(8);
         try {
             for (int attempt = 0; attempt < 40; attempt++) {
-                executor.submit(() -> limiter.recordFailure(
+                executor.submit(() -> recordFailure(limiter, 
                         "192.0.2.16", "ConcurrentAdmin", "tenant_login"));
             }
         } finally {
@@ -104,7 +104,7 @@ class LoginAttemptRateLimiterTest {
             assertThat(executor.awaitTermination(5, TimeUnit.SECONDS)).isTrue();
         }
 
-        assertThatThrownBy(() -> limiter.checkAllowed("192.0.2.16", "ConcurrentAdmin"))
+        assertThatThrownBy(() -> assertAllowed(limiter, "192.0.2.16", "ConcurrentAdmin"))
                 .isInstanceOf(ApiException.class)
                 .satisfies(error -> assertThat(((ApiException) error).getStatus())
                         .isEqualTo(HttpStatus.TOO_MANY_REQUESTS));
@@ -116,16 +116,16 @@ class LoginAttemptRateLimiterTest {
         LoginAttemptRateLimiter limiter = new LoginAttemptRateLimiter(
                 Clock.fixed(Instant.parse("2026-10-28T08:00:00Z"), ZoneOffset.UTC), 2, 2);
 
-        limiter.recordFailure("192.0.2.20", "first", "tenant_login");
-        limiter.recordFailure("192.0.2.20", "second", "tenant_login");
-        limiter.recordFailure("192.0.2.20", "third", "tenant_login");
+        recordFailure(limiter, "192.0.2.20", "first", "tenant_login");
+        recordFailure(limiter, "192.0.2.20", "second", "tenant_login");
+        recordFailure(limiter, "192.0.2.20", "third", "tenant_login");
 
         // New identities remain serviceable at capacity, and the IP-wide bucket is preserved.
-        limiter.checkAllowed("192.0.2.20", "fourth");
+        assertAllowed(limiter, "192.0.2.20", "fourth");
         for (int attempt = 0; attempt < 97; attempt++) {
-            limiter.recordFailure("192.0.2.20", "ip-user-" + attempt, "tenant_login");
+            recordFailure(limiter, "192.0.2.20", "ip-user-" + attempt, "tenant_login");
         }
-        assertThatThrownBy(() -> limiter.checkAllowed("192.0.2.20", "last-user"))
+        assertThatThrownBy(() -> assertAllowed(limiter, "192.0.2.20", "last-user"))
                 .isInstanceOf(ApiException.class)
                 .satisfies(error -> assertThat(((ApiException) error).getStatus())
                         .isEqualTo(HttpStatus.TOO_MANY_REQUESTS));
@@ -136,19 +136,19 @@ class LoginAttemptRateLimiterTest {
         MutableClock clock = new MutableClock(Instant.parse("2026-10-28T08:00:00Z"));
         LoginAttemptRateLimiter limiter = new LoginAttemptRateLimiter(clock, 2, 2);
 
-        limiter.recordFailure("192.0.2.40", "expired-user", "tenant_login");
+        recordFailure(limiter, "192.0.2.40", "expired-user", "tenant_login");
         clock.advance(Duration.ofMinutes(14));
-        limiter.recordFailure("192.0.2.41", "active-user", "tenant_login");
+        recordFailure(limiter, "192.0.2.41", "active-user", "tenant_login");
 
         // The first bucket has expired; the second is still active when capacity is reached.
         clock.advance(Duration.ofMinutes(1).plusMillis(1));
-        limiter.recordFailure("192.0.2.42", "new-user", "tenant_login");
+        recordFailure(limiter, "192.0.2.42", "new-user", "tenant_login");
 
         for (int attempt = 0; attempt < 4; attempt++) {
-            limiter.recordFailure("192.0.2.41", "active-user", "tenant_login");
+            recordFailure(limiter, "192.0.2.41", "active-user", "tenant_login");
         }
 
-        assertThatThrownBy(() -> limiter.checkAllowed("192.0.2.41", "active-user"))
+        assertThatThrownBy(() -> assertAllowed(limiter, "192.0.2.41", "active-user"))
                 .isInstanceOf(ApiException.class)
                 .satisfies(error -> assertThat(((ApiException) error).getStatus())
                         .isEqualTo(HttpStatus.TOO_MANY_REQUESTS));
@@ -202,6 +202,26 @@ class LoginAttemptRateLimiterTest {
         assertThatThrownBy(() -> new LoginAttemptRateLimiter(
                 Clock.systemUTC(), 0, 1))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    private static void assertAllowed(LoginAttemptRateLimiter limiter, String clientIp, String username) {
+        try (LoginAttemptRateLimiter.Attempt ignored = limiter.beginAttempt(clientIp, username)) {
+            // Closing without completing releases the reservation, mirroring an abandoned attempt.
+        }
+    }
+
+    private static void recordFailure(LoginAttemptRateLimiter limiter, String clientIp,
+                                      String username, String endpoint) {
+        try (LoginAttemptRateLimiter.Attempt attempt = limiter.beginAttempt(clientIp, username)) {
+            attempt.failure(endpoint);
+        }
+    }
+
+    private static void recordSuccess(LoginAttemptRateLimiter limiter, String clientIp,
+                                      String username, String endpoint) {
+        try (LoginAttemptRateLimiter.Attempt attempt = limiter.beginAttempt(clientIp, username)) {
+            attempt.success(endpoint);
+        }
     }
 
     private static final class MutableClock extends Clock {
