@@ -51,7 +51,7 @@ CREATE TABLE journal_entries (
         REFERENCES users (id, tenant_id),
     CONSTRAINT fk_journal_entries_reversal FOREIGN KEY (reversal_of_entry_id, tenant_id)
         REFERENCES journal_entries (id, tenant_id),
-    CONSTRAINT ck_journal_entries_status CHECK (status IN ('POSTED','REVERSED')),
+    CONSTRAINT ck_journal_entries_status CHECK (status = 'POSTED'),
     CONSTRAINT ck_journal_entries_source CHECK (CHAR_LENGTH(TRIM(source_type)) > 0),
     CONSTRAINT ck_journal_entries_description CHECK (CHAR_LENGTH(TRIM(description)) > 0),
     CONSTRAINT ck_journal_entries_posting_key CHECK (CHAR_LENGTH(TRIM(posting_key)) > 0)
