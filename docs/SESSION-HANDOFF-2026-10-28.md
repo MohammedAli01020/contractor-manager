@@ -15,9 +15,9 @@
   - Returns `X-Request-ID` in the response header.
   - Adds the ID to SLF4J MDC for request-scoped logging and clears it in `finally`.
   - Logs method, URI path (without query string), status, duration, and exception class; it does not log request/response bodies, headers, passwords, or tokens.
-- Added `requestId` to the standard `ApiError` JSON body when a request ID is available.
+- Added `requestId` to the standard `ApiError` JSON body and to security 401/403 JSON responses emitted before controller handling.
 - Added unit tests in `RequestTrackingFilterTest` for accepted/missing/invalid IDs, response header, and MDC cleanup.
-- Added an integration test in `AuthFlowIntegrationTest` for request ID propagation on an unauthorized login response.
+- Added integration tests in `AuthFlowIntegrationTest` for request ID propagation on failed login and unauthenticated protected-resource responses.
 - Updated `docs/PROGRESS.md`.
 
 ## Verification status
