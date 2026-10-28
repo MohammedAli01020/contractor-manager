@@ -113,3 +113,11 @@ This section supersedes any earlier next-step notes above where they conflict.
 - **Next functional checks:** verify tenant creation and first-admin activation, tenant search/status filtering, suspend/reactivate behavior, and tenant-admin access separation. Then continue Phase 0/1 core and master-data checks per `docs/phases/PHASE-00-CORE.md` and `docs/phases/PHASE-01-MASTER-DATA.md`.
 - **Safety:** preserve local untracked files and existing database contents; do not edit applied migrations, merge to `main`, deploy, or run production migrations without explicit user approval.
 
+## Verification update — 2026-10-28 (user-reported)
+
+- The user confirmed the Platform Owner web UI is working after local verification.
+- The user reported that `mvn test` completed successfully from `D:\\contractor-manager\\backend`.
+- These are user-reported results; the raw terminal output and exact local HEAD were not independently inspected in this chat. Record as reported, not independently reproduced.
+- **Next roadmap task:** functional regression of Platform Owner tenant management: list/search/filter tenants, create a tenant and verify first-admin activation flow only with the user's approval to create a real tenant, inspect activation-link display/copy, and test suspend/reactivate only with explicit approval for the selected existing tenant. Verify tenant Admin login/access separation afterward.
+- Then continue Phase 00/01 verification: shift lifecycle, concurrent active-shift constraints for drivers/equipment, optimistic-lock conflicts, resource deactivation guards, pagination/soft-delete/tenant isolation, and Flutter analysis/tests as applicable.
+- **Not yet confirmed by these reports:** current-HEAD web build/lint output, raw backend test report, and CI runs matching the exact latest branch head.
