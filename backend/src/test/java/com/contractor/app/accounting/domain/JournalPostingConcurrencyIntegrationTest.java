@@ -13,6 +13,11 @@ import com.fasterxml.jackson.databind.JsonNode;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Arrays;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,6 +27,7 @@ class JournalPostingConcurrencyIntegrationTest extends AbstractIntegrationTest {
     @Autowired private JournalPostingService postingService;
     @Autowired private ChartAccountRepository accounts;
     @Autowired private JournalEntryRepository entries;
+    @Autowired private JournalLineRepository lineRepository;
     @SpyBean private JournalLineRepository lines;
 
     private Long tenantId;
@@ -41,6 +47,30 @@ class JournalPostingConcurrencyIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void concurrentIdenticalRequestsResolveToOneJournalEntry() throws Exception {
+        JournalPostingRequest request = request(uniqueName("concurrent"));
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            Future<JournalEntry> first = pool.submit(() -> postTogether(request, ready, start));
+            Future<JournalEntry> second = pool.submit(() -> postTogether(request, ready, start));
+            assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+
+            JournalEntry firstResult = first.get(30, TimeUnit.SECONDS);
+            JournalEntry secondResult = second.get(30, TimeUnit.SECONDS);
+            assertThat(firstResult.getId()).isEqualTo(secondResult.getId());
+            assertThat(entries.findByTenantIdAndPostingKey(tenantId, request.getPostingKey())).isPresent();
+            assertThat(lineRepository.findByTenantIdAndJournalEntryIdOrderByLineNumberAsc(
+                    tenantId, firstResult.getId())).hasSize(2);
+        } finally {
+            start.countDown();
+            pool.shutdownNow();
+        }
+    }
+
+    @Test
     void failedLinePersistenceRollsBackEntryHeader() {
         String key = uniqueName("rollback");
         doThrow(new IllegalStateException("simulated persistence failure"))
@@ -50,9 +80,18 @@ class JournalPostingConcurrencyIntegrationTest extends AbstractIntegrationTest {
         assertThat(entries.findByTenantIdAndPostingKey(tenantId, key)).isEmpty();
     }
 
+    private JournalEntry postTogether(JournalPostingRequest request, CountDownLatch ready, CountDownLatch start)
+            throws Exception {
+        ready.countDown();
+        if (!start.await(10, TimeUnit.SECONDS)) {
+            throw new IllegalStateException("Timed out waiting for concurrent posting");
+        }
+        return postingService.post(tenantId, actorUserId, request);
+    }
+
     private JournalPostingRequest request(String key) {
         return new JournalPostingRequest(key, "INTEGRATION_TEST", 1L, LocalDate.of(2026, 10, 28),
-                "Rollback integration test", null, Arrays.asList(
+                "Accounting integration test", null, Arrays.asList(
                 new JournalLineRequest(debitAccountId, "Debit", new BigDecimal("100.00"),
                         BigDecimal.ZERO.setScale(2), null, null),
                 new JournalLineRequest(creditAccountId, "Credit", BigDecimal.ZERO.setScale(2),
