@@ -62,6 +62,9 @@ public class PlatformOwner {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
+    @Column(name = "last_login_at")
+    private LocalDateTime lastLoginAt;
+
     protected PlatformOwner() { }
 
     public PlatformOwner(String username, String fullName, String passwordHash) {
@@ -87,6 +90,8 @@ public class PlatformOwner {
     public String getFullName() { return fullName; }
     public String getPasswordHash() { return passwordHash; }
     public boolean isActive() { return active; }
+    public LocalDateTime getLastLoginAt() { return lastLoginAt; }
+    public void setLastLoginAt(LocalDateTime lastLoginAt) { this.lastLoginAt = lastLoginAt; }
     public String getTotpSecret() { return totpSecret; }
     public boolean isTotpEnabled() { return totpEnabled; }
     public LocalDateTime getTotpSetupExpiresAt() { return totpSetupExpiresAt; }
