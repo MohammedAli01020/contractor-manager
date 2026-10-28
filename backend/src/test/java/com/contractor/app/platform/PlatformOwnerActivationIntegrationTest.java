@@ -125,13 +125,20 @@ class PlatformOwnerActivationIntegrationTest extends AbstractIntegrationTest {
         mockMvc.perform(post("/api/v1/platform/admin-activation").contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(activate))).andExpect(status().isBadRequest());
 
-        MvcResult tenantLogin = mockMvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
+        MvcResult tenantLogin = mockMvc.perform(post("/api/v1/auth/login")
+                .header("X-Request-ID", "tenant-login-audit-test-id")
+                .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(adminLogin))).andExpect(status().isOk()).andReturn();
         String tenantToken = objectMapper.readTree(tenantLogin.getResponse().getContentAsString()).path("accessToken").asText();
         User loggedInAdmin = users.findByUsername(adminUsername).orElseThrow();
         assertNotNull(loggedInAdmin.getLastLoginAt(), "Tenant user last login is set after successful password login");
         assertTrue(loginSecurityEvents.findByUsernameOrderByCreatedAtDescIdDesc(adminUsername).stream().anyMatch(event -> adminUsername.equals(event.getUsername())
                         && event.getOutcome() == LoginEventOutcome.SUCCESS));
+        assertTrue(loginSecurityEvents.findByUsernameOrderByCreatedAtDescIdDesc(adminUsername).stream().anyMatch(event ->
+                event.getOutcome() == LoginEventOutcome.SUCCESS
+                        && "tenant-login-audit-test-id".equals(event.getRequestId())
+                        && event.getClientIp() != null),
+                "Successful tenant login audit includes the sanitized HTTP request ID and client IP");
         assertTrue(loginSecurityEvents.findByUsernameOrderByCreatedAtDescIdDesc(adminUsername).stream().anyMatch(event -> adminUsername.equals(event.getUsername())
                         && event.getOutcome() == LoginEventOutcome.FAILURE));
         assertTrue(loginSecurityEvents.findByUsernameOrderByCreatedAtDescIdDesc(ownerUsername).stream().anyMatch(event -> ownerUsername.equals(event.getUsername())
