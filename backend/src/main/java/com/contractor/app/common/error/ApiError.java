@@ -17,19 +17,26 @@ public class ApiError {
     private final String path;
     private final List<FieldIssue> fieldErrors;
     private final Map<String, Object> details;
+    private final String requestId;
 
     public ApiError(int status, String code, String message, String path, List<FieldIssue> fieldErrors) {
-        this(status, code, message, path, fieldErrors, null);
+        this(status, code, message, path, fieldErrors, null, null);
     }
 
     public ApiError(int status, String code, String message, String path,
                     List<FieldIssue> fieldErrors, Map<String, Object> details) {
+        this(status, code, message, path, fieldErrors, details, null);
+    }
+
+    public ApiError(int status, String code, String message, String path,
+                    List<FieldIssue> fieldErrors, Map<String, Object> details, String requestId) {
         this.status = status;
         this.code = code;
         this.message = message;
         this.path = path;
         this.fieldErrors = fieldErrors;
         this.details = details;
+        this.requestId = requestId;
     }
 
     public LocalDateTime getTimestamp() {
@@ -58,6 +65,10 @@ public class ApiError {
 
     public Map<String, Object> getDetails() {
         return details;
+    }
+
+    public String getRequestId() {
+        return requestId;
     }
 
     public static class FieldIssue {
