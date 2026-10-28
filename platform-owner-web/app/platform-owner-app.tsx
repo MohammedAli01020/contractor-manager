@@ -550,7 +550,7 @@ export default function PlatformOwnerApp() {
               !loginEvents || loginEvents.items.length === 0 ? <div className="panel tenants-message">لا توجد محاولات دخول مسجلة في هذا القسم حتى الآن.</div> :
               <section className="panel tenants-panel">
                 <div className="tenants-heading"><div><h2>{loginEventType === "TENANT_USER" ? "محاولات دخول مستخدمي الشركات" : "محاولات دخول مالك المنصة"}</h2><p>عدد السجلات المطابقة: {loginEvents.totalElements}</p></div><span className="tenant-count">صفحة {loginEvents.page + 1} من {Math.max(1, loginEvents.totalPages)}</span></div>
-                <div className="table-wrap"><table><thead><tr><th>التاريخ والوقت</th><th>اسم المستخدم</th><th>النتيجة</th><th>الشركة</th><th>عنوان IP</th><th>سبب الفشل / الحالة</th><th>معرّف الطلب</th></tr></thead>
+                <div className="tenants-table-wrap"><table className="tenants-table"><thead><tr><th>التاريخ والوقت</th><th>اسم المستخدم</th><th>النتيجة</th><th>الشركة</th><th>عنوان IP</th><th>سبب الفشل / الحالة</th><th>معرّف الطلب</th></tr></thead>
                   <tbody>{loginEvents.items.map((event) => <tr key={event.id}>
                     <td>{event.createdAt ? new Date(event.createdAt).toLocaleString("ar-EG") : "—"}</td>
                     <td dir="ltr">{event.username}</td>
