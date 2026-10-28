@@ -195,10 +195,10 @@ public class PlatformAdminService {
      .filter(user -> user.getRole() == Role.ADMIN)
      .findFirst()
      .map(user -> new PlatformAdminSummary(user.getId(), user.getFullName(), user.getUsername(),
-       user.isActive(), user.isPasswordActivated()))
+       user.isActive(), user.isPasswordActivated(), user.getPhone(), user.getEmail(), user.isEmailVerified()))
      .orElse(null);
     return new PlatformTenantSummary(tenant.getId(), tenant.getName(), tenant.getStatus().name(),
-      tenant.getCreatedAt(), admin);
+      tenant.getCreatedAt(), tenant.getUpdatedAt(), admin);
    })
    .collect(Collectors.toList());
  }
