@@ -9,12 +9,13 @@
 - The username is SHA-256 hashed in the in-memory identity key. Authentication logs include the request ID from MDC, endpoint label, event, and status; they do not log the username, password, or client IP.
 - Existing tenant-user dummy BCrypt verification and Platform Owner MFA challenge/setup behavior are unchanged. Existing TOTP lockout logic is untouched.
 - Added unit tests for the per-identity threshold, reset after successful login, separation between client IPs, expiry after 15 minutes, the 100-failure IP ceiling, and concurrent failures. Added integration coverage for both tenant and platform login throttling.
-- Expired buckets are swept at most once per minute instead of scanning the entire map on every login check. The in-memory map has a 50,000-bucket ceiling; new identities are rejected with HTTP 429 when capacity is exhausted.
+- Expired buckets are swept at most once per minute instead of scanning the maps on every login check. Identity counters and IP counters are stored separately with independent caps (50,000 identity buckets and 10,000 IP buckets); when a cap is reached, the oldest bucket is evicted instead of broadly rejecting new identities. This bounds memory but means high-cardinality abuse can evict older counters, so shared-store/rate-limit design still needs review before production.
 - Platform login performs a dummy BCrypt password check when an account is missing or inactive, reducing the username-enumeration timing difference. The platform MFA challenge and TOTP behavior remain unchanged.
 
 ## Important deployment limitations
 
 - The current limiter is **in-memory and per JVM**. It is appropriate as an initial single-instance guard, but it is not cluster-wide and resets when the process restarts. Before running multiple backend replicas, move counters to a shared atomic store such as Redis.
 - The limiter uses the servlet remote address and intentionally does not trust arbitrary `X-Forwarded-For` values. If deployed behind a reverse proxy, configure a trusted-proxy strategy before enabling client-IP-based limits; otherwise requests may appear to originate from the proxy address.
+- The login controllers serialize attempts for the same normalized username/IP identity using a fixed array of lock stripes, avoiding unbounded lock allocation and preventing simultaneous attempts for that same identity from all passing the failure check before results are recorded. Stripe collisions may serialize unrelated identities. The IP-wide counter can still be updated by concurrent requests for different usernames from the same IP; this should be considered in the remaining concurrency review.
 - The follow-up changes require a fresh CI run; do not consider them verified until the run finishes successfully.
 - No database schema, Flyway migration, deployment, or merge to `main` was made as part of this increment.
