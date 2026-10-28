@@ -170,7 +170,7 @@ The roadmap below is the only source of truth for phase order and overall status
 |---|---|---|
 | 0 — Stabilize and verify the existing core | In progress — re-verify current branch and refresh test evidence before acceptance | [PHASE-00-CORE.md](phases/PHASE-00-CORE.md) |
 | 1 — Master data and shift usability | In progress — compare existing implementation with the phase exit criteria | [PHASE-01-MASTER-DATA.md](phases/PHASE-01-MASTER-DATA.md) |
-| 2 — Financial foundation and monthly close | Not started | [PHASE-02-FINANCIALS.md](phases/PHASE-02-FINANCIALS.md) |
+| 2 — Financial foundation and monthly close | In progress — architecture documented; code/tests pending | [PHASE-02-FINANCIALS.md](phases/PHASE-02-FINANCIALS.md) and [financial design](phases/FINANCIAL-FOUNDATION-DESIGN.md) |
 | 3 — Purchases, suppliers and inventory | Not started | Tracked in this roadmap until a detailed plan is needed |
 | 4 — Reports and exports | Not started | Tracked in this roadmap until a detailed plan is needed |
 | 5 — Authentication redesign and optional driver accounts | Not started as a redesign phase | [PHASE-05-AUTHENTICATION.md](phases/PHASE-05-AUTHENTICATION.md) |
@@ -202,7 +202,7 @@ The roadmap below is the only source of truth for phase order and overall status
 **Exit criteria:** contractor can manage master data and run the agreed shift workflow reliably.
 
 ### Phase 2 — Financial foundation, driver ledger, equipment expenses and monthly closing
-**Status:** Not started.  
+**Status:** In progress — design baseline recorded on `feature/financial-foundation`; accounting-core implementation not yet verified.  
 **Detailed plan:** [PHASE-02-FINANCIALS.md](phases/PHASE-02-FINANCIALS.md).  
 - Define and test the exact accounting rules first, including sign conventions for positive/negative balances and the period in which each transaction is recognized.
 - Implement driver ledger movements: opening balance, shift wages, advances, approved deductions, bonuses/allowances, actual payments, adjustments and reversals.
@@ -215,6 +215,7 @@ The roadmap below is the only source of truth for phase order and overall status
 **Exit criteria:** sample cases reconcile for driver balances, equipment operating result, owner/partner amounts due, unpaid liabilities, monthly carry-forward, corrections and retries; no double deduction or duplicated transaction.
 
 ### Phase 3 — Purchases, suppliers and inventory
+**Status:** Not started; must use the shared double-entry posting service defined in [FINANCIAL-FOUNDATION-DESIGN.md](phases/FINANCIAL-FOUNDATION-DESIGN.md).
 - Design suppliers, purchase invoices and invoice lines, payment status, stock items/units, warehouses (if required), stock movements and issue-to-equipment flows.
 - Decide stock valuation, negative stock, invoice posting and reversal policies before migrations.
 - Support mixed invoices with different treatment per line.
