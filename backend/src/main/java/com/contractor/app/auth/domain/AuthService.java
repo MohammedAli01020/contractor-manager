@@ -20,6 +20,7 @@ import com.contractor.app.user.api.dto.UserResponse;
 import com.contractor.app.user.domain.Role;
 import com.contractor.app.user.domain.User;
 import com.contractor.app.user.infra.UserRepository;
+import com.contractor.app.securityaudit.domain.LoginSecurityEventService;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.Optional;
@@ -42,6 +43,7 @@ public class AuthService {
     private final PasswordEncoder encoder;
     private final JwtService jwt;
     private final AuditService audit;
+    private final LoginSecurityEventService loginSecurityEvents;
     private final boolean registrationEnabled;
     private final long refreshTokenDays;
     /** يُستخدم عند غياب المستخدم كي يتساوى زمن الاستجابة ولا يمكن تخمين أسماء المستخدمين. */
@@ -51,13 +53,14 @@ public class AuthService {
                        PasswordEncoder encoder, JwtService jwt, AuditService audit,
                        @Value("${app.registration.enabled:false}") boolean registrationEnabled,
                        @Value("${app.jwt.refresh-token-days:30}") long refreshTokenDays,
-                       Environment environment) {
+                       Environment environment, LoginSecurityEventService loginSecurityEvents) {
         this.tenants = tenants;
         this.users = users;
         this.refreshTokens = refreshTokens;
         this.encoder = encoder;
         this.jwt = jwt;
         this.audit = audit;
+        this.loginSecurityEvents = loginSecurityEvents;
         // Direct tenant creation is only permitted in the isolated test profile.
         // An environment variable alone must never reopen public production registration.
         this.registrationEnabled = registrationEnabled && environment.acceptsProfiles(Profiles.of("test"));
@@ -82,6 +85,11 @@ public class AuthService {
 
     @Transactional
     public AuthResponse login(LoginRequest request) {
+        return login(request, null, null);
+    }
+
+    @Transactional
+    public AuthResponse login(LoginRequest request, String clientIp, String requestId) {
         Optional<User> found = users.findByUsername(User.normalizeUsername(request.getUsername()));
         String hash = found.map(User::getPasswordHash).orElse(dummyHash);
         boolean passwordMatches = encoder.matches(request.getPassword(), hash);
@@ -94,6 +102,8 @@ public class AuthService {
         if (!user.isActive() || !user.isPasswordActivated() || tenant.getStatus() != TenantStatus.ACTIVE) {
             throw ApiException.forbidden("الحساب معطّل. تواصل مع مسؤول النظام.");
         }
+        user.setLastLoginAt(LocalDateTime.now(ZoneOffset.UTC));
+        loginSecurityEvents.recordTenantSuccess(user.getId(), user.getTenantId(), user.getUsername(), clientIp, requestId);
         return issueTokens(user);
     }
 
