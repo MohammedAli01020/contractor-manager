@@ -56,6 +56,31 @@ jobs:
         id: backend-tests
         run: mvn -B -ntp test
 
+      - name: Require MySQL accounting integration tests to execute
+        run: |
+          python3 - <<'PY'
+          import glob
+          import sys
+          import xml.etree.ElementTree as ET
+
+          pattern = "target/surefire-reports/TEST-com.contractor.app.accounting.domain.JournalPostingConcurrencyIntegrationTest.xml"
+          reports = glob.glob(pattern)
+          if not reports:
+              sys.exit(f"Required MySQL integration-test report missing: {pattern}")
+
+          root = ET.parse(reports[0]).getroot()
+          totals = {key: int(root.attrib.get(key, 0))
+                    for key in ("tests", "failures", "errors", "skipped")}
+          print(f"JournalPostingConcurrencyIntegrationTest: {totals}")
+
+          if totals["tests"] == 0:
+              sys.exit("Accounting concurrency integration tests did not execute.")
+          if totals["skipped"] != 0:
+              sys.exit("Accounting concurrency integration tests were skipped; Docker/MySQL must be available in CI.")
+          if totals["failures"] != 0 or totals["errors"] != 0:
+              sys.exit("Accounting concurrency integration tests reported failures or errors.")
+          PY
+
       - name: Write test summary
         if: always()
         env:
