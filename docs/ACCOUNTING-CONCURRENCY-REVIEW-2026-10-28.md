@@ -28,7 +28,7 @@ The integration-test base deliberately skips tests if Docker is unavailable. To 
 - Commit `014275f7ea7e0f97e23bb25b0415d982377835d4` added recovery after a database integrity violation. CI passed: [run 40738038729](https://github.com/MohammedAli01020/contractor-manager/actions/runs/40738038729).
 - Commit `d71f75df29e765a241d62ec931ac6457970c7909` includes `concurrentReversalsCreateAtMostOneReversal`, which exercises two concurrent reversal requests with distinct posting keys.
 - CI for that exact commit passed: [run 40738554677](https://github.com/MohammedAli01020/contractor-manager/actions/runs/40738554677). The Maven test step, test summary, and report upload all succeeded. No test count is recorded here because no confirmed total was captured in the verified run details.
-- Commit `9258c32db339556bb3b83f4787de345d18b20c1f` adds a CI guard against skipped/missing accounting MySQL integration tests. Its CI result is pending verification.
+- Commit `9258c32db339556bb3b83f4787de345d18b20c1f` adds a CI guard against skipped/missing accounting MySQL integration tests. CI passed, including the guard: [run 40740171474](https://github.com/MohammedAli01020/contractor-manager/actions/runs/40740171474).
 
 ## Transaction propagation and current call sites
 `JournalPostingService` uses a `TransactionTemplate` with default `PROPAGATION_REQUIRED`. If called inside an active outer transaction, the template may participate in it; catching `DataIntegrityViolationException` outside the callback does not alone prove that the relevant transaction has fully rolled back before the recovery read.
@@ -44,7 +44,7 @@ Do not blindly switch to `REQUIRES_NEW`: independently committing a journal coul
 - [x] Reviewed current production service/controller sources; no production caller of `JournalPostingService.post()` was found.
 - [x] Static review of V17 constraints completed.
 - [x] Confirmed integration tests use a fresh disposable MySQL 8 database and Spring application startup enables Flyway plus Hibernate schema validation.
-- [ ] Verify CI for commit `9258c32db339556bb3b83f4787de345d18b20c1f` passes the new guard and that the accounting integration tests were not skipped.
+- [x] Verified CI for commit `9258c32db339556bb3b83f4787de345d18b20c1f`: Maven tests and the new guard passed; the accounting integration tests were executed and none were skipped.
 - [ ] Document and verify the process-local login limiter as a known single-instance limitation; do not claim cluster-wide throttling.
 - [ ] Before wiring journal posting into a production source workflow, test transaction propagation and preserve atomicity.
 - [ ] After all acceptance checks, update this document and Issue #8, then decide whether to merge. Do not modify the base branch or local-only `.gitignore` changes as part of this review.
