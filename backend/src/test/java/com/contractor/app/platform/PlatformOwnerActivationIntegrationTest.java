@@ -148,6 +148,14 @@ class PlatformOwnerActivationIntegrationTest extends AbstractIntegrationTest {
                         Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"))))
                 .getContent().stream().anyMatch(event -> ownerUsername.equals(event.getUsername())
                         && event.getOutcome() == LoginEventOutcome.SUCCESS));
+        MvcResult tenantEventsResult = mockMvc.perform(get("/api/v1/platform/security/login-events?type=TENANT_USER")
+                .header("Authorization", "Bearer " + ownerToken))
+                .andExpect(status().isOk()).andReturn();
+        assertTrue(objectMapper.readTree(tenantEventsResult.getResponse().getContentAsString()).path("items").isArray());
+        MvcResult platformEventsResult = mockMvc.perform(get("/api/v1/platform/security/login-events?type=PLATFORM_OWNER")
+                .header("Authorization", "Bearer " + ownerToken))
+                .andExpect(status().isOk()).andReturn();
+        assertTrue(objectMapper.readTree(platformEventsResult.getResponse().getContentAsString()).path("items").isArray());
         mockMvc.perform(post("/api/v1/platform/tenants").header("Authorization", "Bearer " + tenantToken)
                 .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(create)))
                 .andExpect(status().isForbidden());
