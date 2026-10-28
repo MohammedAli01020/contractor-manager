@@ -1,3 +1,14 @@
+## Platform Owner company user counts — implementation added, verification pending (2026-10-28)
+
+- Added `totalUsers` and `activeUsers` to the Platform Owner company-list response and company details view.
+- `totalUsers` counts all tenant-scoped user accounts. `activeUsers` counts only accounts where the user is enabled and their password has been activated; this is an account-state metric, not a measure of recent usage.
+- The existing per-tenant user query is reused to calculate counts and select the company Admin. No schema change or database migration was added.
+- Extended `PlatformOwnerActivationIntegrationTest` to cover total and active account counts, including disabled and pending-activation users.
+- **Verification status:** implementation is committed to `feature/request-tracking`; CI and local backend/frontend checks for this increment are still pending. The user has confirmed the frontend `npm run lint` and `npm run build` succeeded for the previously tested state, but those results do not independently verify these newest changes.
+- **Next:** fast-forward the local branch without disturbing local `.gitignore` edits, remove only the three confirmed zero-byte accidental files if desired, then run backend tests and frontend lint/build again. Keep last successful login and persistent login-attempt logging as separate future work; neither is represented by these counts.
+
+---
+
 ## Tenant suspension/reactivation — implementation added, verification pending (2026-10-26)
 
 - **Branch:** `feature/platform-owner-web`; no changes to `main`, database contents, schema, or Flyway migrations.
