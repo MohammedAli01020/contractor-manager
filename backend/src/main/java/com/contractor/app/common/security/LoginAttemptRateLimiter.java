@@ -7,6 +7,7 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import org.slf4j.Logger;
@@ -26,10 +27,14 @@ public class LoginAttemptRateLimiter {
     private static final int MAX_FAILURES_PER_IP = 100;
     private static final long WINDOW_MILLIS = Duration.ofMinutes(15).toMillis();
     private static final long PRUNE_INTERVAL_MILLIS = Duration.ofMinutes(1).toMillis();
-    private static final int MAX_BUCKETS = 50_000;
+    private static final int DEFAULT_MAX_IDENTITY_BUCKETS = 50_000;
+    private static final int DEFAULT_MAX_IP_BUCKETS = 10_000;
 
-    private final ConcurrentHashMap<String, Bucket> buckets = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Bucket> ipBuckets = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Bucket> identityBuckets = new ConcurrentHashMap<>();
     private final Clock clock;
+    private final int maxIdentityBuckets;
+    private final int maxIpBuckets;
     private final AtomicLong lastPruneAt = new AtomicLong();
 
     public LoginAttemptRateLimiter() {
@@ -37,19 +42,23 @@ public class LoginAttemptRateLimiter {
     }
 
     LoginAttemptRateLimiter(Clock clock) {
+        this(clock, DEFAULT_MAX_IDENTITY_BUCKETS, DEFAULT_MAX_IP_BUCKETS);
+    }
+
+    LoginAttemptRateLimiter(Clock clock, int maxIdentityBuckets, int maxIpBuckets) {
+        if (maxIdentityBuckets < 1 || maxIpBuckets < 1) {
+            throw new IllegalArgumentException("Bucket limits must be positive");
+        }
         this.clock = clock;
+        this.maxIdentityBuckets = maxIdentityBuckets;
+        this.maxIpBuckets = maxIpBuckets;
     }
 
     public void checkAllowed(String clientIp, String username) {
         long now = clock.millis();
         pruneExpiredPeriodically(now);
-        String ipKey = ipKey(clientIp);
-        String identityKey = identityKey(clientIp, username);
-        Bucket ip = buckets.get(ipKey);
-        Bucket identity = buckets.get(identityKey);
-        if (buckets.size() >= MAX_BUCKETS && (ip == null || identity == null)) {
-            rejectThrottled();
-        }
+        Bucket ip = ipBuckets.get(ipKey(clientIp));
+        Bucket identity = identityBuckets.get(identityKey(clientIp, username));
         if (isLimited(ip, now, MAX_FAILURES_PER_IP)
                 || isLimited(identity, now, MAX_FAILURES_PER_IDENTITY_AND_IP)) {
             rejectThrottled();
@@ -58,14 +67,14 @@ public class LoginAttemptRateLimiter {
 
     public void recordFailure(String clientIp, String username, String endpoint) {
         long now = clock.millis();
-        increment(ipKey(clientIp), now);
-        increment(identityKey(clientIp, username), now);
+        increment(ipBuckets, ipKey(clientIp), now, maxIpBuckets);
+        increment(identityBuckets, identityKey(clientIp, username), now, maxIdentityBuckets);
         log.warn("Security event=login_failed requestId={} endpoint={} status=401",
                 MDC.get("requestId"), endpoint);
     }
 
     public void recordSuccess(String clientIp, String username, String endpoint) {
-        buckets.remove(identityKey(clientIp, username));
+        identityBuckets.remove(identityKey(clientIp, username));
         log.info("Security event=login_succeeded requestId={} endpoint={} status=200",
                 MDC.get("requestId"), endpoint);
     }
@@ -74,14 +83,38 @@ public class LoginAttemptRateLimiter {
         return bucket != null && bucket.isLimited(now, limit);
     }
 
-    private void increment(String key, long now) {
-        buckets.compute(key, (ignored, current) -> {
-            if (current == null || current.isExpired(now)) {
-                return new Bucket(now, 1);
+    private void increment(ConcurrentHashMap<String, Bucket> target, String key, long now,
+                           int maxBuckets) {
+        synchronized (target) {
+            Bucket current = target.get(key);
+            if (current != null && !current.isExpired(now)) {
+                current.increment();
+                return;
             }
-            current.increment();
-            return current;
-        });
+            if (current != null) {
+                target.remove(key, current);
+            }
+            removeExpired(target, now);
+            if (target.size() >= maxBuckets) {
+                evictOldest(target);
+            }
+            target.put(key, new Bucket(now, 1));
+        }
+    }
+
+    private void evictOldest(ConcurrentHashMap<String, Bucket> target) {
+        String oldestKey = null;
+        long oldestStart = Long.MAX_VALUE;
+        for (Map.Entry<String, Bucket> entry : target.entrySet()) {
+            long startedAt = entry.getValue().windowStartedAt();
+            if (startedAt < oldestStart) {
+                oldestStart = startedAt;
+                oldestKey = entry.getKey();
+            }
+        }
+        if (oldestKey != null) {
+            target.remove(oldestKey);
+        }
     }
 
     private void rejectThrottled() {
@@ -95,16 +128,21 @@ public class LoginAttemptRateLimiter {
         long previous = lastPruneAt.get();
         if (now - previous >= PRUNE_INTERVAL_MILLIS
                 && lastPruneAt.compareAndSet(previous, now)) {
-            buckets.entrySet().removeIf(entry -> entry.getValue().isExpired(now));
+            removeExpired(ipBuckets, now);
+            removeExpired(identityBuckets, now);
         }
     }
 
+    private void removeExpired(ConcurrentHashMap<String, Bucket> target, long now) {
+        target.entrySet().removeIf(entry -> entry.getValue().isExpired(now));
+    }
+
     private String ipKey(String clientIp) {
-        return "ip:" + safeIp(clientIp);
+        return safeIp(clientIp);
     }
 
     private String identityKey(String clientIp, String username) {
-        return "identity:" + safeIp(clientIp) + ":" + sha256(
+        return safeIp(clientIp) + ":" + sha256(
                 username == null ? "" : username.trim().toLowerCase(Locale.ROOT));
     }
 
@@ -146,6 +184,10 @@ public class LoginAttemptRateLimiter {
 
         private synchronized void increment() {
             failures++;
+        }
+
+        private long windowStartedAt() {
+            return windowStartedAt;
         }
     }
 }
