@@ -135,11 +135,11 @@ Follow this order. Continue on `feature/platform-owner-activation`; do not merge
 
 ## Request tracking increment — 2026-10-28 (verification pending)
 
-- **Branch:** `feature/request-tracking`, based on `feature/platform-owner-totp-2fa`. No merge to `main), no deployment, and no database or Flyway migration changes.
+- **Branch:** `feature/request-tracking`, based on `feature/platform-owner-totp-2fa`. No merge to `main`, no deployment, and no database or Flyway migration changes.
 - Added `RequestTrackingFilter` to assign a request ID to each HTTP request, preserve a supplied `X-Request-ID` only when it matches the safe 1–64 character allowlist, return the ID in the response header, put it in SLF4J MDC during request processing, and remove the MDC value in `finally`.
 - Added structured completion/failure log messages with request ID, HTTP method, URI path, response status, duration, and exception class. Query strings, headers, bodies, credentials, and tokens are not logged by this filter.
 - Added `requestId` to the standard `ApiError` response body when the request has passed through the tracking filter.
 - Added unit tests for safe ID preservation, generated UUIDs for missing/invalid IDs, response header behavior, and MDC cleanup. Added an integration test asserting that an authentication error includes the request ID in both the response header and error JSON.
 - **Verification pending:** changes were committed through the GitHub file API, but tests/build and CI have not yet been observed. Do not describe this increment as verified until the checks pass.
 - **Next:** inspect the complete diff and run backend tests/CI on this branch. Then address any findings before moving to login throttling/security events. Idempotency and offline sync remain future phases; this change does not implement either.
-- **Safety:** existing database and migrations were not changed. Do not merge to `main) or deploy without explicit approval.
+- **Safety:** existing database and migrations were not changed. Do not merge to `main` or deploy without explicit approval.
