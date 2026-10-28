@@ -1,5 +1,6 @@
 package com.contractor.app.common.error;
 
+import com.contractor.app.common.web.RequestTrackingFilter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import javax.servlet.http.HttpServletRequest;
@@ -18,6 +19,6 @@ public final class JsonErrorWriter {
         response.setContentType("application/json;charset=UTF-8");
         mapper.writeValue(response.getOutputStream(),
                 new ApiError(status.value(), code, message, request.getRequestURI(), null, null,
-                        request.getHeader(com.contractor.app.common.web.RequestTrackingFilter.HEADER_NAME)));
+                        (String) request.getAttribute(RequestTrackingFilter.REQUEST_ID_ATTRIBUTE)));
     }
 }
