@@ -102,3 +102,14 @@ This section supersedes any earlier next-step notes above where they conflict.
 - Recovery-code lifecycle implementation is described in the section above; the earlier “recovery codes are not complete” paragraph is historical and must not be treated as current status.
 - Backend CI success documented above applies only to the specific commit/run listed there. Frontend CI for the latest web changes and the current end-to-end browser flow still need confirmation.
 - No merge to `main`, production deployment, or production database migration is authorized by this checkpoint.
+
+## Runtime confirmation — 2026-10-28
+
+- **Branch:** `feature/platform-owner-totp-2fa`.
+- **Latest branch commit checked during this session:** `ff06e6f` (short SHA).
+- **User-confirmed manual status:** the project is running locally. The user reports that Platform Owner login, MFA, and recovery codes appear to work.
+- **Evidence classification:** this is a user-reported manual smoke check, not an independently observed browser session or an automated end-to-end test. Do not label the whole security phase fully verified on this evidence alone.
+- **Still pending for current branch:** run `npm run lint` and `npm run build` in `platform-owner-web`; run backend tests from `backend` (prefer the repository Maven wrapper if present, otherwise `mvn test`); inspect the exact results and current working-tree status before recording them.
+- **Next functional checks:** verify tenant creation and first-admin activation, tenant search/status filtering, suspend/reactivate behavior, and tenant-admin access separation. Then continue Phase 0/1 core and master-data checks per `docs/phases/PHASE-00-CORE.md` and `docs/phases/PHASE-01-MASTER-DATA.md`.
+- **Safety:** preserve local untracked files and existing database contents; do not edit applied migrations, merge to `main`, deploy, or run production migrations without explicit user approval.
+
