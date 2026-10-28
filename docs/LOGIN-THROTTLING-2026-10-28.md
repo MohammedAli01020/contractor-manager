@@ -53,9 +53,10 @@
 - No code was changed as part of this review note. No database/Flyway changes, deployment, or merge to `main`. The user's local `.gitignore` modification remains outside the repository commit.
 
 
-## Legacy API cleanup — verification pending
+## Legacy API cleanup — locally verified (2026-10-28)
 
-- Removed the legacy `checkAllowed`, `recordFailure`, and `recordSuccess` methods from `LoginAttemptRateLimiter`, along with their independent counter-mutation helpers. The production controllers already use `beginAttempt(...)` and complete each reservation through `Attempt.failure(...)` or `Attempt.success(...)`.
-- Reworked the unit tests to exercise the same reservation protocol rather than the removed legacy methods. The successful-login reset test now verifies that success clears failures before the threshold is reached; the concurrent unit test asserts that only five of 40 simultaneous attempts reach authentication.
-- **Verification pending:** these changes were made after the user's successful 129-test Maven run. Re-run `mvn test` on the latest `feature/request-tracking` commit before considering this cleanup validated.
+- Removed the legacy `checkAllowed`, `recordFailure`, and `recordSuccess` methods from `LoginAttemptRateLimiter`, along with their independent counter-mutation helpers. The production controllers use `beginAttempt(...)` and complete each reservation through `Attempt.failure(...)` or `Attempt.success(...)`.
+- Reworked unit tests to exercise the reservation protocol. The successful-login reset test verifies that success clears failures before the threshold is reached; the concurrent unit test asserts that only five of 40 simultaneous attempts reach authentication.
+- **User-provided local verification:** after pulling the latest branch changes, `mvn test` completed with `BUILD SUCCESS`: 129 tests, 0 failures, 0 errors, 0 skipped, in about five minutes (reported at 2026-10-28 14:33 local time).
+- This confirms the local Maven suite passed on the user's checked-out code. No separate CI result or load benchmark is claimed here.
 - No database/Flyway changes, deployment, or merge to `main`. The user's local `.gitignore` modification remains outside the repository commit.
