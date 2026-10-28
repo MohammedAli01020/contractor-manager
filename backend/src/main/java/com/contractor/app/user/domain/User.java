@@ -64,6 +64,9 @@ public class User {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
+    @Column(name = "last_login_at")
+    private LocalDateTime lastLoginAt;
+
     protected User() {
     }
 
@@ -159,4 +162,7 @@ public class User {
     public LocalDateTime getCreatedAt() {
         return createdAt;
     }
+
+    public LocalDateTime getLastLoginAt() { return lastLoginAt; }
+    public void setLastLoginAt(LocalDateTime lastLoginAt) { this.lastLoginAt = lastLoginAt; }
 }
