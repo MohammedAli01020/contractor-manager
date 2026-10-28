@@ -6,12 +6,15 @@ import com.contractor.app.auth.api.dto.LoginRequest;
 import com.contractor.app.auth.api.dto.RefreshTokenRequest;
 import com.contractor.app.auth.api.dto.RegisterTenantRequest;
 import com.contractor.app.auth.domain.AuthService;
+import com.contractor.app.common.error.ApiException;
 import com.contractor.app.common.security.AuthenticatedUser;
 import com.contractor.app.common.security.CurrentUser;
+import com.contractor.app.common.security.LoginAttemptRateLimiter;
 import com.contractor.app.user.api.dto.UserResponse;
 import com.contractor.app.user.domain.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import javax.servlet.http.HttpServletRequest;
 import javax.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -28,10 +31,13 @@ public class AuthController {
 
     private final AuthService authService;
     private final UserService userService;
+    private final LoginAttemptRateLimiter loginRateLimiter;
 
-    public AuthController(AuthService authService, UserService userService) {
+    public AuthController(AuthService authService, UserService userService,
+                          LoginAttemptRateLimiter loginRateLimiter) {
         this.authService = authService;
         this.userService = userService;
+        this.loginRateLimiter = loginRateLimiter;
     }
 
     @PostMapping("/register-tenant")
@@ -43,8 +49,19 @@ public class AuthController {
 
     @PostMapping("/login")
     @Operation(summary = "تسجيل الدخول")
-    public AuthResponse login(@Valid @RequestBody LoginRequest request) {
-        return authService.login(request);
+    public AuthResponse login(@Valid @RequestBody LoginRequest request, HttpServletRequest servletRequest) {
+        String clientIp = servletRequest.getRemoteAddr();
+        loginRateLimiter.checkAllowed(clientIp, request.getUsername());
+        try {
+            AuthResponse response = authService.login(request);
+            loginRateLimiter.recordSuccess(clientIp, request.getUsername(), "tenant_login");
+            return response;
+        } catch (ApiException ex) {
+            if (ex.getStatus() == HttpStatus.UNAUTHORIZED) {
+                loginRateLimiter.recordFailure(clientIp, request.getUsername(), "tenant_login");
+            }
+            throw ex;
+        }
     }
 
     @PostMapping("/refresh")
