@@ -90,6 +90,18 @@ class AuthFlowIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void generatedRequestIdIsAlsoIncludedInSecurityErrorBody() throws Exception {
+        org.springframework.test.web.servlet.ResultActions result = mockMvc.perform(
+                        org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                                .get("/api/v1/auth/me"))
+                .andExpect(status().isUnauthorized());
+
+        String responseRequestId = result.andReturn().getResponse().getHeader("X-Request-ID");
+        assertThat(responseRequestId).isNotBlank();
+        assertThat(body(result).path("requestId").asText()).isEqualTo(responseRequestId);
+    }
+
+    @Test
     void protectedEndpointsRequireAValidToken() throws Exception {
         String username = uniqueName("owner");
         JsonNode res = registerTenant("Protected Co", username);
