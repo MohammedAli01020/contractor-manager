@@ -11,6 +11,7 @@ on:
       - fix/accounting-concurrency-hardening
       - feature/financial-foundation
       - feature/default-chart-of-accounts
+      - feature/chart-of-accounts-api
     paths:
       - "backend/**"
       - ".github/workflows/backend-ci.yml"
@@ -20,6 +21,7 @@ on:
       - feature/platform-owner-web
       - feature/platform-owner-totp-2fa
       - feature/request-tracking
+      - feature/financial-foundation
     paths:
       - "backend/**"
       - ".github/workflows/backend-ci.yml"
