@@ -51,14 +51,14 @@ public class PlatformController {
                 } catch (ResponseStatusException ex) {
                     if (ex.getStatus() == HttpStatus.UNAUTHORIZED) {
                         loginRateLimiter.recordFailure(clientIp, request.getUsername(), "platform_login");
+                    }
+                    throw ex;
                 }
-                throw ex;
-            }
             }
         }
     }
 
-    @PostMapping("/auth/mfa/setup")
+        @PostMapping("/auth/mfa/setup")
     public PlatformMfaSetupResponse beginMfaSetup(@Valid @RequestBody PlatformMfaChallengeRequest request) {
         return service.beginTotpSetup(request);
     }
