@@ -2,6 +2,9 @@ package com.contractor.app.accounting.domain;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.contractor.app.accounting.infra.ChartAccountRepository;
 import com.contractor.app.accounting.infra.JournalEntryRepository;
@@ -12,19 +15,24 @@ import com.contractor.app.equipment.infra.EquipmentRepository;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Arrays;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 class JournalPostingServiceTest {
 
     private JournalPostingService service;
+    private JournalEntryRepository entries;
+    private JournalLineRepository lines;
 
     @BeforeEach
     void setUp() {
+        entries = mock(JournalEntryRepository.class);
+        lines = mock(JournalLineRepository.class);
         service = new JournalPostingService(
                 mock(ChartAccountRepository.class),
-                mock(JournalEntryRepository.class),
-                mock(JournalLineRepository.class),
+                entries,
+                lines,
                 mock(DriverRepository.class),
                 mock(EquipmentRepository.class));
     }
@@ -54,6 +62,55 @@ class JournalPostingServiceTest {
                 line(20L, "0.00", "100.001"));
 
         assertThrows(ApiException.class, () -> service.post(1L, 7L, request));
+    }
+
+
+    @Test
+    void returnsExistingJournalForIdenticalRetry() {
+        LocalDate accountingDate = LocalDate.of(2026, 10, 28);
+        JournalEntry existing = mock(JournalEntry.class);
+        when(existing.getId()).thenReturn(22L);
+        when(existing.getSourceType()).thenReturn("TEST");
+        when(existing.getSourceId()).thenReturn(1L);
+        when(existing.getAccountingDate()).thenReturn(accountingDate);
+        when(existing.getDescription()).thenReturn("Automated journal validation test");
+        when(existing.getReversalOfEntryId()).thenReturn(null);
+        when(entries.findByTenantIdAndPostingKey(1L, "test-posting-key"))
+                .thenReturn(Optional.of(existing));
+        JournalLine debit = new JournalLine(1L, 22L, 1, 10L, null,
+                new BigDecimal("100.00"), new BigDecimal("0.00"), null, null);
+        JournalLine credit = new JournalLine(1L, 22L, 2, 20L, null,
+                new BigDecimal("0.00"), new BigDecimal("100.00"), null, null);
+        when(lines.findByTenantIdAndJournalEntryIdOrderByLineNumberAsc(1L, 22L))
+                .thenReturn(Arrays.asList(debit, credit));
+
+        JournalEntry result = service.post(1L, 7L, request(
+                line(10L, "100.00", "0.00"),
+                line(20L, "0.00", "100.00")));
+
+        org.junit.jupiter.api.Assertions.assertSame(existing, result);
+        verify(entries, never()).saveAndFlush(org.mockito.ArgumentMatchers.any(JournalEntry.class));
+        verify(lines, never()).saveAll(org.mockito.ArgumentMatchers.anyList());
+    }
+
+    @Test
+    void rejectsReusingPostingKeyForDifferentPayload() {
+        LocalDate accountingDate = LocalDate.of(2026, 10, 28);
+        JournalEntry existing = mock(JournalEntry.class);
+        when(existing.getSourceType()).thenReturn("TEST");
+        when(existing.getSourceId()).thenReturn(1L);
+        when(existing.getAccountingDate()).thenReturn(accountingDate);
+        when(existing.getDescription()).thenReturn("A different journal");
+        when(existing.getReversalOfEntryId()).thenReturn(null);
+        when(entries.findByTenantIdAndPostingKey(1L, "test-posting-key"))
+                .thenReturn(Optional.of(existing));
+
+        JournalPostingRequest retry = request(
+                line(10L, "100.00", "0.00"),
+                line(20L, "0.00", "100.00"));
+
+        assertThrows(ApiException.class, () -> service.post(1L, 7L, retry));
+        verify(entries, never()).saveAndFlush(org.mockito.ArgumentMatchers.any(JournalEntry.class));
     }
 
     private JournalPostingRequest request(JournalLineRequest first, JournalLineRequest second) {

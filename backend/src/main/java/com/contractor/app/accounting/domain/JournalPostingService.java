@@ -15,8 +15,11 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * The single entry point for posting accounting journals. Callers provide a source document;
@@ -32,24 +35,62 @@ public class JournalPostingService {
     private final JournalLineRepository lines;
     private final DriverRepository drivers;
     private final EquipmentRepository equipment;
+    private final TransactionTemplate transactionTemplate;
 
+    @Autowired
     public JournalPostingService(ChartAccountRepository accounts, JournalEntryRepository entries,
                                  JournalLineRepository lines, DriverRepository drivers,
-                                 EquipmentRepository equipment) {
+                                 EquipmentRepository equipment, PlatformTransactionManager transactionManager) {
         this.accounts = accounts;
         this.entries = entries;
         this.lines = lines;
         this.drivers = drivers;
         this.equipment = equipment;
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
-    @Transactional
+    // Retained for isolated unit tests that do not configure a Spring transaction manager.
+    JournalPostingService(ChartAccountRepository accounts, JournalEntryRepository entries,
+                          JournalLineRepository lines, DriverRepository drivers,
+                          EquipmentRepository equipment) {
+        this.accounts = accounts;
+        this.entries = entries;
+        this.lines = lines;
+        this.drivers = drivers;
+        this.equipment = equipment;
+        this.transactionTemplate = null;
+    }
+
     public JournalEntry post(Long tenantId, Long actorUserId, JournalPostingRequest request) {
         if (tenantId == null || tenantId <= 0 || actorUserId == null || actorUserId <= 0) {
             throw ApiException.badRequest("المقاول والمستخدم المنفّذ مطلوبان للترحيل المالي.");
         }
         NormalizedJournal normalized = normalize(request);
+        if (transactionTemplate == null) {
+            return postNormalized(tenantId, actorUserId, normalized);
+        }
 
+        try {
+            return transactionTemplate.execute(status -> postNormalized(tenantId, actorUserId, normalized));
+        } catch (DataIntegrityViolationException ex) {
+            // The failed transaction has been rolled back before this recovery read.
+            Optional<JournalEntry> existing = entries.findByTenantIdAndPostingKey(tenantId, normalized.postingKey);
+            if (existing.isPresent()) {
+                JournalEntry prior = existing.get();
+                if (sameRequest(tenantId, prior, normalized)) {
+                    return prior;
+                }
+                throw ApiException.conflict("مفتاح الترحيل مستخدم بالفعل لحركة مالية مختلفة.");
+            }
+            if (normalized.reversalOfEntryId != null
+                    && entries.existsByTenantIdAndReversalOfEntryId(tenantId, normalized.reversalOfEntryId)) {
+                throw ApiException.conflict("تم عكس القيد الأصلي من قبل.");
+            }
+            throw ex;
+        }
+    }
+
+    private JournalEntry postNormalized(Long tenantId, Long actorUserId, NormalizedJournal normalized) {
         Optional<JournalEntry> existing = entries.findByTenantIdAndPostingKey(tenantId, normalized.postingKey);
         if (existing.isPresent()) {
             JournalEntry prior = existing.get();
