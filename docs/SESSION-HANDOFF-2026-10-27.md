@@ -121,3 +121,9 @@ This section supersedes any earlier next-step notes above where they conflict.
 - **Next roadmap task:** functional regression of Platform Owner tenant management: list/search/filter tenants, create a tenant and verify first-admin activation flow only with the user's approval to create a real tenant, inspect activation-link display/copy, and test suspend/reactivate only with explicit approval for the selected existing tenant. Verify tenant Admin login/access separation afterward.
 - Then continue Phase 00/01 verification: shift lifecycle, concurrent active-shift constraints for drivers/equipment, optimistic-lock conflicts, resource deactivation guards, pagination/soft-delete/tenant isolation, and Flutter analysis/tests as applicable.
 - **Not yet confirmed by these reports:** current-HEAD web build/lint output, raw backend test report, and CI runs matching the exact latest branch head.
+
+## Tenant-management smoke-check update — 2026-10-28 (user-reported)
+
+- The user confirmed that the Platform Owner tenant list, search, and filtering are present in the UI. This is not yet a full verification of edge cases or tenant data isolation.
+- Next: test tenant creation and first-admin activation with a **dedicated test tenant only after explicit user approval**. Do not create a real tenant or alter an existing tenant's status without approval.
+- After the approved test, verify activation-link display/copy and the tenant Admin login/access boundary; then test suspend/reactivate only against an explicitly selected test tenant.
