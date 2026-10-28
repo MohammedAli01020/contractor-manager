@@ -42,3 +42,12 @@
 - Removed tests for the old lock-stripe approach. Existing HTTP concurrency integration tests still cover both login endpoints.
 - **Verification status:** GitHub workflow-run lookup did not return a run for the latest test commit during this update. Do not treat the code as CI-verified until a Maven test run succeeds.
 - No database/Flyway changes, deployment, or merge to `main`.
+
+
+## Final review and local test verification — 2026-10-28
+
+- **User-provided local Maven result:** `mvn test` completed with `BUILD SUCCESS`: 129 tests, 0 failures, 0 errors, 0 skipped. The Surefire reports specifically confirm `LoginAttemptRateLimiterTest`: 11 tests passed, and `LoginThrottlingIntegrationTest`: 4 tests passed.
+- The local checkout's `HEAD` and `origin/feature/request-tracking` both matched `047184be825a1b7d86dcdc9d5dc5078c4cead791` when verified.
+- **Code-review follow-up:** `AuthController` and `PlatformController` use the reservation API (`beginAttempt` / `Attempt`), but the limiter still exposes legacy `checkAllowed`, `recordFailure`, and `recordSuccess` methods. These legacy methods mutate counters outside `reservationLock`; if called concurrently with reservation-based requests, they are not coordinated by the reservation protocol. Current controllers do not use those legacy methods, but the API inconsistency should be resolved (remove unused legacy methods and adapt tests, or make all counter mutation paths use one synchronization protocol) before treating the implementation review as fully closed.
+- **Verification boundary:** the 129-test result is from the user's local Maven run at the commit above. No confirmed GitHub Actions result was available for the latest reservation-refactor commit, and no load benchmark was run.
+- No code was changed as part of this review note. No database/Flyway changes, deployment, or merge to `main`. The user's local `.gitignore` modification remains outside the repository commit.
