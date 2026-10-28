@@ -45,7 +45,7 @@ Do not blindly switch to `REQUIRES_NEW`: independently committing a journal coul
 - [x] Static review of V17 constraints completed.
 - [x] Confirmed integration tests use a fresh disposable MySQL 8 database and Spring application startup enables Flyway plus Hibernate schema validation.
 - [x] Verified CI for commit `9258c32db339556bb3b83f4787de345d18b20c1f`: Maven tests and the new guard passed; the accounting integration tests were executed and none were skipped.
-- [ ] Document and verify the process-local login limiter as a known single-instance limitation; do not claim cluster-wide throttling.
+- [x] Documented and verified the process-local login limiter: source explicitly states it is per-process; unit tests cover identity/IP limits, 15-minute expiry, concurrent attempts, and bucket capacity. CI passed on commit `9258c32db339556bb3b83f4787de345d18b20c1f`. This remains single-instance protection, not cluster-wide throttling.
 - [ ] Before wiring journal posting into a production source workflow, test transaction propagation and preserve atomicity.
 - [ ] After all acceptance checks, update this document and Issue #8, then decide whether to merge. Do not modify the base branch or local-only `.gitignore` changes as part of this review.
 
