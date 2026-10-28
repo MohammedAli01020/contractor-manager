@@ -5,7 +5,7 @@
 - The existing per-tenant user query is reused to calculate counts and select the company Admin. No schema change or database migration was added.
 - Extended `PlatformOwnerActivationIntegrationTest` to cover total and active account counts, including disabled and pending-activation users.
 - **Verification status:** implementation is committed to `feature/request-tracking`; CI and local backend/frontend checks for this increment are still pending. The user has confirmed the frontend `npm run lint` and `npm run build` succeeded for the previously tested state, but those results do not independently verify these newest changes.
-- **Next:** fast-forward the local branch without disturbing local `.gitignore` edits, remove only the three confirmed zero-byte accidental files if desired, then run backend tests and frontend lint/build again. Keep last successful login and persistent login-attempt logging as separate future work; neither is represented by these counts.
+- **Next:** fast-forward the local branch without disturbing local `.gitignore` edits, remove only the three confirmed zero-byte accidental files if desired, then run backend tests and frontend lint/build again. Last-login timestamps and persistent login security events are implemented separately and documented below; they are not represented by these account counts.
 
 ---
 
