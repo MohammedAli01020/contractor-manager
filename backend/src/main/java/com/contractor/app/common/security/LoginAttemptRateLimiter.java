@@ -36,6 +36,7 @@ public class LoginAttemptRateLimiter {
     private final int maxIdentityBuckets;
     private final int maxIpBuckets;
     private final AtomicLong lastPruneAt = new AtomicLong();
+    private final Object[] identityLocks = new Object[256];
 
     public LoginAttemptRateLimiter() {
         this(Clock.systemUTC());
@@ -50,8 +51,16 @@ public class LoginAttemptRateLimiter {
             throw new IllegalArgumentException("Bucket limits must be positive");
         }
         this.clock = clock;
+        for (int index = 0; index < identityLocks.length; index++) {
+            identityLocks[index] = new Object();
+        }
         this.maxIdentityBuckets = maxIdentityBuckets;
         this.maxIpBuckets = maxIpBuckets;
+    }
+
+    /** A fixed lock stripe serializes authentication attempts for the same identity without unbounded lock allocation. */
+    public Object identityLock(String clientIp, String username) {
+        return identityLocks[Math.floorMod(identityKey(clientIp, username).hashCode(), identityLocks.length)];
     }
 
     public void checkAllowed(String clientIp, String username) {
