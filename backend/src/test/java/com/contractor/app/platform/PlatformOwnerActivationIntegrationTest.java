@@ -139,11 +139,20 @@ class PlatformOwnerActivationIntegrationTest extends AbstractIntegrationTest {
         MvcResult tenantEventsResult = mockMvc.perform(get("/api/v1/platform/security/login-events?type=TENANT_USER")
                 .header("Authorization", "Bearer " + ownerToken))
                 .andExpect(status().isOk()).andReturn();
-        assertTrue(objectMapper.readTree(tenantEventsResult.getResponse().getContentAsString()).path("items").isArray());
+        JsonNode tenantEvents = objectMapper.readTree(tenantEventsResult.getResponse().getContentAsString()).path("items");
+        assertTrue(tenantEvents.isArray());
+        tenantEvents.forEach(event -> assertEquals("TENANT_USER", event.path("principalType").asText()));
+
         MvcResult platformEventsResult = mockMvc.perform(get("/api/v1/platform/security/login-events?type=PLATFORM_OWNER")
                 .header("Authorization", "Bearer " + ownerToken))
                 .andExpect(status().isOk()).andReturn();
-        assertTrue(objectMapper.readTree(platformEventsResult.getResponse().getContentAsString()).path("items").isArray());
+        JsonNode platformEvents = objectMapper.readTree(platformEventsResult.getResponse().getContentAsString()).path("items");
+        assertTrue(platformEvents.isArray());
+        platformEvents.forEach(event -> assertEquals("PLATFORM_OWNER", event.path("principalType").asText()));
+
+        mockMvc.perform(get("/api/v1/platform/security/login-events?type=TENANT_USER")
+                .header("Authorization", "Bearer " + tenantToken))
+                .andExpect(status().isForbidden());
         mockMvc.perform(post("/api/v1/platform/tenants").header("Authorization", "Bearer " + tenantToken)
                 .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(create)))
                 .andExpect(status().isForbidden());
