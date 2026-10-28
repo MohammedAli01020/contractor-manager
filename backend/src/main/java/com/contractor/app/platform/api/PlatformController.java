@@ -43,14 +43,14 @@ public class PlatformController {
         String clientIp = servletRequest.getRemoteAddr();
         synchronized (loginRateLimiter.ipLock(clientIp)) {
             synchronized (loginRateLimiter.identityLock(clientIp, request.getUsername())) {
-            loginRateLimiter.checkAllowed(clientIp, request.getUsername());
-            try {
-                PlatformLoginResponse response = service.login(request);
-                loginRateLimiter.recordSuccess(clientIp, request.getUsername(), "platform_login");
-                return response;
-            } catch (ResponseStatusException ex) {
-                if (ex.getStatus() == HttpStatus.UNAUTHORIZED) {
-                    loginRateLimiter.recordFailure(clientIp, request.getUsername(), "platform_login");
+                loginRateLimiter.checkAllowed(clientIp, request.getUsername());
+                try {
+                    PlatformLoginResponse response = service.login(request);
+                    loginRateLimiter.recordSuccess(clientIp, request.getUsername(), "platform_login");
+                    return response;
+                } catch (ResponseStatusException ex) {
+                    if (ex.getStatus() == HttpStatus.UNAUTHORIZED) {
+                        loginRateLimiter.recordFailure(clientIp, request.getUsername(), "platform_login");
                 }
                 throw ex;
             }
