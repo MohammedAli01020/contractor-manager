@@ -154,3 +154,14 @@ Follow this order. Continue on `feature/platform-owner-activation`; do not merge
 - **Deployment caveat:** counters remain process-local and reset on restart. A shared atomic store is required for consistent enforcement across multiple backend instances. The client IP uses `getRemoteAddr()`; behind a reverse proxy, configure trusted-proxy handling rather than trusting arbitrary forwarded headers.
 - **Database safety:** no schema/Flyway changes were introduced. No merge to `main` and no production deployment.
 
+
+
+## Login throttling hardening — CI verified (2026-10-28)
+
+- **Branch:** `feature/request-tracking`.
+- **User-provided GitHub Actions result:** Maven test step **success** for code/test commit `cb7c18f4968a37f44174bb5ddfb433724b456527`. This confirms the Maven test step passed for that commit; it does not imply a separate production or deployment verification.
+- **Current branch HEAD at handoff:** `6cfa193e1b40ba948665940e818a2cfc7110edbf` (documentation follow-up after the tested code/test commit).
+- **Implemented:** separate bounded identity/IP bucket maps (50,000 identity buckets; 10,000 IP buckets), periodic expired-entry pruning, oldest-entry eviction at capacity, fixed lock stripes, and serialized tenant and Platform Owner login attempts for the same normalized username/IP identity. Added tests for capacity behavior, positive capacity validation, and stable identity lock selection.
+- **Remaining concurrency caveat:** requests for different usernames from the same IP are not serialized around the shared IP-wide threshold; simultaneous requests may race at that threshold. Do not claim all concurrent limiter races are eliminated.
+- **Production caveats:** counters remain per-process and reset on restart; multiple replicas need a shared atomic rate-limit store. Behind a reverse proxy, configure trusted client-IP handling. Bounded eviction can allow high-cardinality traffic to evict older counters, so abuse/availability behavior still needs production review.
+- **Safety:** no database schema/Flyway changes, deployment, or merge to `main`.
