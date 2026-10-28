@@ -19,6 +19,14 @@ import org.springframework.http.HttpStatus;
 class LoginAttemptRateLimiterTest {
 
     @Test
+    void ipLockIsStableForSameIpAndDistinctAcrossDifferentIps() {
+        LoginAttemptRateLimiter limiter = new LoginAttemptRateLimiter(Clock.systemUTC());
+
+        assertThat(limiter.ipLock("192.0.2.30")).isSameAs(limiter.ipLock("192.0.2.30"));
+        assertThat(limiter.ipLock("192.0.2.30")).isNotSameAs(limiter.ipLock("192.0.2.31"));
+    }
+
+    @Test
     void identityLockIsStableForCaseInsensitiveUsernameAndSameIp() {
         LoginAttemptRateLimiter limiter = new LoginAttemptRateLimiter(Clock.systemUTC());
 
