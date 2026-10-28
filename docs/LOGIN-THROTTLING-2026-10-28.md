@@ -51,3 +51,11 @@
 - **Code-review follow-up:** `AuthController` and `PlatformController` use the reservation API (`beginAttempt` / `Attempt`), but the limiter still exposes legacy `checkAllowed`, `recordFailure`, and `recordSuccess` methods. These legacy methods mutate counters outside `reservationLock`; if called concurrently with reservation-based requests, they are not coordinated by the reservation protocol. Current controllers do not use those legacy methods, but the API inconsistency should be resolved (remove unused legacy methods and adapt tests, or make all counter mutation paths use one synchronization protocol) before treating the implementation review as fully closed.
 - **Verification boundary:** the 129-test result is from the user's local Maven run at the commit above. No confirmed GitHub Actions result was available for the latest reservation-refactor commit, and no load benchmark was run.
 - No code was changed as part of this review note. No database/Flyway changes, deployment, or merge to `main`. The user's local `.gitignore` modification remains outside the repository commit.
+
+
+## Legacy API cleanup — verification pending
+
+- Removed the legacy `checkAllowed`, `recordFailure`, and `recordSuccess` methods from `LoginAttemptRateLimiter`, along with their independent counter-mutation helpers. The production controllers already use `beginAttempt(...)` and complete each reservation through `Attempt.failure(...)` or `Attempt.success(...)`.
+- Reworked the unit tests to exercise the same reservation protocol rather than the removed legacy methods. The successful-login reset test now verifies that success clears failures before the threshold is reached; the concurrent unit test asserts that only five of 40 simultaneous attempts reach authentication.
+- **Verification pending:** these changes were made after the user's successful 129-test Maven run. Re-run `mvn test` on the latest `feature/request-tracking` commit before considering this cleanup validated.
+- No database/Flyway changes, deployment, or merge to `main`. The user's local `.gitignore` modification remains outside the repository commit.
