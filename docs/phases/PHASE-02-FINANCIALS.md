@@ -48,9 +48,10 @@ Build auditable financial ledgers and monthly closing without double-counting sh
 
 ## Implementation plan and current evidence
 - Design baseline: [FINANCIAL-FOUNDATION-DESIGN.md](FINANCIAL-FOUNDATION-DESIGN.md).
-- First coding step: inspect the actual tenant/base entity, money conventions, migration version, and any existing accounting or inventory implementation on this branch before creating additive migrations.
-- Implement journal/account core first; then driver ledger and expense categories/documents; then cash/bank and close; inventory follows with shared posting rules.
-- This phase is **not implemented or tested yet** merely because the design is documented. Update each checklist item only after code and tests provide evidence.
+- Baseline inspected: tenant-scoped entities, `BaseTenantEntity`, `Money`, existing shift snapshots, user identity and Flyway migrations through V16.
+- Initial accounting-core code is present on `feature/financial-foundation`: additive migration V17 creates tenant-scoped chart of accounts, journal entries and journal lines; Java models/repositories and `JournalPostingService` validate balanced lines, account/driver/equipment tenant ownership, idempotency keys and exact reversal lines. Initial validation tests were added.
+- **Verification is pending:** the connected GitHub environment did not report CI runs for the latest commit, and the backend test suite has not yet been executed in the local project. Do not mark the core tested until `mvn test` and a MySQL/Flyway migration run succeed.
+- Next: run backend tests and Flyway migration locally, fix any failures, then add tenant default chart/bootstrap and safe account management before connecting completed shifts, driver payables and expenses.
 
 ## Dependencies and next action
 Depends on stable Phase 0/1 behavior and a verified schema baseline. Balance sign convention is defined in the design as positive = amount payable to driver; payment/advance/deduction reduce the payable. Recognition date is separate from payment date. Monthly close/reopen is controlled and audited. Before schema changes, inspect the current code, migrations and tests, then implement the smallest reviewable accounting-core slice.
