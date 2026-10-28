@@ -143,3 +143,14 @@ Follow this order. Continue on `feature/platform-owner-activation`; do not merge
 - **Verification pending:** changes were committed through the GitHub file API, but tests/build and CI have not yet been observed. Do not describe this increment as verified until the checks pass.
 - **Next:** inspect the complete diff and run backend tests/CI on this branch. Then address any findings before moving to login throttling/security events. Idempotency and offline sync remain future phases; this change does not implement either.
 - **Safety:** existing database and migrations were not changed. Do not merge to `main` or deploy without explicit approval.
+
+## Login throttling follow-up review — 2026-10-28
+
+- **Branch:** `feature/request-tracking`.
+- **CI evidence:** GitHub Actions [Backend CI run 40666959386](https://github.com/MohammedAli01020/contractor-manager/actions/runs/40666959386) completed successfully on code commit `e7f7541af4f66b07d37db4d9b73103290896e688`. The current branch HEAD is `8ee12ad77d8c66f956f098e0f76dc68890d52aa6`; the only commit after the green run is the documentation update `Document limiter hardening and expanded test coverage`. The code changes in this review were included in the tested commit.
+- **Review checked:** both tenant and Platform Owner login controller integrations; in-memory limiter thresholds and expiry; safe security-event logging; platform dummy BCrypt check; tests for expiry, per-IP threshold, concurrent failure recording, and both login endpoints.
+- **Remaining production caveat:** the 50,000-bucket ceiling rejects requests for new identities when the map is full. This bounds memory, but an attacker able to fill the map could cause a broad login-availability failure for otherwise legitimate new identities. Treat this as a known trade-off to resolve before production; consider a bounded cache/eviction strategy or shared rate-limit store with explicit abuse and availability behavior.
+- **Concurrency caveat:** the unit test verifies concurrent failure recording, not many simultaneous in-flight login requests. Since `checkAllowed` and `recordFailure` are separate operations, concurrent requests can pass the check before earlier failures are recorded. Add a focused concurrency test and decide whether an in-flight attempt guard is warranted.
+- **Deployment caveat:** counters remain process-local and reset on restart. A shared atomic store is required for consistent enforcement across multiple backend instances. The client IP uses `getRemoteAddr()`; behind a reverse proxy, configure trusted-proxy handling rather than trusting arbitrary forwarded headers.
+- **Database safety:** no schema/Flyway changes were introduced. No merge to `main` and no production deployment.
+
