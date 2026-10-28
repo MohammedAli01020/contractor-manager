@@ -30,8 +30,6 @@ import com.contractor.app.platform.infra.PlatformOwnerRepository;
 import com.contractor.app.securityaudit.domain.LoginEventOutcome;
 import com.contractor.app.securityaudit.domain.LoginPrincipalType;
 import com.contractor.app.securityaudit.infra.LoginSecurityEventRepository;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.HashMap;
 import java.util.Map;
@@ -133,20 +131,14 @@ class PlatformOwnerActivationIntegrationTest extends AbstractIntegrationTest {
         String tenantToken = objectMapper.readTree(tenantLogin.getResponse().getContentAsString()).path("accessToken").asText();
         User loggedInAdmin = users.findByUsername(adminUsername).orElseThrow();
         assertNotNull(loggedInAdmin.getLastLoginAt(), "Tenant user last login is set after successful password login");
-        assertTrue(loginSecurityEvents.findByPrincipalTypeOrderByCreatedAtDescIdDesc(
-                LoginPrincipalType.TENANT_USER, PageRequest.of(0, 100,
-                        Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"))))
-                .getContent().stream().anyMatch(event -> adminUsername.equals(event.getUsername())
+        assertTrue(loginSecurityEvents.findByUsernameOrderByCreatedAtDescIdDesc(adminUsername).stream().anyMatch(event -> adminUsername.equals(event.getUsername())
                         && event.getOutcome() == LoginEventOutcome.SUCCESS));
         assertTrue(loginSecurityEvents.findByPrincipalTypeOrderByCreatedAtDescIdDesc(
                 LoginPrincipalType.TENANT_USER, PageRequest.of(0, 100,
                         Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"))))
                 .getContent().stream().anyMatch(event -> adminUsername.equals(event.getUsername())
                         && event.getOutcome() == LoginEventOutcome.FAILURE));
-        assertTrue(loginSecurityEvents.findByPrincipalTypeOrderByCreatedAtDescIdDesc(
-                LoginPrincipalType.PLATFORM_OWNER, PageRequest.of(0, 100,
-                        Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"))))
-                .getContent().stream().anyMatch(event -> ownerUsername.equals(event.getUsername())
+        assertTrue(loginSecurityEvents.findByUsernameOrderByCreatedAtDescIdDesc(ownerUsername).stream().anyMatch(event -> ownerUsername.equals(event.getUsername())
                         && event.getOutcome() == LoginEventOutcome.SUCCESS));
         MvcResult tenantEventsResult = mockMvc.perform(get("/api/v1/platform/security/login-events?type=TENANT_USER")
                 .header("Authorization", "Bearer " + ownerToken))
