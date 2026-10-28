@@ -206,3 +206,14 @@ Follow this order. Continue on `feature/platform-owner-activation`; do not merge
 - The test result validates the reported Maven test step for this commit. It does not validate production load, latency, multi-instance rate limiting, or deployment behavior.
 - **Remaining trade-off:** IP lock serializes full login flows sharing the same lock stripe. Benchmark before production; consider a shared atomic limiter/reservation design if latency or throughput is unacceptable.
 - No database/Flyway changes, deployment, or merge to `main`.
+
+
+## Login bucket-pruning optimization — verified (2026-10-28)
+
+- **Branch:** `feature/request-tracking`.
+- **Code commit:** `f87cb0d54d81219c7f0238e71ab70a90ae2b2a82`.
+- **Test commit:** `5e82a0632f54ae018be2980c823609de57cd799d`.
+- **Verification:** GitHub Actions [Backend CI run 40675857991](https://github.com/MohammedAli01020/contractor-manager/actions/runs/40675857991) completed successfully for the test commit. The user also confirmed: Maven test step **success**.
+- **Implemented:** avoid sweeping the entire bucket map for every new identity; prune expired entries during insertion only when capacity pressure is reached, before evicting an older entry. Added a test for expired-entry pruning while preserving an active identity throttle.
+- **Limitations:** no load/performance benchmark has been run. Login flows sharing an IP lock stripe remain serialized, and counters remain in-memory per JVM.
+- **Safety:** no database/Flyway changes, deployment, or merge to `main`.
