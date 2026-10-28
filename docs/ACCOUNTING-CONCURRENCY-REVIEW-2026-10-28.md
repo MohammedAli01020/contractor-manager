@@ -13,7 +13,7 @@ Static review of `backend/src/main/resources/db/migration/V17__create_accounting
 ### Fresh-database startup verification
 The integration-test base class starts a disposable `mysql:8.0` Testcontainers database with a new `contractor_test` schema. The tests use `@SpringBootTest` with the `test` profile; no test-specific application configuration overrides Flyway. The main application config enables Flyway at `classpath:db/migration` and sets Hibernate schema handling to `validate`. Consequently, a successful Spring context startup for these integration tests exercises Flyway migrations against a fresh MySQL schema and Hibernate schema validation, rather than an H2 approximation.
 
-The integration-test base deliberately skips tests if Docker is unavailable. To prevent a green CI run that silently skipped this critical path, `.github/workflows/backend-ci.yml` now has a guard that requires the accounting concurrency integration-test report to exist, contain tests, and report zero skipped tests. This is an automated startup/migration check through the integration-test application context; it is not a separate standalone `flyway validate` job. The guard has been committed and its newly triggered CI result must be checked before marking this acceptance item complete.
+The integration-test base deliberately skips tests if Docker is unavailable. To prevent a green CI run that silently skipped this critical path, `.github/workflows/backend-ci.yml` has a guard that requires the accounting concurrency integration-test report to exist, contain tests, and report zero skipped tests. This is an automated startup/migration check through the integration-test application context; it is not a separate standalone `flyway validate` job. The guard's CI run succeeded: [run 40740171474](https://github.com/MohammedAli01020/contractor-manager/actions/runs/40740171474), including the Maven tests and the required integration-test guard.
 
 ## Changes and verification
 
@@ -47,7 +47,8 @@ Do not blindly switch to `REQUIRES_NEW`: independently committing a journal coul
 - [x] Verified CI for commit `9258c32db339556bb3b83f4787de345d18b20c1f`: Maven tests and the new guard passed; the accounting integration tests were executed and none were skipped.
 - [x] Documented and verified the process-local login limiter: source explicitly states it is per-process; unit tests cover identity/IP limits, 15-minute expiry, concurrent attempts, and bucket capacity. CI passed on commit `9258c32db339556bb3b83f4787de345d18b20c1f`. This remains single-instance protection, not cluster-wide throttling.
 - [ ] Before wiring journal posting into a production source workflow, test transaction propagation and preserve atomicity.
-- [ ] After all acceptance checks, update this document and Issue #8, then decide whether to merge. Do not modify the base branch or local-only `.gitignore` changes as part of this review.
+- [x] Final branch comparison reviewed against `feature/financial-foundation`: 20 commits ahead, 0 behind; the diff is limited to the backend CI workflow, journal posting/error handling, concurrency/service tests, and the two review/handoff documents. No unrelated changed files were reported by GitHub's compare endpoint.
+- [ ] Merge decision remains pending explicit approval. Do not modify the base branch or local-only `.gitignore` changes as part of this review.
 
 ## Deployment scope
 The current deployment target is one backend instance. Redis/shared rate limiting and multi-instance operations are deferred. Any process-local `LoginAttemptRateLimiter` is not cluster-wide protection.
