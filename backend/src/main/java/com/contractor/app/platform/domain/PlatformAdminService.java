@@ -191,14 +191,19 @@ public class PlatformAdminService {
  public List<PlatformTenantSummary> listTenants(){
   return tenants.findAll(Sort.by(Sort.Direction.DESC, "createdAt")).stream()
    .map(tenant -> {
-    PlatformAdminSummary admin = users.findByTenantIdOrderByFullNameAsc(tenant.getId()).stream()
+    List<User> tenantUsers = users.findByTenantIdOrderByFullNameAsc(tenant.getId());
+    int totalUsers = tenantUsers.size();
+    int activeUsers = (int) tenantUsers.stream()
+      .filter(user -> user.isActive() && user.isPasswordActivated())
+      .count();
+    PlatformAdminSummary admin = tenantUsers.stream()
      .filter(user -> user.getRole() == Role.ADMIN)
      .findFirst()
      .map(user -> new PlatformAdminSummary(user.getId(), user.getFullName(), user.getUsername(),
        user.isActive(), user.isPasswordActivated(), user.getPhone(), user.getEmail(), user.isEmailVerified()))
      .orElse(null);
     return new PlatformTenantSummary(tenant.getId(), tenant.getName(), tenant.getStatus().name(),
-      tenant.getCreatedAt(), tenant.getUpdatedAt(), admin);
+      tenant.getCreatedAt(), tenant.getUpdatedAt(), totalUsers, activeUsers, admin);
    })
    .collect(Collectors.toList());
  }
