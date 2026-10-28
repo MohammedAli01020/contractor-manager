@@ -17,6 +17,7 @@ public final class JsonErrorWriter {
         response.setStatus(status.value());
         response.setContentType("application/json;charset=UTF-8");
         mapper.writeValue(response.getOutputStream(),
-                new ApiError(status.value(), code, message, request.getRequestURI(), null, null,\n                        request.getHeader(com.contractor.app.common.web.RequestTrackingFilter.HEADER_NAME)));
+                new ApiError(status.value(), code, message, request.getRequestURI(), null, null,
+                        request.getHeader(com.contractor.app.common.web.RequestTrackingFilter.HEADER_NAME)));
     }
 }
