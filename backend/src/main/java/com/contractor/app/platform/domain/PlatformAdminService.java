@@ -1,5 +1,6 @@
 package com.contractor.app.platform.domain;
 
+import com.contractor.app.accounting.domain.DefaultChartOfAccountsService;
 import com.contractor.app.common.security.JwtService;
 import com.contractor.app.common.email.PlatformEmailService;
 import com.contractor.app.common.security.TokenHasher;
@@ -50,6 +51,7 @@ public class PlatformAdminService {
  private final String baseUrl; private final long activationHours; private final boolean linkReturnEnabled; private final PlatformEmailService emailService;
  private final PlatformTotpService totp; private final PlatformTotpSecretCipher totpCipher;
  private final PlatformOwnerRecoveryCodeRepository recoveryCodes;
+ private final DefaultChartOfAccountsService defaultChartOfAccounts;
  private static final SecureRandom RECOVERY_RANDOM = new SecureRandom();
  // A fixed BCrypt hash keeps the password-check cost similar when the account is absent or inactive.
  private static final String DUMMY_PASSWORD_HASH = "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy";
@@ -57,7 +59,7 @@ public class PlatformAdminService {
  public PlatformAdminService(PlatformOwnerRepository owners,TenantRepository tenants,UserRepository users,TenantAdminActivationTokenRepository tokens,PasswordEncoder encoder,JwtService jwt, PlatformEmailService emailService, Environment environment,
  @Value("${app.platform.activation-base-url:http://localhost:8081/activate-admin/index.html}") String baseUrl,
  @Value("${app.platform.activation-hours:24}") long activationHours,
- @Value("${app.platform.activation-link-return-enabled:false}") boolean linkReturnEnabled, PlatformTotpService totp, PlatformTotpSecretCipher totpCipher , PlatformOwnerRecoveryCodeRepository recoveryCodes){this.owners=owners;this.tenants=tenants;this.users=users;this.tokens=tokens;this.encoder=encoder;this.jwt=jwt;this.emailService=emailService;this.baseUrl=baseUrl;this.activationHours=activationHours;this.linkReturnEnabled=linkReturnEnabled && environment.acceptsProfiles(Profiles.of("dev","test"));this.totp=totp;this.totpCipher=totpCipher;this.recoveryCodes=recoveryCodes;}
+ @Value("${app.platform.activation-link-return-enabled:false}") boolean linkReturnEnabled, PlatformTotpService totp, PlatformTotpSecretCipher totpCipher , PlatformOwnerRecoveryCodeRepository recoveryCodes, DefaultChartOfAccountsService defaultChartOfAccounts){this.owners=owners;this.tenants=tenants;this.users=users;this.tokens=tokens;this.encoder=encoder;this.jwt=jwt;this.emailService=emailService;this.baseUrl=baseUrl;this.activationHours=activationHours;this.linkReturnEnabled=linkReturnEnabled && environment.acceptsProfiles(Profiles.of("dev","test"));this.totp=totp;this.totpCipher=totpCipher;this.recoveryCodes=recoveryCodes;this.defaultChartOfAccounts=defaultChartOfAccounts;}
  @Transactional
  public PlatformLoginResponse login(PlatformLoginRequest req){
   String username=User.normalizeUsername(req.getUsername());
@@ -222,6 +224,7 @@ public class PlatformAdminService {
   String username=User.normalizeUsername(req.getAdminUsername());
   if(users.existsByUsername(username)) throw new ResponseStatusException(HttpStatus.CONFLICT,"اسم المستخدم مستخدم بالفعل");
   Tenant tenant=tenants.saveAndFlush(new Tenant(req.getTenantName().trim()));
+  defaultChartOfAccounts.initializeForTenant(tenant.getId());
   String raw=TokenHasher.newOpaqueToken();
   User admin=new User(tenant.getId(),username,req.getAdminFullName().trim(),req.getAdminPhone(),encoder.encode(TokenHasher.newOpaqueToken()),Role.ADMIN);
   admin.setEmail(req.getAdminEmail()); admin.setPasswordActivated(false); admin=users.saveAndFlush(admin);

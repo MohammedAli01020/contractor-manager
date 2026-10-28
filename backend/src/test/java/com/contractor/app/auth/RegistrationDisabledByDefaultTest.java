@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.contractor.app.accounting.domain.DefaultChartOfAccountsService;
 import com.contractor.app.audit.domain.AuditService;
 import com.contractor.app.auth.api.dto.RegisterTenantRequest;
 import com.contractor.app.auth.domain.AuthService;
@@ -34,7 +35,7 @@ class RegistrationDisabledByDefaultTest {
         when(encoder.encode(anyString())).thenReturn("test-hash");
 
         AuthService service = new AuthService(
-                tenants, users, refreshTokens, encoder, jwt, audit, false, 30L, new StandardEnvironment(), loginSecurityEvents);
+                tenants, users, refreshTokens, encoder, jwt, audit, false, 30L, new StandardEnvironment(), loginSecurityEvents, mock(DefaultChartOfAccountsService.class));
 
         assertThatThrownBy(() -> service.registerTenant(mock(RegisterTenantRequest.class)))
                 .isInstanceOf(ApiException.class)
@@ -53,7 +54,7 @@ class RegistrationDisabledByDefaultTest {
         when(encoder.encode(anyString())).thenReturn("test-hash");
 
         AuthService service = new AuthService(
-                tenants, users, refreshTokens, encoder, jwt, audit, true, 30L, new StandardEnvironment(), loginSecurityEvents);
+                tenants, users, refreshTokens, encoder, jwt, audit, true, 30L, new StandardEnvironment(), loginSecurityEvents, mock(DefaultChartOfAccountsService.class));
 
         assertThatThrownBy(() -> service.registerTenant(mock(RegisterTenantRequest.class)))
                 .isInstanceOf(ApiException.class)
