@@ -10,6 +10,7 @@ import com.contractor.app.common.error.ApiException;
 import com.contractor.app.common.security.AuthenticatedUser;
 import com.contractor.app.common.security.CurrentUser;
 import com.contractor.app.common.security.LoginAttemptRateLimiter;
+import com.contractor.app.common.web.RequestTrackingFilter;
 import com.contractor.app.securityaudit.domain.LoginSecurityEventService;
 import com.contractor.app.user.api.dto.UserResponse;
 import com.contractor.app.user.domain.UserService;
@@ -54,12 +55,12 @@ public class AuthController {
     @Operation(summary = "تسجيل الدخول")
     public AuthResponse login(@Valid @RequestBody LoginRequest request, HttpServletRequest servletRequest) {
         String clientIp = servletRequest.getRemoteAddr();
-        String requestId = servletRequest.getHeader("X-Request-ID");
+        String requestId = (String) servletRequest.getAttribute(RequestTrackingFilter.REQUEST_ID_ATTRIBUTE);
         try {
             try (LoginAttemptRateLimiter.Attempt attempt =
                          loginRateLimiter.beginAttempt(clientIp, request.getUsername())) {
                 try {
-                    AuthResponse response = authService.login(request);
+                    AuthResponse response = authService.login(request, clientIp, requestId);
                     attempt.success("tenant_login");
                     return response;
                 } catch (ApiException ex) {
