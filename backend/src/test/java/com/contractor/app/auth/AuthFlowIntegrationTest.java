@@ -79,6 +79,17 @@ class AuthFlowIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void requestIdIsIncludedInSecurityEntryPointErrors() throws Exception {
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .get("/api/v1/auth/me")
+                        .header("X-Request-ID", "unauthenticated-request-7"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .header().string("X-Request-ID", "unauthenticated-request-7"))
+                .andExpect(jsonPath("$.requestId").value("unauthenticated-request-7"));
+    }
+
+    @Test
     void protectedEndpointsRequireAValidToken() throws Exception {
         String username = uniqueName("owner");
         JsonNode res = registerTenant("Protected Co", username);
