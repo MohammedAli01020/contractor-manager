@@ -102,11 +102,4 @@ public class JournalEntry extends BaseTenantEntity {
     public LocalDateTime getPostedAt() {
         return postedAt;
     }
-
-    public void markReversed() {
-        if (status != JournalEntryStatus.POSTED) {
-            throw new IllegalStateException("Only a posted journal can be reversed.");
-        }
-        status = JournalEntryStatus.REVERSED;
-    }
 }
