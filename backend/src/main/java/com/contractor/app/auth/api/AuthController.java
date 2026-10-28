@@ -68,7 +68,7 @@ public class AuthController {
         }
     }
 
-        @PostMapping("/refresh")
+    @PostMapping("/refresh")
     @Operation(summary = "تجديد الجلسة (الرمز القديم يُلغى ويصدر رمز جديد)")
     public AuthResponse refresh(@Valid @RequestBody RefreshTokenRequest request) {
         return authService.refresh(request.getRefreshToken());
