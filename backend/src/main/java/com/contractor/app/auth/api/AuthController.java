@@ -51,19 +51,17 @@ public class AuthController {
     @Operation(summary = "تسجيل الدخول")
     public AuthResponse login(@Valid @RequestBody LoginRequest request, HttpServletRequest servletRequest) {
         String clientIp = servletRequest.getRemoteAddr();
-        synchronized (loginRateLimiter.ipLock(clientIp)) {
-            synchronized (loginRateLimiter.identityLock(clientIp, request.getUsername())) {
-                loginRateLimiter.checkAllowed(clientIp, request.getUsername());
-                try {
-                    AuthResponse response = authService.login(request);
-                    loginRateLimiter.recordSuccess(clientIp, request.getUsername(), "tenant_login");
-                    return response;
-                } catch (ApiException ex) {
-                    if (ex.getStatus() == HttpStatus.UNAUTHORIZED) {
-                        loginRateLimiter.recordFailure(clientIp, request.getUsername(), "tenant_login");
-                    }
-                    throw ex;
+        try (LoginAttemptRateLimiter.Attempt attempt =
+                     loginRateLimiter.beginAttempt(clientIp, request.getUsername())) {
+            try {
+                AuthResponse response = authService.login(request);
+                attempt.success("tenant_login");
+                return response;
+            } catch (ApiException ex) {
+                if (ex.getStatus() == HttpStatus.UNAUTHORIZED) {
+                    attempt.failure("tenant_login");
                 }
+                throw ex;
             }
         }
     }
