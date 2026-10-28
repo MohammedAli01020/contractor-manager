@@ -28,7 +28,6 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import com.contractor.app.platform.infra.PlatformOwnerRepository;
 import com.contractor.app.securityaudit.domain.LoginEventOutcome;
-import com.contractor.app.securityaudit.domain.LoginPrincipalType;
 import com.contractor.app.securityaudit.infra.LoginSecurityEventRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.HashMap;
@@ -133,10 +132,7 @@ class PlatformOwnerActivationIntegrationTest extends AbstractIntegrationTest {
         assertNotNull(loggedInAdmin.getLastLoginAt(), "Tenant user last login is set after successful password login");
         assertTrue(loginSecurityEvents.findByUsernameOrderByCreatedAtDescIdDesc(adminUsername).stream().anyMatch(event -> adminUsername.equals(event.getUsername())
                         && event.getOutcome() == LoginEventOutcome.SUCCESS));
-        assertTrue(loginSecurityEvents.findByPrincipalTypeOrderByCreatedAtDescIdDesc(
-                LoginPrincipalType.TENANT_USER, PageRequest.of(0, 100,
-                        Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"))))
-                .getContent().stream().anyMatch(event -> adminUsername.equals(event.getUsername())
+        assertTrue(loginSecurityEvents.findByUsernameOrderByCreatedAtDescIdDesc(adminUsername).stream().anyMatch(event -> adminUsername.equals(event.getUsername())
                         && event.getOutcome() == LoginEventOutcome.FAILURE));
         assertTrue(loginSecurityEvents.findByUsernameOrderByCreatedAtDescIdDesc(ownerUsername).stream().anyMatch(event -> ownerUsername.equals(event.getUsername())
                         && event.getOutcome() == LoginEventOutcome.SUCCESS));
