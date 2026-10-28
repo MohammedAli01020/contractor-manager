@@ -6,6 +6,7 @@ on:
       - feature/platform-owner-activation
       - feature/platform-owner-web
       - feature/platform-owner-totp-2fa
+      - feature/request-tracking
     paths:
       - "backend/**"
       - ".github/workflows/backend-ci.yml"
@@ -14,6 +15,7 @@ on:
       - feature/platform-owner-activation
       - feature/platform-owner-web
       - feature/platform-owner-totp-2fa
+      - feature/request-tracking
     paths:
       - "backend/**"
       - ".github/workflows/backend-ci.yml"
