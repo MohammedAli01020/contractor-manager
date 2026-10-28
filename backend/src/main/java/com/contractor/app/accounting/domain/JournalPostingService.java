@@ -12,6 +12,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import org.springframework.stereotype.Service;
@@ -44,7 +45,7 @@ public class JournalPostingService {
 
     @Transactional
     public JournalEntry post(Long tenantId, Long actorUserId, JournalPostingRequest request) {
-        if (tenantId == null || actorUserId == null) {
+        if (tenantId == null || tenantId <= 0 || actorUserId == null || actorUserId <= 0) {
             throw ApiException.badRequest("المقاول والمستخدم المنفّذ مطلوبان للترحيل المالي.");
         }
         NormalizedJournal normalized = normalize(request);
@@ -106,7 +107,7 @@ public class JournalPostingService {
             throw ApiException.badRequest("بيانات القيد المحاسبي مطلوبة.");
         }
         String postingKey = required(request.getPostingKey(), 120, "مفتاح الترحيل");
-        String sourceType = required(request.getSourceType(), 40, "نوع المصدر").toUpperCase();
+        String sourceType = required(request.getSourceType(), 40, "نوع المصدر").toUpperCase(Locale.ROOT);
         if (!sourceType.matches("[A-Z0-9_]+")) {
             throw ApiException.badRequest("نوع مصدر القيد غير صالح.");
         }
