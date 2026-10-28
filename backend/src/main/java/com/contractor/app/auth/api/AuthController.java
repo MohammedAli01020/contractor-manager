@@ -10,6 +10,7 @@ import com.contractor.app.common.error.ApiException;
 import com.contractor.app.common.security.AuthenticatedUser;
 import com.contractor.app.common.security.CurrentUser;
 import com.contractor.app.common.security.LoginAttemptRateLimiter;
+import com.contractor.app.securityaudit.domain.LoginSecurityEventService;
 import com.contractor.app.user.api.dto.UserResponse;
 import com.contractor.app.user.domain.UserService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -32,12 +33,14 @@ public class AuthController {
     private final AuthService authService;
     private final UserService userService;
     private final LoginAttemptRateLimiter loginRateLimiter;
+    private final LoginSecurityEventService loginSecurityEvents;
 
     public AuthController(AuthService authService, UserService userService,
-                          LoginAttemptRateLimiter loginRateLimiter) {
+                          LoginAttemptRateLimiter loginRateLimiter, LoginSecurityEventService loginSecurityEvents) {
         this.authService = authService;
         this.userService = userService;
         this.loginRateLimiter = loginRateLimiter;
+        this.loginSecurityEvents = loginSecurityEvents;
     }
 
     @PostMapping("/register-tenant")
@@ -51,18 +54,29 @@ public class AuthController {
     @Operation(summary = "تسجيل الدخول")
     public AuthResponse login(@Valid @RequestBody LoginRequest request, HttpServletRequest servletRequest) {
         String clientIp = servletRequest.getRemoteAddr();
-        try (LoginAttemptRateLimiter.Attempt attempt =
-                     loginRateLimiter.beginAttempt(clientIp, request.getUsername())) {
-            try {
-                AuthResponse response = authService.login(request);
-                attempt.success("tenant_login");
-                return response;
-            } catch (ApiException ex) {
-                if (ex.getStatus() == HttpStatus.UNAUTHORIZED) {
-                    attempt.failure("tenant_login");
+        String requestId = servletRequest.getHeader("X-Request-ID");
+        try {
+            try (LoginAttemptRateLimiter.Attempt attempt =
+                         loginRateLimiter.beginAttempt(clientIp, request.getUsername())) {
+                try {
+                    AuthResponse response = authService.login(request, clientIp, requestId);
+                    attempt.success("tenant_login");
+                    return response;
+                } catch (ApiException ex) {
+                    if (ex.getStatus() == HttpStatus.UNAUTHORIZED || ex.getStatus() == HttpStatus.FORBIDDEN) {
+                        attempt.failure("tenant_login");
+                        loginSecurityEvents.recordTenantFailure(request.getUsername(),
+                                ex.getStatus() == HttpStatus.FORBIDDEN ? "ACCOUNT_DISABLED_OR_PENDING" : "INVALID_CREDENTIALS",
+                                clientIp, requestId);
+                    }
+                    throw ex;
                 }
-                throw ex;
             }
+        } catch (ApiException ex) {
+            if (ex.getStatus() == HttpStatus.TOO_MANY_REQUESTS) {
+                loginSecurityEvents.recordTenantFailure(request.getUsername(), "RATE_LIMITED", clientIp, requestId);
+            }
+            throw ex;
         }
     }
 
