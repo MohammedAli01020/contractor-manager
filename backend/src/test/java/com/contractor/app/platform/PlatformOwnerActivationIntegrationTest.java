@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.contractor.app.AbstractIntegrationTest;
@@ -26,6 +27,11 @@ import com.contractor.app.user.infra.UserRepository;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import com.contractor.app.platform.infra.PlatformOwnerRepository;
+import com.contractor.app.securityaudit.domain.LoginEventOutcome;
+import com.contractor.app.securityaudit.domain.LoginPrincipalType;
+import com.contractor.app.securityaudit.infra.LoginSecurityEventRepository;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.HashMap;
 import java.util.Map;
@@ -47,6 +53,7 @@ class PlatformOwnerActivationIntegrationTest extends AbstractIntegrationTest {
     @Autowired private UserRepository users;
     @Autowired private TenantAdminActivationTokenRepository activationTokens;
     @Autowired private RefreshTokenRepository refreshTokens;
+    @Autowired private LoginSecurityEventRepository loginSecurityEvents;
 
     @Test
     void ownerCreatesTenantAdminActivationIsOneTimeAndTokensStaySeparated() throws Exception {
@@ -58,6 +65,8 @@ class PlatformOwnerActivationIntegrationTest extends AbstractIntegrationTest {
         owners.saveAndFlush(new PlatformOwner(ownerUsername, "Platform Owner", encoder.encode("StrongOwnerPass123")));
 
         String ownerToken = loginOwnerToken(ownerUsername, "StrongOwnerPass123");
+        PlatformOwner loggedInOwner = owners.findByUsername(ownerUsername).orElseThrow();
+        assertNotNull(loggedInOwner.getLastLoginAt(), "Platform Owner last login is set only after MFA completes");
 
         String adminUsername = uniqueName("admin_");
         Map<String, Object> create = new HashMap<>();
@@ -122,6 +131,23 @@ class PlatformOwnerActivationIntegrationTest extends AbstractIntegrationTest {
         MvcResult tenantLogin = mockMvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(adminLogin))).andExpect(status().isOk()).andReturn();
         String tenantToken = objectMapper.readTree(tenantLogin.getResponse().getContentAsString()).path("accessToken").asText();
+        User loggedInAdmin = users.findByUsername(adminUsername).orElseThrow();
+        assertNotNull(loggedInAdmin.getLastLoginAt(), "Tenant user last login is set after successful password login");
+        assertTrue(loginSecurityEvents.findByPrincipalTypeOrderByCreatedAtDescIdDesc(
+                LoginPrincipalType.TENANT_USER, PageRequest.of(0, 100,
+                        Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"))))
+                .getContent().stream().anyMatch(event -> adminUsername.equals(event.getUsername())
+                        && event.getOutcome() == LoginEventOutcome.SUCCESS));
+        assertTrue(loginSecurityEvents.findByPrincipalTypeOrderByCreatedAtDescIdDesc(
+                LoginPrincipalType.TENANT_USER, PageRequest.of(0, 100,
+                        Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"))))
+                .getContent().stream().anyMatch(event -> adminUsername.equals(event.getUsername())
+                        && event.getOutcome() == LoginEventOutcome.FAILURE));
+        assertTrue(loginSecurityEvents.findByPrincipalTypeOrderByCreatedAtDescIdDesc(
+                LoginPrincipalType.PLATFORM_OWNER, PageRequest.of(0, 100,
+                        Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"))))
+                .getContent().stream().anyMatch(event -> ownerUsername.equals(event.getUsername())
+                        && event.getOutcome() == LoginEventOutcome.SUCCESS));
         mockMvc.perform(post("/api/v1/platform/tenants").header("Authorization", "Bearer " + tenantToken)
                 .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(create)))
                 .andExpect(status().isForbidden());
