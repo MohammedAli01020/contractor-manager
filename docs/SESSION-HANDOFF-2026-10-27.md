@@ -134,3 +134,10 @@ This section supersedes any earlier next-step notes above where they conflict.
 - The user has also confirmed the tenant list/search/filter UI is present and working.
 - **Next pending Platform Owner regression item:** verify tenant suspend/reactivate behavior and the resulting access restrictions. Status changes can affect real data, so use an explicitly designated test tenant and obtain approval before changing its status.
 - After this, verify tenant Admin login/access separation and cross-tenant isolation, then proceed to Phase 00/01 core and master-data acceptance checks.
+
+## Tenant status-change regression update — 2026-10-28 (user-reported)
+
+- The user confirmed that tenant suspend/reactivate behavior has already been tested. Do not repeat the basic workflow unless a specific gap or failure is identified.
+- This confirmation is user-reported; no raw test evidence or exact tenant status-transition traces were independently reviewed in this chat.
+- **Next roadmap item:** verify tenant Admin authentication and tenant isolation: tenant Admin login uses the tenant-auth endpoint, an Admin can access only their own tenant's data, and requests for another tenant's resources are rejected. Use existing test accounts/data; do not modify or expose production data.
+- After tenant-boundary checks, proceed through Phase 00 Core acceptance criteria (shift lifecycle and concurrency invariants) and Phase 01 Master Data acceptance criteria (tenant-scoped sites/drivers/equipment, pagination, version conflicts, soft deletion, uniqueness, and isolation).
