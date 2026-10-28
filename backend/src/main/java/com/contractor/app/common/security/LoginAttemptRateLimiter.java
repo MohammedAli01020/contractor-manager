@@ -110,9 +110,13 @@ public class LoginAttemptRateLimiter {
             if (current != null) {
                 target.remove(key, current);
             }
-            removeExpired(target, now);
             if (target.size() >= maxBuckets) {
-                evictOldest(target);
+                // Capacity pressure is the exceptional path: reclaim expired entries
+                // before evicting a still-active bucket.
+                removeExpired(target, now);
+                if (target.size() >= maxBuckets) {
+                    evictOldest(target);
+                }
             }
             target.put(key, new Bucket(now, 1));
         }
