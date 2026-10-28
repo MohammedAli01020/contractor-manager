@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.contractor.app.AbstractIntegrationTest;
+import com.contractor.app.accounting.infra.ChartAccountRepository;
 import com.contractor.app.platform.domain.PlatformOwner;
 import com.contractor.app.platform.domain.PlatformBootstrapService;
 import com.contractor.app.platform.security.PlatformTotpService;
@@ -47,6 +48,7 @@ class PlatformOwnerActivationIntegrationTest extends AbstractIntegrationTest {
     @Autowired private PasswordEncoder encoder;
     @Autowired private PlatformTotpService totp;
     @Autowired private TenantRepository tenants;
+    @Autowired private ChartAccountRepository chartAccounts;
     @Autowired private UserRepository users;
     @Autowired private TenantAdminActivationTokenRepository activationTokens;
     @Autowired private RefreshTokenRepository refreshTokens;
@@ -77,6 +79,10 @@ class PlatformOwnerActivationIntegrationTest extends AbstractIntegrationTest {
                 .content(objectMapper.writeValueAsString(create)))
                 .andExpect(status().isCreated()).andReturn();
         JsonNode createdBody = objectMapper.readTree(created.getResponse().getContentAsString());
+        long createdTenantId = createdBody.path("tenantId").asLong();
+        assertTrue(createdTenantId > 0);
+        assertEquals(13, chartAccounts.findByTenantIdOrderByAccountCodeAsc(createdTenantId).size(),
+                "Platform-created companies should receive the default chart of accounts");
         String activationUrl = createdBody.path("activationUrl").asText();
         String activationToken = activationUrl.substring(activationUrl.indexOf("token=") + 6);
 

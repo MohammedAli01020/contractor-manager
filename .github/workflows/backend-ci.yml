@@ -10,6 +10,7 @@ on:
       - fix/multi-instance-accounting-safety
       - fix/accounting-concurrency-hardening
       - feature/financial-foundation
+      - feature/default-chart-of-accounts
     paths:
       - "backend/**"
       - ".github/workflows/backend-ci.yml"

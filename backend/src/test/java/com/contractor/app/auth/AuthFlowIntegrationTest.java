@@ -6,13 +6,18 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.contractor.app.AbstractIntegrationTest;
+import com.contractor.app.accounting.infra.ChartAccountRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.HashMap;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
+import org.springframework.beans.factory.annotation.Autowired;
 
 class AuthFlowIntegrationTest extends AbstractIntegrationTest {
+
+    @Autowired
+    private ChartAccountRepository chartAccounts;
 
     @Test
     void registerTenantReturnsTokensAndAdminUser() throws Exception {
@@ -24,7 +29,9 @@ class AuthFlowIntegrationTest extends AbstractIntegrationTest {
         assertThat(res.path("refreshToken").asText()).isNotBlank();
         assertThat(res.path("user").path("role").asText()).isEqualTo("ADMIN");
         assertThat(res.path("user").path("username").asText()).isEqualTo(username);
-        assertThat(res.path("user").path("tenantId").asLong()).isPositive();
+        long tenantId = res.path("user").path("tenantId").asLong();
+        assertThat(tenantId).isPositive();
+        assertThat(chartAccounts.findByTenantIdOrderByAccountCodeAsc(tenantId)).hasSize(13);
     }
 
     @Test
