@@ -42,6 +42,7 @@ CREATE TABLE journal_entries (
     PRIMARY KEY (id),
     UNIQUE KEY uq_journal_entries_id_tenant (id, tenant_id),
     UNIQUE KEY uq_journal_entries_posting_key (tenant_id, posting_key),
+    UNIQUE KEY uq_journal_entries_reversal (tenant_id, reversal_of_entry_id),
     KEY ix_journal_entries_tenant_date (tenant_id, accounting_date, id),
     KEY ix_journal_entries_source (tenant_id, source_type, source_id),
     CONSTRAINT fk_journal_entries_tenant FOREIGN KEY (tenant_id) REFERENCES tenants (id),
