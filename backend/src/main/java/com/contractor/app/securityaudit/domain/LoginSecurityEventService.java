@@ -1,6 +1,7 @@
 package com.contractor.app.securityaudit.domain;
 
 import com.contractor.app.platform.domain.PlatformOwner;
+import com.contractor.app.common.security.JwtService;
 import com.contractor.app.platform.infra.PlatformOwnerRepository;
 import com.contractor.app.securityaudit.api.dto.LoginSecurityEventResponse;
 import com.contractor.app.securityaudit.infra.LoginSecurityEventRepository;
@@ -18,12 +19,14 @@ public class LoginSecurityEventService {
     private final LoginSecurityEventRepository events;
     private final UserRepository users;
     private final PlatformOwnerRepository owners;
+    private final JwtService jwt;
 
     public LoginSecurityEventService(LoginSecurityEventRepository events, UserRepository users,
-                                     PlatformOwnerRepository owners) {
+                                     PlatformOwnerRepository owners, JwtService jwt) {
         this.events = events;
         this.users = users;
         this.owners = owners;
+        this.jwt = jwt;
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -55,6 +58,15 @@ public class LoginSecurityEventService {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void recordPlatformFailure(String username, String reason, String clientIp, String requestId) {
         PlatformOwner owner = owners.findByUsername(normalize(username)).orElse(null);
+        record(LoginPrincipalType.PLATFORM_OWNER, owner == null ? null : owner.getId(), null,
+                username, LoginEventOutcome.FAILURE, reason, clientIp, requestId);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void recordPlatformMfaFailure(String challengeToken, String reason, String clientIp, String requestId) {
+        PlatformOwner owner = jwt.parsePlatformMfaChallenge(challengeToken)
+                .flatMap(challenge -> owners.findById(challenge.getOwnerId())).orElse(null);
+        String username = owner == null ? "unknown-platform-owner" : owner.getUsername();
         record(LoginPrincipalType.PLATFORM_OWNER, owner == null ? null : owner.getId(), null,
                 username, LoginEventOutcome.FAILURE, reason, clientIp, requestId);
     }
