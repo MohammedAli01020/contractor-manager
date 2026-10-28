@@ -177,3 +177,14 @@ Follow this order. Continue on `feature/platform-owner-activation`; do not merge
 - **CI:** GitHub Actions run [40673134508](https://github.com/MohammedAli01020/contractor-manager/actions/runs/40673134508) was pending when this note was written. Do not claim this increment passes until its Maven test step completes successfully.
 - **Other production caveats remain:** the limiter is process-local and resets on restart; multi-replica deployments need a shared atomic store; proxy client-IP handling must be configured safely; bounded bucket eviction can let high-cardinality abuse evict older counters.
 - **Safety:** no database/schema/Flyway changes, no deployment, and no merge to `main`.
+
+
+## IP-wide login concurrency fix — latest handoff (2026-10-28)
+
+- **Branch:** `feature/request-tracking`; latest code commit before this documentation entry: `204332a1cb20d5a0424d8a5588f59255de36536b`.
+- **Change:** tenant and Platform Owner login flows now acquire a fixed-size IP lock stripe before the normalized identity lock stripe. This serializes login requests sharing an IP stripe, preventing concurrent failures for different usernames from racing past the shared IP-wide threshold.
+- **Test:** added a unit test for stable IP-lock selection. It does not replace a concurrent controller/integration test.
+- **Trade-off:** same-IP login flows are serialized while authentication/password verification runs; users behind shared NAT/proxies may experience increased latency. Evaluate this before production and consider a shared atomic rate-limit/reservation design.
+- **CI status:** earlier runs triggered by intermediate commits were cancelled as later commits were pushed. The final source/documentation state should be verified by the latest Backend CI run; do not infer a pass from the earlier success on commit `cb7c18f4968a37f44174bb5ddfb433724b456527`.
+- **Remaining production caveats:** in-memory counters reset on restart and are not shared across replicas; configure trusted proxy client-IP handling; bounded eviction can let high-cardinality abuse evict older counters.
+- **Safety:** no database/schema/Flyway changes, no deployment, and no merge to `main`.
