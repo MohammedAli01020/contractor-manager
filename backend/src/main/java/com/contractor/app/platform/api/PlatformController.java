@@ -92,7 +92,7 @@ public class PlatformController {
     public PlatformLoginResponse enableMfa(@Valid @RequestBody PlatformMfaCodeRequest request,
                                            HttpServletRequest servletRequest) {
         String clientIp = servletRequest.getRemoteAddr();
-        String requestId = servletRequest.getHeader("X-Request-ID");
+        String requestId = (String) servletRequest.getAttribute(RequestTrackingFilter.REQUEST_ID_ATTRIBUTE);
         try {
             PlatformLoginResponse response = service.enableTotp(request);
             loginSecurityEvents.recordPlatformSuccess(response.getOwnerId(), response.getUsername(), clientIp, requestId);
@@ -111,7 +111,7 @@ public class PlatformController {
     public PlatformLoginResponse verifyMfa(@Valid @RequestBody PlatformMfaCodeRequest request,
                                            HttpServletRequest servletRequest) {
         String clientIp = servletRequest.getRemoteAddr();
-        String requestId = servletRequest.getHeader("X-Request-ID");
+        String requestId = (String) servletRequest.getAttribute(RequestTrackingFilter.REQUEST_ID_ATTRIBUTE);
         try {
             PlatformLoginResponse response = service.verifyTotp(request);
             loginSecurityEvents.recordPlatformSuccess(response.getOwnerId(), response.getUsername(), clientIp, requestId);
