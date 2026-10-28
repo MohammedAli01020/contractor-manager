@@ -196,3 +196,13 @@ Follow this order. Continue on `feature/platform-owner-activation`; do not merge
 - Each test releases 12 requests simultaneously from a unique synthetic client IP and asserts exactly 5 authentication failures (HTTP 401) and 7 throttled responses (HTTP 429). This checks the controller/IP-lock path rather than only concurrently incrementing the limiter directly.
 - Performance assessment: the IP lock is held for the complete authentication flow, including password verification. This prevents the IP-wide check/record race but serializes logins sharing the same IP stripe, potentially reducing throughput for users behind NAT/proxies. No benchmark has been run; production review should measure latency/throughput under realistic BCrypt cost and consider a shared atomic reservation/store design.
 - CI must pass for the new test commit before considering this addition verified. No database schema changes, deployment, or merge to `main`.
+
+
+## Login throttling concurrent HTTP tests — verification updated (2026-10-28)
+
+- **Branch:** `feature/request-tracking`.
+- **User-provided CI result:** Maven test step **success** for commit `cea8748cbdd6cd47fb222d79ffe75e0cdbe72083`.
+- Added integration tests concurrently exercising both tenant and Platform Owner login endpoints; each submits 12 requests from a synthetic IP and expects exactly five HTTP 401 responses and seven HTTP 429 responses.
+- The test result validates the reported Maven test step for this commit. It does not validate production load, latency, multi-instance rate limiting, or deployment behavior.
+- **Remaining trade-off:** IP lock serializes full login flows sharing the same lock stripe. Benchmark before production; consider a shared atomic limiter/reservation design if latency or throughput is unacceptable.
+- No database/Flyway changes, deployment, or merge to `main`.
