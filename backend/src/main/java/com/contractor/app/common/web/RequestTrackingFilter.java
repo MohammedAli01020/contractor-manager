@@ -25,6 +25,7 @@ public class RequestTrackingFilter extends OncePerRequestFilter {
 
     public static final String HEADER_NAME = "X-Request-ID";
     public static final String MDC_KEY = "requestId";
+    public static final String REQUEST_ID_ATTRIBUTE = RequestTrackingFilter.class.getName() + ".requestId";
     private static final Logger log = LoggerFactory.getLogger(RequestTrackingFilter.class);
     private static final Pattern SAFE_REQUEST_ID = Pattern.compile("[A-Za-z0-9._-]{1,64}");
 
@@ -34,6 +35,7 @@ public class RequestTrackingFilter extends OncePerRequestFilter {
         String requestId = resolveRequestId(request.getHeader(HEADER_NAME));
         long startedAtNanos = System.nanoTime();
         MDC.put(MDC_KEY, requestId);
+        request.setAttribute(REQUEST_ID_ATTRIBUTE, requestId);
         response.setHeader(HEADER_NAME, requestId);
 
         try {
