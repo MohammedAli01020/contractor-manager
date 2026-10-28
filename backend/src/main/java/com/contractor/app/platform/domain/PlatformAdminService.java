@@ -14,6 +14,7 @@ import com.contractor.app.platform.api.dto.PlatformMfaCodeRequest;
 import com.contractor.app.platform.api.dto.PlatformMfaSetupResponse;
 import com.contractor.app.platform.security.PlatformTotpService;
 import com.contractor.app.platform.security.PlatformTotpSecretCipher;
+import com.contractor.app.securityaudit.domain.LoginSecurityEventService;
 import java.time.Instant;
 import com.contractor.app.platform.api.dto.PlatformTenantSummary;
 import com.contractor.app.platform.infra.PlatformOwnerRepository;
@@ -50,6 +51,7 @@ public class PlatformAdminService {
  private final String baseUrl; private final long activationHours; private final boolean linkReturnEnabled; private final PlatformEmailService emailService;
  private final PlatformTotpService totp; private final PlatformTotpSecretCipher totpCipher;
  private final PlatformOwnerRecoveryCodeRepository recoveryCodes;
+ private final LoginSecurityEventService loginSecurityEvents;
  private static final SecureRandom RECOVERY_RANDOM = new SecureRandom();
  // A fixed BCrypt hash keeps the password-check cost similar when the account is absent or inactive.
  private static final String DUMMY_PASSWORD_HASH = "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy";
@@ -57,7 +59,7 @@ public class PlatformAdminService {
  public PlatformAdminService(PlatformOwnerRepository owners,TenantRepository tenants,UserRepository users,TenantAdminActivationTokenRepository tokens,PasswordEncoder encoder,JwtService jwt, PlatformEmailService emailService, Environment environment,
  @Value("${app.platform.activation-base-url:http://localhost:8081/activate-admin/index.html}") String baseUrl,
  @Value("${app.platform.activation-hours:24}") long activationHours,
- @Value("${app.platform.activation-link-return-enabled:false}") boolean linkReturnEnabled, PlatformTotpService totp, PlatformTotpSecretCipher totpCipher, PlatformOwnerRecoveryCodeRepository recoveryCodes){this.owners=owners;this.tenants=tenants;this.users=users;this.tokens=tokens;this.encoder=encoder;this.jwt=jwt;this.emailService=emailService;this.baseUrl=baseUrl;this.activationHours=activationHours;this.linkReturnEnabled=linkReturnEnabled && environment.acceptsProfiles(Profiles.of("dev","test"));this.totp=totp;this.totpCipher=totpCipher;this.recoveryCodes=recoveryCodes;}
+ @Value("${app.platform.activation-link-return-enabled:false}") boolean linkReturnEnabled, PlatformTotpService totp, PlatformTotpSecretCipher totpCipher, PlatformOwnerRecoveryCodeRepository recoveryCodes, LoginSecurityEventService loginSecurityEvents){this.owners=owners;this.tenants=tenants;this.users=users;this.tokens=tokens;this.encoder=encoder;this.jwt=jwt;this.emailService=emailService;this.baseUrl=baseUrl;this.activationHours=activationHours;this.linkReturnEnabled=linkReturnEnabled && environment.acceptsProfiles(Profiles.of("dev","test"));this.totp=totp;this.totpCipher=totpCipher;this.recoveryCodes=recoveryCodes;this.loginSecurityEvents=loginSecurityEvents;}
  @Transactional
  public PlatformLoginResponse login(PlatformLoginRequest req){
   String username=User.normalizeUsername(req.getUsername());
@@ -118,6 +120,7 @@ public class PlatformAdminService {
    throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "رمز التحقق غير صحيح.");
   }
   owner.setTotpEnabled(true);
+  owner.setLastLoginAt(now);
   owner.setTotpEnabledAt(now);
   owner.setTotpSetupExpiresAt(null);
   owner.setTotpLastUsedStep(step);
@@ -130,6 +133,7 @@ public class PlatformAdminService {
    rawRecoveryCodes.add(rawCode);
    recoveryCodes.save(new PlatformOwnerRecoveryCode(owner.getId(), TokenHasher.sha256Hex(normalizeRecoveryCode(rawCode))));
   }
+  loginSecurityEvents.recordPlatformSuccess(owner.getId(), owner.getUsername(), null, null);
   return new PlatformLoginResponse(jwt.createPlatformOwnerAccessToken(owner.getId()), jwt.getAccessTtlSeconds(),
     owner.getId(), owner.getUsername(), rawRecoveryCodes);
  }
@@ -167,6 +171,8 @@ public class PlatformAdminService {
   if (step != null) owner.setTotpLastUsedStep(step);
   owner.setTotpFailedAttempts(0);
   owner.setTotpLockedUntil(null);
+  owner.setLastLoginAt(now);
+  loginSecurityEvents.recordPlatformSuccess(owner.getId(), owner.getUsername(), null, null);
   return new PlatformLoginResponse(jwt.createPlatformOwnerAccessToken(owner.getId()), jwt.getAccessTtlSeconds(),
     owner.getId(), owner.getUsername());
  }
@@ -200,7 +206,7 @@ public class PlatformAdminService {
      .filter(user -> user.getRole() == Role.ADMIN)
      .findFirst()
      .map(user -> new PlatformAdminSummary(user.getId(), user.getFullName(), user.getUsername(),
-       user.isActive(), user.isPasswordActivated(), user.getPhone(), user.getEmail(), user.isEmailVerified()))
+       user.isActive(), user.isPasswordActivated(), user.getPhone(), user.getEmail(), user.isEmailVerified(), user.getLastLoginAt()))
      .orElse(null);
     return new PlatformTenantSummary(tenant.getId(), tenant.getName(), tenant.getStatus().name(),
       tenant.getCreatedAt(), tenant.getUpdatedAt(), totalUsers, activeUsers, admin);
