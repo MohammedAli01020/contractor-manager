@@ -61,14 +61,14 @@ public class AuthController {
                 } catch (ApiException ex) {
                     if (ex.getStatus() == HttpStatus.UNAUTHORIZED) {
                         loginRateLimiter.recordFailure(clientIp, request.getUsername(), "tenant_login");
+                    }
+                    throw ex;
                 }
-                throw ex;
-            }
             }
         }
     }
 
-    @PostMapping("/refresh")
+        @PostMapping("/refresh")
     @Operation(summary = "تجديد الجلسة (الرمز القديم يُلغى ويصدر رمز جديد)")
     public AuthResponse refresh(@Valid @RequestBody RefreshTokenRequest request) {
         return authService.refresh(request.getRefreshToken());
