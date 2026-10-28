@@ -224,6 +224,39 @@ class PlatformOwnerActivationIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void platformCompanyListIncludesUpdateTimestampAndAdminContactDetails() throws Exception {
+        Tenant tenant = tenants.saveAndFlush(new Tenant("Company details tenant"));
+        String adminUsername = uniqueName("details_admin_");
+        User admin = new User(tenant.getId(), adminUsername, "Details Admin", "01012345678",
+                encoder.encode("NotARealLoginPass123"), Role.ADMIN);
+        admin.setEmail("details-admin@example.test");
+        admin.setEmailVerified(true);
+        users.saveAndFlush(admin);
+
+        String ownerUsername = uniqueName("details_owner_");
+        owners.saveAndFlush(new PlatformOwner(ownerUsername, "Details Owner", encoder.encode("StrongOwnerPass123")));
+        String ownerToken = loginOwnerToken(ownerUsername, "StrongOwnerPass123");
+
+        MvcResult result = mockMvc.perform(get("/api/v1/platform/tenants")
+                .header("Authorization", "Bearer " + ownerToken))
+                .andExpect(status().isOk()).andReturn();
+        JsonNode companies = objectMapper.readTree(result.getResponse().getContentAsString());
+        JsonNode company = null;
+        for (JsonNode item : companies) {
+            if (item.path("tenantId").asLong() == tenant.getId()) {
+                company = item;
+                break;
+            }
+        }
+
+        assertTrue(company != null, "The created company should be present in the Platform Owner list");
+        assertTrue(company.path("updatedAt").isTextual(), "Company update timestamp should be exposed");
+        assertEquals(admin.getPhone(), company.path("admin").path("phone").asText());
+        assertEquals(admin.getEmail(), company.path("admin").path("email").asText());
+        assertTrue(company.path("admin").path("emailVerified").asBoolean());
+    }
+
+    @Test
     void tenantStatusCanBeSuspendedAndReactivatedOnlyByPlatformOwner() throws Exception {
         Tenant tenant = tenants.saveAndFlush(new Tenant("Status transition tenant"));
         String ownerUsername = uniqueName("status_owner_");
