@@ -125,7 +125,10 @@ void main() {
   blocTest<AuthBloc, AuthState>(
     'restores the session after the interceptor refreshes an expired access token',
     build: () => AuthBloc(dio: dio, storage: storage),
-    act: (bloc) => bloc.add(const AuthStarted()),
+    act: (bloc) async {
+      bloc.add(const AuthStarted());
+      await bloc.stream.firstWhere((state) => state is AuthAuthenticated);
+    },
     expect: () => [
       const AuthChecking(),
       AuthAuthenticated(AuthUser.fromJson(userJson)),
