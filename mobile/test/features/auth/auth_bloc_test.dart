@@ -90,7 +90,10 @@ void main() {
       },
       build: () => AuthBloc(dio: dio, storage: storage),
       act: (bloc) => bloc.add(const AuthStarted()),
-      expect: () => [const AuthUnauthenticated()],
+      expect: () => [
+        const AuthChecking(),
+        const AuthUnauthenticated(),
+      ],
       verify: (_) => verify(() => storage.clear()).called(1),
     );
 
