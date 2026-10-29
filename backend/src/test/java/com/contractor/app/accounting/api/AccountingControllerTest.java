@@ -11,7 +11,8 @@ import com.contractor.app.accounting.domain.JournalLine;
 import com.contractor.app.accounting.domain.JournalPostingRequest;
 import com.contractor.app.accounting.domain.JournalPostingService;
 import com.contractor.app.accounting.infra.ChartAccountRepository;
-import com.contractor.app.accounting.infra.JournalEntryRepository;\nimport com.contractor.app.accounting.infra.JournalLineRepository;
+import com.contractor.app.accounting.infra.JournalEntryRepository;
+import com.contractor.app.accounting.infra.JournalLineRepository;
 import com.contractor.app.common.security.AuthenticatedUser;
 import com.contractor.app.user.domain.Role;
 import java.math.BigDecimal;
@@ -31,15 +32,17 @@ class AccountingControllerTest {
 
     private ChartAccountRepository accounts;
     private JournalPostingService journals;
-    private JournalEntryRepository entries;\n    private JournalLineRepository lines;
+    private JournalEntryRepository entries;
+    private JournalLineRepository lines;
     private AccountingController controller;
 
     @BeforeEach
     void setUp() {
         accounts = org.mockito.Mockito.mock(ChartAccountRepository.class);
         journals = org.mockito.Mockito.mock(JournalPostingService.class);
+        entries = org.mockito.Mockito.mock(JournalEntryRepository.class);
         lines = org.mockito.Mockito.mock(JournalLineRepository.class);
-        controller = new AccountingController(accounts, journals, lines);
+        controller = new AccountingController(accounts, journals, entries, lines);
         AuthenticatedUser principal = new AuthenticatedUser(7L, 42L, "tenant-admin", Role.ADMIN);
         SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
                 principal, "n/a", Collections.singleton(new SimpleGrantedAuthority("ROLE_ADMIN"))));
