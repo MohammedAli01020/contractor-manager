@@ -6,6 +6,7 @@ import com.contractor.app.accounting.domain.JournalLine;
 import com.contractor.app.accounting.domain.JournalPostingRequest;
 import com.contractor.app.accounting.domain.JournalPostingService;
 import com.contractor.app.accounting.infra.ChartAccountRepository;
+import com.contractor.app.accounting.infra.JournalEntryRepository;
 import com.contractor.app.accounting.infra.JournalLineRepository;
 import com.contractor.app.common.security.CurrentUser;
 import io.swagger.v3.oas.annotations.Operation;
@@ -14,9 +15,11 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -34,12 +37,14 @@ public class AccountingController {
 
     private final ChartAccountRepository accounts;
     private final JournalPostingService journals;
+    private final JournalEntryRepository entries;
     private final JournalLineRepository lines;
 
     public AccountingController(ChartAccountRepository accounts, JournalPostingService journals,
-                                JournalLineRepository lines) {
+                                JournalEntryRepository entries, JournalLineRepository lines) {
         this.accounts = accounts;
         this.journals = journals;
+        this.entries = entries;
         this.lines = lines;
     }
 
@@ -49,6 +54,24 @@ public class AccountingController {
         return accounts.findByTenantIdOrderByAccountCodeAsc(CurrentUser.tenantId()).stream()
                 .map(AccountResponse::new)
                 .collect(Collectors.toList());
+    }
+
+    @GetMapping("/journals")
+    @Operation(summary = "عرض القيود المحاسبية للشركة الحالية")
+    public List<JournalSummaryResponse> listJournals() {
+        return entries.findByTenantIdOrderByAccountingDateDescPostedAtDesc(CurrentUser.tenantId()).stream()
+                .map(JournalSummaryResponse::new)
+                .collect(Collectors.toList());
+    }
+
+    @GetMapping("/journals/{journalId}")
+    @Operation(summary = "عرض تفاصيل قيد محاسبي")
+    public JournalResponse getJournal(@PathVariable Long journalId) {
+        JournalEntry entry = entries.findByIdAndTenantId(journalId, CurrentUser.tenantId())
+                .orElseThrow(() -> com.contractor.app.common.error.ApiException.notFound("القيد المحاسبي غير موجود."));
+        List<JournalLine> postedLines = lines.findByTenantIdAndJournalEntryIdOrderByLineNumberAsc(
+                CurrentUser.tenantId(), entry.getId());
+        return new JournalResponse(entry, postedLines);
     }
 
     @PostMapping("/journals")
@@ -87,6 +110,40 @@ public class AccountingController {
         public Long getParentAccountId() { return parentAccountId; }
         public boolean isSystemManaged() { return systemManaged; }
         public boolean isActive() { return active; }
+    }
+
+    public static final class JournalSummaryResponse {
+        private final Long id;
+        private final String postingKey;
+        private final String sourceType;
+        private final Long sourceId;
+        private final LocalDate accountingDate;
+        private final String description;
+        private final String status;
+        private final Long postedByUserId;
+        private final LocalDateTime postedAt;
+
+        JournalSummaryResponse(JournalEntry entry) {
+            this.id = entry.getId();
+            this.postingKey = entry.getPostingKey();
+            this.sourceType = entry.getSourceType();
+            this.sourceId = entry.getSourceId();
+            this.accountingDate = entry.getAccountingDate();
+            this.description = entry.getDescription();
+            this.status = entry.getStatus().name();
+            this.postedByUserId = entry.getPostedByUserId();
+            this.postedAt = entry.getPostedAt();
+        }
+
+        public Long getId() { return id; }
+        public String getPostingKey() { return postingKey; }
+        public String getSourceType() { return sourceType; }
+        public Long getSourceId() { return sourceId; }
+        public LocalDate getAccountingDate() { return accountingDate; }
+        public String getDescription() { return description; }
+        public String getStatus() { return status; }
+        public Long getPostedByUserId() { return postedByUserId; }
+        public LocalDateTime getPostedAt() { return postedAt; }
     }
 
     public static final class JournalResponse {
