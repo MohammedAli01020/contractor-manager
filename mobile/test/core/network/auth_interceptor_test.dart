@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:contractor_mobile/core/network/auth_interceptor.dart';
 import 'package:contractor_mobile/core/storage/auth_token_storage.dart';
 import 'package:dio/dio.dart';
@@ -174,7 +176,7 @@ void main() {
             data: {'refreshToken': 'old-refresh'},
           )).thenThrow(DioError(
         requestOptions: RequestOptions(path: '/auth/refresh'),
-        type: DioErrorType.connectionError,
+        type: DioErrorType.other,
       ));
 
       buildInterceptor().onError(error, handler);
