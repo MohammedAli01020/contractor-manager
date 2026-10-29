@@ -46,6 +46,14 @@ void main() {
         refreshDio: refreshDio,
       );
 
+  DioError unauthorized(RequestOptions request) => DioError(
+        requestOptions: request,
+        response: Response<dynamic>(
+          requestOptions: request,
+          statusCode: 401,
+        ),
+      );
+
   group('onRequest', () {
     test('adds the access token to protected requests', () async {
       final handler = MockRequestInterceptorHandler();
@@ -99,13 +107,7 @@ void main() {
         () async {
       final handler = MockErrorInterceptorHandler();
       final request = RequestOptions(path: '/drivers');
-      final error = DioError(
-        requestOptions: request,
-        response: Response<dynamic>(
-          requestOptions: request,
-          statusCode: 401,
-        ),
-      );
+      final error = unauthorized(request);
       when(() => storage.readRefreshToken()).thenAnswer((_) async => null);
       when(() => storage.clear()).thenAnswer((_) async {});
 
@@ -120,13 +122,7 @@ void main() {
     test('refreshes tokens and retries a protected request once', () async {
       final handler = MockErrorInterceptorHandler();
       final request = RequestOptions(path: '/drivers');
-      final error = DioError(
-        requestOptions: request,
-        response: Response<dynamic>(
-          requestOptions: request,
-          statusCode: 401,
-        ),
-      );
+      final error = unauthorized(request);
       final retriedResponse = Response<dynamic>(
         requestOptions: request,
         data: {'ok': true},
@@ -166,19 +162,120 @@ void main() {
       verify(() => handler.resolve(retriedResponse)).called(1);
     });
 
+    test('clears the session when the refresh request fails', () async {
+      final handler = MockErrorInterceptorHandler();
+      final request = RequestOptions(path: '/drivers');
+      final error = unauthorized(request);
+      when(() => storage.readRefreshToken())
+          .thenAnswer((_) async => 'old-refresh');
+      when(() => storage.clear()).thenAnswer((_) async {});
+      when(() => refreshDio.post<Map<String, dynamic>>(
+            '/auth/refresh',
+            data: {'refreshToken': 'old-refresh'},
+          )).thenThrow(DioError(
+        requestOptions: RequestOptions(path: '/auth/refresh'),
+        type: DioErrorType.connectionError,
+      ));
+
+      buildInterceptor().onError(error, handler);
+      await pumpEventQueue();
+
+      verify(() => storage.clear()).called(1);
+      verify(() => handler.next(error)).called(1);
+      verifyNever(() => dio.fetch<dynamic>(any()));
+    });
+
+    test('clears the session when refresh response tokens are incomplete',
+        () async {
+      final handler = MockErrorInterceptorHandler();
+      final request = RequestOptions(path: '/drivers');
+      final error = unauthorized(request);
+      when(() => storage.readRefreshToken())
+          .thenAnswer((_) async => 'old-refresh');
+      when(() => storage.clear()).thenAnswer((_) async {});
+      when(() => refreshDio.post<Map<String, dynamic>>(
+            '/auth/refresh',
+            data: {'refreshToken': 'old-refresh'},
+          )).thenAnswer(
+        (_) async => Response<Map<String, dynamic>>(
+          requestOptions: RequestOptions(path: '/auth/refresh'),
+          data: {'accessToken': 'new-access'},
+        ),
+      );
+
+      buildInterceptor().onError(error, handler);
+      await pumpEventQueue();
+
+      verify(() => storage.clear()).called(1);
+      verify(() => handler.next(error)).called(1);
+      verifyNever(() => storage.save(
+            accessToken: any(named: 'accessToken'),
+            refreshToken: any(named: 'refreshToken'),
+          ));
+      verifyNever(() => dio.fetch<dynamic>(any()));
+    });
+
+    test('shares one refresh across concurrent unauthorized requests', () async {
+      final refreshCompleter = Completer<Response<Map<String, dynamic>>>();
+      final firstHandler = MockErrorInterceptorHandler();
+      final secondHandler = MockErrorInterceptorHandler();
+      final firstRequest = RequestOptions(path: '/drivers');
+      final secondRequest = RequestOptions(path: '/equipment');
+      final firstError = unauthorized(firstRequest);
+      final secondError = unauthorized(secondRequest);
+
+      when(() => storage.readRefreshToken())
+          .thenAnswer((_) async => 'old-refresh');
+      when(() => storage.save(
+            accessToken: 'new-access',
+            refreshToken: 'new-refresh',
+          )).thenAnswer((_) async {});
+      when(() => refreshDio.post<Map<String, dynamic>>(
+            '/auth/refresh',
+            data: {'refreshToken': 'old-refresh'},
+          )).thenAnswer((_) => refreshCompleter.future);
+      when(() => dio.fetch<dynamic>(any())).thenAnswer((invocation) async {
+        final request = invocation.positionalArguments[0] as RequestOptions;
+        return Response<dynamic>(
+          requestOptions: request,
+          data: {'ok': true},
+        );
+      });
+
+      final interceptor = buildInterceptor();
+      interceptor.onError(firstError, firstHandler);
+      interceptor.onError(secondError, secondHandler);
+      await pumpEventQueue();
+
+      refreshCompleter.complete(Response<Map<String, dynamic>>(
+        requestOptions: RequestOptions(path: '/auth/refresh'),
+        data: {
+          'accessToken': 'new-access',
+          'refreshToken': 'new-refresh',
+        },
+      ));
+      await pumpEventQueue();
+
+      verify(() => refreshDio.post<Map<String, dynamic>>(
+            '/auth/refresh',
+            data: {'refreshToken': 'old-refresh'},
+          )).called(1);
+      verify(() => storage.save(
+            accessToken: 'new-access',
+            refreshToken: 'new-refresh',
+          )).called(1);
+      verify(() => dio.fetch<dynamic>(any())).called(2);
+      verify(() => firstHandler.resolve(any())).called(1);
+      verify(() => secondHandler.resolve(any())).called(1);
+    });
+
     test('does not refresh an already retried request', () async {
       final handler = MockErrorInterceptorHandler();
       final request = RequestOptions(
         path: '/drivers',
         extra: {'authRetry': true},
       );
-      final error = DioError(
-        requestOptions: request,
-        response: Response<dynamic>(
-          requestOptions: request,
-          statusCode: 401,
-        ),
-      );
+      final error = unauthorized(request);
 
       buildInterceptor().onError(error, handler);
       await pumpEventQueue();
