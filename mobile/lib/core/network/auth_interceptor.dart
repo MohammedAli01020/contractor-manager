@@ -32,7 +32,7 @@ class AuthInterceptor extends Interceptor {
       '/health',
     ];
     final normalized = path.split('?').first;
-    return publicPaths.any(normalized.endsWith);
+    return publicPaths.contains(normalized);
   }
 
   @override
