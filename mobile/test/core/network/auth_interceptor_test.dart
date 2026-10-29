@@ -373,6 +373,7 @@ void main() {
             accessToken: 'new-access',
             refreshToken: 'new-refresh',
           )).thenAnswer((_) async {});
+      when(() => storage.clear()).thenAnswer((_) async {});
       when(() => dio.fetch<dynamic>(request)).thenThrow(retryError);
 
       buildInterceptor().onError(originalError, handler);
@@ -382,7 +383,12 @@ void main() {
             '/auth/refresh',
             data: {'refreshToken': 'old-refresh'},
           )).called(1);
+      verify(() => storage.save(
+            accessToken: 'new-access',
+            refreshToken: 'new-refresh',
+          )).called(1);
       verify(() => dio.fetch<dynamic>(request)).called(1);
+      verify(() => storage.clear()).called(1);
       verify(() => handler.next(retryError)).called(1);
       verifyNever(() => handler.resolve(any()));
     });
