@@ -21,17 +21,40 @@ class AuthUser extends Equatable {
   final String role;
   final bool active;
 
-  factory AuthUser.fromJson(Map<String, dynamic> json) => AuthUser(
-        id: _asInt(json['id']),
-        tenantId: _asInt(json['tenantId']),
-        username: json['username'] as String? ?? '',
-        fullName: json['fullName'] as String? ?? '',
-        role: json['role'] as String? ?? '',
-        active: json['active'] == true,
-      );
+  factory AuthUser.fromJson(Map<String, dynamic> json) {
+    final id = _asPositiveInt(json['id'], 'id');
+    final tenantId = _asPositiveInt(json['tenantId'], 'tenantId');
+    final username = _asRequiredString(json['username'], 'username');
+    final fullName = _asRequiredString(json['fullName'], 'fullName');
+    final role = _asRequiredString(json['role'], 'role');
+    final active = json['active'];
+    if (active is! bool) {
+      throw const FormatException('Invalid user field: active');
+    }
+    return AuthUser(
+      id: id,
+      tenantId: tenantId,
+      username: username,
+      fullName: fullName,
+      role: role,
+      active: active,
+    );
+  }
 
-  static int _asInt(dynamic value) =>
-      value is num ? value.toInt() : int.tryParse('$value') ?? 0;
+  static int _asPositiveInt(dynamic value, String field) {
+    final parsed = value is int ? value : int.tryParse('$value');
+    if (parsed == null || parsed <= 0) {
+      throw FormatException('Invalid user field: $field');
+    }
+    return parsed;
+  }
+
+  static String _asRequiredString(dynamic value, String field) {
+    if (value is! String || value.trim().isEmpty) {
+      throw FormatException('Invalid user field: $field');
+    }
+    return value;
+  }
 
   @override
   List<Object?> get props => [id, tenantId, username, fullName, role, active];
@@ -103,7 +126,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         emit(const AuthUnauthenticated());
         return;
       }
-      emit(AuthAuthenticated(AuthUser.fromJson(response.data!)));
+      try {
+        emit(AuthAuthenticated(AuthUser.fromJson(response.data!)));
+      } on FormatException {
+        await _storage.clear();
+        emit(const AuthUnauthenticated());
+      }
     } on DioError catch (error) {
       if (error.response?.statusCode == 401) {
         await _storage.clear();
@@ -138,10 +166,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         emit(const AuthError('استجابة تسجيل الدخول من الخادم غير مكتملة.'));
         return;
       }
+      final user = AuthUser.fromJson(
+        Map<String, dynamic>.from(data['user'] as Map),
+      );
       await _storage.save(accessToken: access, refreshToken: refresh);
-      emit(AuthAuthenticated(
-        AuthUser.fromJson(Map<String, dynamic>.from(data['user'] as Map)),
-      ));
+      emit(AuthAuthenticated(user));
     } on DioError catch (error) {
       emit(AuthError(AppFailure.fromDio(error).message));
     } on FormatException {
