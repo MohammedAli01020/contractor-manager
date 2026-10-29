@@ -84,13 +84,12 @@ void main() {
       if (options.path == '/auth/me') {
         sessionRequests++;
         if (options.headers['Authorization'] != 'Bearer new-access') {
-          throw DioError(
-            requestOptions: options,
-            response: Response<dynamic>(
-              requestOptions: options,
-              statusCode: 401,
-              data: {'message': 'Access token expired'},
-            ),
+          return ResponseBody.fromString(
+            jsonEncode({'message': 'Access token expired'}),
+            401,
+            headers: {
+              Headers.contentTypeHeader: ['application/json'],
+            },
           );
         }
         return jsonResponse(userJson);
