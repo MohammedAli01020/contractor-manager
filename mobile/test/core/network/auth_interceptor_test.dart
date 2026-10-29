@@ -348,6 +348,45 @@ void main() {
       verify(() => secondHandler.resolve(any())).called(1);
     });
 
+    test('forwards a 401 after the refreshed request is rejected', () async {
+      final handler = MockErrorInterceptorHandler();
+      final request = RequestOptions(path: '/drivers');
+      final originalError = unauthorized(request);
+      final retryRequest = RequestOptions(path: '/drivers');
+      final retryError = unauthorized(retryRequest);
+
+      when(() => storage.readRefreshToken())
+          .thenAnswer((_) async => 'old-refresh');
+      when(() => refreshDio.post<Map<String, dynamic>>(
+            '/auth/refresh',
+            data: {'refreshToken': 'old-refresh'},
+          )).thenAnswer(
+        (_) async => Response<Map<String, dynamic>>(
+          requestOptions: RequestOptions(path: '/auth/refresh'),
+          data: {
+            'accessToken': 'new-access',
+            'refreshToken': 'new-refresh',
+          },
+        ),
+      );
+      when(() => storage.save(
+            accessToken: 'new-access',
+            refreshToken: 'new-refresh',
+          )).thenAnswer((_) async {});
+      when(() => dio.fetch<dynamic>(request)).thenThrow(retryError);
+
+      buildInterceptor().onError(originalError, handler);
+      await pumpEventQueue();
+
+      verify(() => refreshDio.post<Map<String, dynamic>>(
+            '/auth/refresh',
+            data: {'refreshToken': 'old-refresh'},
+          )).called(1);
+      verify(() => dio.fetch<dynamic>(request)).called(1);
+      verify(() => handler.next(retryError)).called(1);
+      verifyNever(() => handler.resolve(any()));
+    });
+
     test('does not refresh an already retried request', () async {
       final handler = MockErrorInterceptorHandler();
       final request = RequestOptions(
