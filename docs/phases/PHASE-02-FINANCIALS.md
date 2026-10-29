@@ -1,7 +1,7 @@
 # Phase 02 — Financial foundation and monthly close
 
 **Roadmap:** [PRODUCT_ROADMAP.md](../PRODUCT_ROADMAP.md#phase-2--financial-foundation-driver-ledger-equipment-expenses-and-monthly-closing)  
-**Status:** In progress — accounting/inventory architecture documented; implementation and tests not yet verified.
+**Status:** In progress — accounting core and tenant-scoped API code exist on feature branches; Flutter read-only accounting UI exists and Flutter CI passed twice on the recorded UI commit. Full accounting acceptance, backend/MySQL integration, and real-device/API verification are still pending.
 
 ## Goal
 Build auditable financial ledgers and monthly closing without double-counting shift wages, expenses, payments, or inventory consumption.
@@ -50,8 +50,11 @@ Build auditable financial ledgers and monthly closing without double-counting sh
 - Design baseline: [FINANCIAL-FOUNDATION-DESIGN.md](FINANCIAL-FOUNDATION-DESIGN.md).
 - Baseline inspected: tenant-scoped entities, `BaseTenantEntity`, `Money`, existing shift snapshots, user identity and Flyway migrations through V16.
 - Initial accounting-core code is present on `feature/financial-foundation`: additive migration V17 creates tenant-scoped chart of accounts, journal entries and journal lines; Java models/repositories and `JournalPostingService` validate balanced lines, account/driver/equipment tenant ownership, idempotency keys and exact reversal lines. Initial validation tests were added.
-- **Verification is pending:** the connected GitHub environment did not report CI runs for the latest commit, and the backend test suite has not yet been executed in the local project. Do not mark the core tested until `mvn test` and a MySQL/Flyway migration run succeed.
-- Next: run backend tests and Flyway migration locally, fix any failures, then add tenant default chart/bootstrap and safe account management before connecting completed shifts, driver payables and expenses.
+- **Accounting API:** proposed in [PR #14](https://github.com/MohammedAli01020/contractor-manager/pull/14), based on the accounting API foundation. It exposes tenant-scoped account and journal list/detail reads plus ADMIN-only journal posting. Keep the PR open as a draft until review and verification are complete.
+- **Flutter accounting UI:** proposed in [PR #15](https://github.com/MohammedAli01020/contractor-manager/pull/15), based on `feature/accounting-mobile-foundation`. It adds Arabic screens for chart of accounts, journal list and journal details, plus retry/error handling and a Flutter CI workflow. On the recorded UI commit, Flutter 3.3.3 `flutter analyze --no-fatal-infos` and `flutter test` each passed in two workflow runs. This is CI evidence, not confirmation of a real-device run or a live backend connection.
+- **Still to verify:** run/confirm backend accounting tests and Flyway V17 against MySQL; exercise tenant boundaries and ADMIN-only posting; run the app on a real Android phone over Wireless ADB with a reachable backend; verify account and journal responses end-to-end. Do not mark the whole phase tested until these checks and the phase reconciliation scenarios pass.
+- **Next UI slice:** implement a manual journal-entry form for ADMIN users with date, description, unique posting key, multiple account lines, debit/credit inputs, client-side balancing checks, and POST to the existing backend endpoint. The backend remains authoritative for validation and permissions. Refresh the journal list only after a successful post.
+- Then implement tenant default chart/bootstrap and safe account management as needed before connecting completed shifts, driver payables and expenses.
 
 ## Dependencies and next action
 Depends on stable Phase 0/1 behavior and a verified schema baseline. Balance sign convention is defined in the design as positive = amount payable to driver; payment/advance/deduction reduce the payable. Recognition date is separate from payment date. Monthly close/reopen is controlled and audited. Before schema changes, inspect the current code, migrations and tests, then implement the smallest reviewable accounting-core slice.
