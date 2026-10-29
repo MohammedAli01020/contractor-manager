@@ -178,7 +178,55 @@ void main() {
       verify(() => handler.resolve(retriedResponse)).called(1);
     });
 
-    test('clears the session when the refresh request fails', () async {
+    test('preserves the session when refresh fails due to a network error',
+        () async {
+      final handler = MockErrorInterceptorHandler();
+      final request = RequestOptions(path: '/drivers');
+      final error = unauthorized(request);
+      when(() => storage.readRefreshToken())
+          .thenAnswer((_) async => 'old-refresh');
+      when(() => refreshDio.post<Map<String, dynamic>>(
+            '/auth/refresh',
+            data: {'refreshToken': 'old-refresh'},
+          )).thenThrow(DioError(
+        requestOptions: RequestOptions(path: '/auth/refresh'),
+        type: DioErrorType.other,
+      ));
+
+      buildInterceptor().onError(error, handler);
+      await pumpEventQueue();
+
+      verifyNever(() => storage.clear());
+      verify(() => handler.next(error)).called(1);
+      verifyNever(() => dio.fetch<dynamic>(any()));
+    });
+
+    test('preserves the session when refresh server returns 503', () async {
+      final handler = MockErrorInterceptorHandler();
+      final request = RequestOptions(path: '/drivers');
+      final error = unauthorized(request);
+      when(() => storage.readRefreshToken())
+          .thenAnswer((_) async => 'old-refresh');
+      when(() => refreshDio.post<Map<String, dynamic>>(
+            '/auth/refresh',
+            data: {'refreshToken': 'old-refresh'},
+          )).thenThrow(DioError(
+        requestOptions: RequestOptions(path: '/auth/refresh'),
+        response: Response<dynamic>(
+          requestOptions: RequestOptions(path: '/auth/refresh'),
+          statusCode: 503,
+        ),
+      ));
+
+      buildInterceptor().onError(error, handler);
+      await pumpEventQueue();
+
+      verifyNever(() => storage.clear());
+      verify(() => handler.next(error)).called(1);
+      verifyNever(() => dio.fetch<dynamic>(any()));
+    });
+
+    test('clears the session when refresh credentials are rejected', () async {
       final handler = MockErrorInterceptorHandler();
       final request = RequestOptions(path: '/drivers');
       final error = unauthorized(request);
@@ -190,7 +238,10 @@ void main() {
             data: {'refreshToken': 'old-refresh'},
           )).thenThrow(DioError(
         requestOptions: RequestOptions(path: '/auth/refresh'),
-        type: DioErrorType.other,
+        response: Response<dynamic>(
+          requestOptions: RequestOptions(path: '/auth/refresh'),
+          statusCode: 401,
+        ),
       ));
 
       buildInterceptor().onError(error, handler);
