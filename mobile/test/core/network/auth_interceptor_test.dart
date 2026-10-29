@@ -80,6 +80,20 @@ void main() {
       verifyNever(() => storage.readAccessToken());
       verify(() => handler.next(request)).called(1);
     });
+
+    test('does not treat a longer path ending in a public path as public',
+        () async {
+      final handler = MockRequestInterceptorHandler();
+      final request = RequestOptions(path: '/not-auth/login');
+      when(() => storage.readAccessToken()).thenAnswer((_) async => 'access');
+
+      buildInterceptor().onRequest(request, handler);
+      await pumpEventQueue();
+
+      expect(request.headers['Authorization'], 'Bearer access');
+      verify(() => storage.readAccessToken()).called(1);
+      verify(() => handler.next(request)).called(1);
+    });
   });
 
   group('onError', () {
