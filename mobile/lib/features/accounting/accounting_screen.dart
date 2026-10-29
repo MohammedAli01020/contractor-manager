@@ -89,14 +89,14 @@ class _AccountingScreenState extends State<AccountingScreen>
   }
 
   String _errorMessage(Object error) {
-    if (error is DioException) {
+    if (error is DioError) {
       final status = error.response?.statusCode;
       if (status == 401) return 'انتهت جلسة الدخول. سجّل الدخول مرة أخرى.';
       if (status == 403) return 'ليس لديك صلاحية لعرض هذه البيانات.';
       if (status != null && status >= 500) return 'حدث خطأ بالخادم. حاول لاحقًا.';
-      if (error.type == DioExceptionType.connectionTimeout ||
-          error.type == DioExceptionType.receiveTimeout ||
-          error.type == DioExceptionType.connectionError) {
+      if (error.type == DioErrorType.connectTimeout ||
+          error.type == DioErrorType.receiveTimeout ||
+          error.type == DioErrorType.other) {
         return 'تعذر الاتصال بالخادم. تأكد من تشغيله واتصال الشبكة.';
       }
     }
@@ -295,7 +295,7 @@ class _JournalDetailsScreenState extends State<_JournalDetailsScreen> {
     } catch (error) {
       if (!mounted) return;
       setState(() {
-        _error = error is DioException && error.response?.statusCode == 404
+        _error = error is DioError && error.response?.statusCode == 404
             ? 'القيد غير موجود أو لا يتبع شركتك.'
             : 'تعذر تحميل تفاصيل القيد.';
         _loading = false;
