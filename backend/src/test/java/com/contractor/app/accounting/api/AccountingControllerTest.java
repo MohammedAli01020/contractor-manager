@@ -11,7 +11,7 @@ import com.contractor.app.accounting.domain.JournalLine;
 import com.contractor.app.accounting.domain.JournalPostingRequest;
 import com.contractor.app.accounting.domain.JournalPostingService;
 import com.contractor.app.accounting.infra.ChartAccountRepository;
-import com.contractor.app.accounting.infra.JournalLineRepository;
+import com.contractor.app.accounting.infra.JournalEntryRepository;\nimport com.contractor.app.accounting.infra.JournalLineRepository;
 import com.contractor.app.common.security.AuthenticatedUser;
 import com.contractor.app.user.domain.Role;
 import java.math.BigDecimal;
@@ -31,7 +31,7 @@ class AccountingControllerTest {
 
     private ChartAccountRepository accounts;
     private JournalPostingService journals;
-    private JournalLineRepository lines;
+    private JournalEntryRepository entries;\n    private JournalLineRepository lines;
     private AccountingController controller;
 
     @BeforeEach
