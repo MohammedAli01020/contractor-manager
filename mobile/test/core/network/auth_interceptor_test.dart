@@ -81,6 +81,18 @@ void main() {
       verify(() => handler.next(request)).called(1);
     });
 
+    test('treats a public endpoint with query parameters as public', () async {
+      final handler = MockRequestInterceptorHandler();
+      final request = RequestOptions(path: '/auth/login?source=mobile');
+
+      buildInterceptor().onRequest(request, handler);
+      await pumpEventQueue();
+
+      expect(request.headers.containsKey('Authorization'), isFalse);
+      verifyNever(() => storage.readAccessToken());
+      verify(() => handler.next(request)).called(1);
+    });
+
     test('does not treat a longer path ending in a public path as public',
         () async {
       final handler = MockRequestInterceptorHandler();
