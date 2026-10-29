@@ -7,7 +7,9 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface JournalEntryRepository extends JpaRepository<JournalEntry, Long> {
 
-    List<JournalEntry> findByTenantIdOrderByAccountingDateDescPostedAtDesc(Long tenantId);\n\n    Optional<JournalEntry> findByIdAndTenantId(Long id, Long tenantId);
+    List<JournalEntry> findByTenantIdOrderByAccountingDateDescPostedAtDesc(Long tenantId);
+
+    Optional<JournalEntry> findByIdAndTenantId(Long id, Long tenantId);
 
     Optional<JournalEntry> findByTenantIdAndPostingKey(Long tenantId, String postingKey);
 
