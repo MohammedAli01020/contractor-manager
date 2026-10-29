@@ -59,6 +59,14 @@ class AuthInterceptor extends Interceptor {
     }
     final token = await _refreshToken();
     if (token == null) {
+      // A transient refresh failure leaves the refresh token in storage. Mark
+      // the original 401 so AuthBloc does not mistake it for a rejected session.
+      try {
+        final refresh = await _storage.readRefreshToken();
+        if (refresh != null && refresh.isNotEmpty) {
+          request.extra['authRefreshUnavailable'] = true;
+        }
+      } catch (_) {}
       handler.next(error);
       return;
     }
