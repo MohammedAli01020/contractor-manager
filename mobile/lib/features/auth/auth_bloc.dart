@@ -133,9 +133,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         emit(const AuthUnauthenticated());
       }
     } on DioError catch (error) {
-      if (error.response?.statusCode == 401) {
+      if (error.response?.statusCode == 401 &&
+          error.requestOptions.extra['authRefreshUnavailable'] != true) {
         await _storage.clear();
         emit(const AuthUnauthenticated());
+      } else if (error.requestOptions.extra['authRefreshUnavailable'] == true) {
+        emit(const AuthError('تعذر التحقق من الجلسة. حاول مرة أخرى.'));
       } else {
         emit(AuthError(AppFailure.fromDio(error).message));
       }
