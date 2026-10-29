@@ -104,10 +104,18 @@ class AuthInterceptor extends Interceptor {
       }
       await _storage.save(accessToken: access, refreshToken: nextRefresh);
       return access;
+    } on DioError catch (error) {
+      final statusCode = error.response?.statusCode;
+      if (statusCode == 400 || statusCode == 401 || statusCode == 403) {
+        // The server explicitly rejected the refresh credentials.
+        try {
+          await _storage.clear();
+        } catch (_) {}
+      }
+      // Keep tokens for network failures and temporary server errors.
+      return null;
     } catch (_) {
-      try {
-        await _storage.clear();
-      } catch (_) {}
+      // Storage or unexpected failures must not sign the user out.
       return null;
     }
   }
