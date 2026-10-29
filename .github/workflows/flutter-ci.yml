@@ -58,29 +58,7 @@ jobs:
         run: flutter test
 
       - name: Analyze Flutter code
-        shell: bash
-        run: |
-          set +e
-          flutter analyze 2>&1 | tee /tmp/flutter-analyze.log
-          analyze_status=${PIPESTATUS[0]}
-          set -e
-
-          # Strip ANSI escape codes before classifying analyzer output.
-          sed -E 's/\x1B\[[0-9;]*[[:alpha:]]//g' /tmp/flutter-analyze.log > /tmp/flutter-analyze-clean.log
-
-          if grep -E ' • (error|warning) •' /tmp/flutter-analyze-clean.log; then
-            echo "::error::Flutter analyzer reported errors or warnings."
-            exit 1
-          fi
-
-          if [ "$analyze_status" -ne 0 ]; then
-            if grep -q 'info' /tmp/flutter-analyze-clean.log; then
-              echo "::warning::Flutter analyzer reported info-level lints; these do not block CI while the existing lint baseline is addressed."
-            else
-              echo "::error::Flutter analyzer failed without an info-only lint result."
-              exit "$analyze_status"
-            fi
-          fi
+        run: flutter analyze --no-fatal-infos
 
       - name: Write CI summary
         if: always()
@@ -93,4 +71,4 @@ jobs:
             echo "- Result: **${JOB_STATUS}**"
             echo "- Flutter version: 3.3.3"
             echo "- Commit: ${GITHUB_SHA}"
-          } >> "$GITHUB_STEP_SUMMARY"
+          } >> "${GITHUB_STEP_SUMMARY}"
