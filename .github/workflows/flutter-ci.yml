@@ -65,12 +65,16 @@ jobs:
           analyze_status=${PIPESTATUS[0]}
           set -e
 
-          if grep -E ' • (error|warning) •' /tmp/flutter-analyze.log; then
+          # Strip ANSI escape codes before classifying analyzer output.
+          sed -E 's/\x1B\[[0-9;]*[[:alpha:]]//g' /tmp/flutter-analyze.log > /tmp/flutter-analyze-clean.log
+
+          if grep -E ' • (error|warning) •' /tmp/flutter-analyze-clean.log; then
+            echo "::error::Flutter analyzer reported errors or warnings."
             exit 1
           fi
 
           if [ "$analyze_status" -ne 0 ]; then
-            if grep -q ' • info •' /tmp/flutter-analyze.log; then
+            if grep -q 'info' /tmp/flutter-analyze-clean.log; then
               echo "::warning::Flutter analyzer reported info-level lints; these do not block CI while the existing lint baseline is addressed."
             else
               echo "::error::Flutter analyzer failed without an info-only lint result."
