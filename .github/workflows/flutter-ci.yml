@@ -64,5 +64,5 @@ jobs:
             echo
             echo "- Result: **${JOB_STATUS}**"
             echo "- Flutter version: 3.3.3"
-            echo "- Commit: ` ${GITHUB_SHA} `"
+            echo "- Commit: ${GITHUB_SHA}"
           } >> "$GITHUB_STEP_SUMMARY"
