@@ -143,6 +143,51 @@ void main() {
       ],
       verify: (_) => verifyNever(() => storage.clear()),
     );
+
+    blocTest<AuthBloc, AuthState>(
+      'allows session validation to be retried after a connection failure',
+      setUp: () {
+        when(() => storage.readAccessToken())
+            .thenAnswer((_) async => 'access');
+        when(() => storage.readRefreshToken())
+            .thenAnswer((_) async => 'refresh');
+
+        var requestCount = 0;
+        when(() => dio.get<Map<String, dynamic>>('/auth/me')).thenAnswer(
+          (_) async {
+            requestCount++;
+            if (requestCount == 1) {
+              throw DioError(
+                requestOptions: RequestOptions(path: '/auth/me'),
+                type: DioErrorType.connectTimeout,
+              );
+            }
+            return Response<Map<String, dynamic>>(
+              requestOptions: RequestOptions(path: '/auth/me'),
+              data: userJson,
+            );
+          },
+        );
+      },
+      build: () => AuthBloc(dio: dio, storage: storage),
+      act: (bloc) async {
+        bloc.add(const AuthStarted());
+        await bloc.stream.firstWhere((state) => state is AuthError);
+        bloc.add(const AuthStarted());
+        await bloc.stream.firstWhere((state) => state is AuthAuthenticated);
+      },
+      expect: () => [
+        const AuthChecking(),
+        isA<AuthError>(),
+        const AuthChecking(),
+        AuthAuthenticated(AuthUser.fromJson(userJson)),
+      ],
+      verify: (_) {
+        verify(() => dio.get<Map<String, dynamic>>('/auth/me')).called(2);
+        verifyNever(() => storage.clear());
+      },
+    );
+
   });
 
   group('AuthLoginSubmitted', () {
