@@ -3,10 +3,13 @@ import 'package:dio/dio.dart';
 import '../storage/auth_token_storage.dart';
 
 class AuthInterceptor extends Interceptor {
-  AuthInterceptor({required Dio dio, required AuthTokenStorage storage})
-      : _dio = dio,
+  AuthInterceptor({
+    required Dio dio,
+    required AuthTokenStorage storage,
+    Dio? refreshDio,
+  })  : _dio = dio,
         _storage = storage,
-        _refreshDio = Dio(BaseOptions(
+        _refreshDio = refreshDio ?? Dio(BaseOptions(
           baseUrl: dio.options.baseUrl,
           connectTimeout: dio.options.connectTimeout,
           receiveTimeout: dio.options.receiveTimeout,
