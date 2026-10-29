@@ -36,7 +36,10 @@ void main() {
       },
       build: () => AuthBloc(dio: dio, storage: storage),
       act: (bloc) => bloc.add(const AuthStarted()),
-      expect: () => [const AuthUnauthenticated()],
+      expect: () => [
+        const AuthChecking(),
+        const AuthUnauthenticated(),
+      ],
       verify: (_) {
         verifyNever(() => dio.get<Map<String, dynamic>>('/auth/me'));
         verifyNever(() => storage.clear());
@@ -59,7 +62,10 @@ void main() {
       },
       build: () => AuthBloc(dio: dio, storage: storage),
       act: (bloc) => bloc.add(const AuthStarted()),
-      expect: () => [AuthAuthenticated(AuthUser.fromJson(userJson))],
+      expect: () => [
+        const AuthChecking(),
+        AuthAuthenticated(AuthUser.fromJson(userJson)),
+      ],
       verify: (_) => verify(() => dio.get<Map<String, dynamic>>('/auth/me'))
           .called(1),
     );
@@ -105,6 +111,7 @@ void main() {
       build: () => AuthBloc(dio: dio, storage: storage),
       act: (bloc) => bloc.add(const AuthStarted()),
       expect: () => [
+        const AuthChecking(),
         isA<AuthError>().having((state) => state.message, 'message', isNotEmpty),
       ],
       verify: (_) => verifyNever(() => storage.clear()),
