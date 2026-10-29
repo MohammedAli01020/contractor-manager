@@ -44,6 +44,7 @@ void main() {
   late int refreshRequests;
   late String accessToken;
   late String refreshToken;
+  late bool failRefresh;
 
   final userJson = <String, dynamic>{
     'id': 7,
@@ -60,6 +61,7 @@ void main() {
     refreshRequests = 0;
     accessToken = 'expired-access';
     refreshToken = 'old-refresh';
+    failRefresh = false;
 
     when(() => storage.readAccessToken())
         .thenAnswer((_) async => accessToken);
@@ -104,6 +106,12 @@ void main() {
       }
       refreshRequests++;
       expect(options.data, {'refreshToken': 'old-refresh'});
+      if (failRefresh) {
+        throw DioError(
+          requestOptions: options,
+          type: DioErrorType.connectTimeout,
+        );
+      }
       return jsonResponse({
         'accessToken': 'new-access',
         'refreshToken': 'new-refresh',
@@ -121,6 +129,30 @@ void main() {
     dio.close(force: true);
     refreshDio.close(force: true);
   });
+
+  blocTest<AuthBloc, AuthState>(
+    'preserves the session when token refresh fails due to a connection timeout',
+    setUp: () {
+      failRefresh = true;
+    },
+    build: () => AuthBloc(dio: dio, storage: storage),
+    act: (bloc) async {
+      bloc.add(const AuthStarted());
+      await bloc.stream.firstWhere((state) => state is AuthError);
+    },
+    expect: () => [
+      const AuthChecking(),
+      isA<AuthError>().having((state) => state.message, 'message', isNotEmpty),
+    ],
+    verify: (_) {
+      expect(sessionRequests, 1,
+          reason: 'A failed refresh must not retry the protected request.');
+      expect(refreshRequests, 1);
+      expect(accessToken, 'expired-access');
+      expect(refreshToken, 'old-refresh');
+      verifyNever(() => storage.clear());
+    },
+  );
 
   blocTest<AuthBloc, AuthState>(
     'restores the session after the interceptor refreshes an expired access token',
