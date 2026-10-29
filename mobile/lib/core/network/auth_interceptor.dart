@@ -67,6 +67,12 @@ class AuthInterceptor extends Interceptor {
     try {
       handler.resolve(await _dio.fetch<dynamic>(request));
     } on DioError catch (retryError) {
+      if (retryError.response?.statusCode == 401) {
+        // The refreshed access token was rejected; invalidate the stale session.
+        try {
+          await _storage.clear();
+        } catch (_) {}
+      }
       handler.next(retryError);
     } catch (_) {
       handler.next(error);
