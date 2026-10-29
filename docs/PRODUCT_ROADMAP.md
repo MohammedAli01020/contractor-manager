@@ -170,7 +170,7 @@ The roadmap below is the only source of truth for phase order and overall status
 |---|---|---|
 | 0 — Stabilize and verify the existing core | In progress — re-verify current branch and refresh test evidence before acceptance | [PHASE-00-CORE.md](phases/PHASE-00-CORE.md) |
 | 1 — Master data and shift usability | In progress — compare existing implementation with the phase exit criteria | [PHASE-01-MASTER-DATA.md](phases/PHASE-01-MASTER-DATA.md) |
-| 2 — Financial foundation and monthly close | In progress — architecture documented; code/tests pending | [PHASE-02-FINANCIALS.md](phases/PHASE-02-FINANCIALS.md) and [financial design](phases/FINANCIAL-FOUNDATION-DESIGN.md) |
+| 2 — Financial foundation and monthly close | In progress — accounting schema/service and tenant-scoped API exist; Flutter accounting screens added and Flutter CI passed twice; full accounting acceptance and real-device/API verification remain pending | [PHASE-02-FINANCIALS.md](phases/PHASE-02-FINANCIALS.md) and [financial design](phases/FINANCIAL-FOUNDATION-DESIGN.md) |
 | 3 — Purchases, suppliers and inventory | Not started | Tracked in this roadmap until a detailed plan is needed |
 | 4 — Reports and exports | Not started | Tracked in this roadmap until a detailed plan is needed |
 | 5 — Authentication redesign and optional driver accounts | Not started as a redesign phase | [PHASE-05-AUTHENTICATION.md](phases/PHASE-05-AUTHENTICATION.md) |
@@ -202,9 +202,9 @@ The roadmap below is the only source of truth for phase order and overall status
 **Exit criteria:** contractor can manage master data and run the agreed shift workflow reliably.
 
 ### Phase 2 — Financial foundation, driver ledger, equipment expenses and monthly closing
-**Status:** In progress — V17 accounting schema and initial journal posting service added on `feature/financial-foundation`; test and MySQL migration verification pending.  
+**Status:** In progress — V17 accounting schema and posting service exist; tenant-scoped accounting API is proposed in [PR #14](https://github.com/MohammedAli01020/contractor-manager/pull/14), and Flutter accounting screens are proposed in [PR #15](https://github.com/MohammedAli01020/contractor-manager/pull/15). Flutter CI (`flutter analyze --no-fatal-infos` and `flutter test`, Flutter 3.3.3) passed in two runs for the recorded UI commit. These PRs remain open drafts; do not treat the whole phase as accepted. Full backend/accounting integration and MySQL/Flyway verification plus real-device/API smoke testing remain pending.  
 **Detailed plan:** [PHASE-02-FINANCIALS.md](phases/PHASE-02-FINANCIALS.md).  
-- Define and test the exact accounting rules first, including sign conventions for positive/negative balances and the period in which each transaction is recognized. Initial chart/journal schema and posting-service validation code now exist; run backend tests and Flyway against MySQL before proceeding.
+- Define and test the exact accounting rules first, including sign conventions for positive/negative balances and the period in which each transaction is recognized. Initial chart/journal schema, posting-service validation, tenant-scoped accounting endpoints, and Flutter read-only screens for chart of accounts/journal list/details now exist on their feature branches. Flutter CI passed twice on the recorded UI commit; backend accounting integration and MySQL/Flyway verification still need explicit confirmation.
 - Implement driver ledger movements: opening balance, shift wages, advances, approved deductions, bonuses/allowances, actual payments, adjustments and reversals.
 - Implement configurable equipment expense categories and expense entries that can be linked to an equipment or a specific shift; support unpaid, partially paid and fully paid status.
 - Model equipment ownership (company-owned or third-party/partner-owned) and, when applicable, owner/partner settlements separately from operating result and cash movement.
@@ -212,6 +212,7 @@ The roadmap below is the only source of truth for phase order and overall status
 - Make posting, payment and close operations idempotent; prevent duplicate wage/expense/payment posting and enforce tenant isolation and audit history.
 - Preserve existing shift price/wage/operating-cost snapshots and avoid double-counting estimated operating costs, actual expenses, driver wages or inventory consumption.
 - Separate operational profit from cash flow and supplier/owner liabilities.
+- Before building more financial workflows, run backend tests and Flyway against MySQL; verify PR #14/#15 against their dependency chain and test the Flutter accounting screen on a real Android device with a reachable API. Next UI slice: an ADMIN-only manual journal-entry form with multiple lines, account selection, client-side balance validation, and authoritative backend posting validation.
 **Exit criteria:** sample cases reconcile for driver balances, equipment operating result, owner/partner amounts due, unpaid liabilities, monthly carry-forward, corrections and retries; no double deduction or duplicated transaction.
 
 ### Phase 3 — Purchases, suppliers and inventory
