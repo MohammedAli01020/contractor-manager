@@ -71,6 +71,30 @@ void main() {
     );
 
     blocTest<AuthBloc, AuthState>(
+      'clears the session when /auth/me returns a malformed user',
+      setUp: () {
+        when(() => storage.readAccessToken())
+            .thenAnswer((_) async => 'access');
+        when(() => storage.readRefreshToken())
+            .thenAnswer((_) async => 'refresh');
+        when(() => dio.get<Map<String, dynamic>>('/auth/me')).thenAnswer(
+          (_) async => Response<Map<String, dynamic>>(
+            requestOptions: RequestOptions(path: '/auth/me'),
+            data: {'id': 0, 'username': '', 'role': 'ADMIN'},
+          ),
+        );
+        when(() => storage.clear()).thenAnswer((_) async {});
+      },
+      build: () => AuthBloc(dio: dio, storage: storage),
+      act: (bloc) => bloc.add(const AuthStarted()),
+      expect: () => [
+        const AuthChecking(),
+        const AuthUnauthenticated(),
+      ],
+      verify: (_) => verify(() => storage.clear()).called(1),
+    );
+
+    blocTest<AuthBloc, AuthState>(
       'clears stored tokens when the session endpoint returns 401',
       setUp: () {
         when(() => storage.readAccessToken())
@@ -193,6 +217,43 @@ void main() {
         ),
       ),
     );
+    blocTest<AuthBloc, AuthState>(
+      'does not save tokens when the login user payload is malformed',
+      setUp: () {
+        when(
+          () => dio.post<Map<String, dynamic>>(
+            '/auth/login',
+            data: {'username': 'demo', 'password': 'secret'},
+          ),
+        ).thenAnswer(
+          (_) async => Response<Map<String, dynamic>>(
+            requestOptions: RequestOptions(path: '/auth/login'),
+            data: {
+              'user': {'id': 0, 'username': '', 'role': 'ADMIN'},
+              'accessToken': 'new-access',
+              'refreshToken': 'new-refresh',
+            },
+          ),
+        );
+      },
+      build: () => AuthBloc(dio: dio, storage: storage),
+      act: (bloc) => bloc.add(const AuthLoginSubmitted('demo', 'secret')),
+      expect: () => [
+        const AuthLoginLoading(),
+        isA<AuthError>().having(
+          (state) => state.message,
+          'message',
+          'تعذر قراءة استجابة تسجيل الدخول.',
+        ),
+      ],
+      verify: (_) => verifyNever(
+        () => storage.save(
+          accessToken: any(named: 'accessToken'),
+          refreshToken: any(named: 'refreshToken'),
+        ),
+      ),
+    );
+
   });
 
   group('AuthLogoutRequested', () {
