@@ -58,8 +58,9 @@ class AccountingControllerTest {
         ChartAccount account = new ChartAccount(42L, "1000", "الخزينة", AccountType.ASSET, null, true);
         when(accounts.findByTenantIdOrderByAccountCodeAsc(42L)).thenReturn(Collections.singletonList(account));
 
-        assertEquals(1, controller.listAccounts().size());
-        assertEquals("1000", controller.listAccounts().get(0).getAccountCode());
+        java.util.List<AccountingController.AccountResponse> response = controller.listAccounts();
+        assertEquals(1, response.size());
+        assertEquals("1000", response.get(0).getAccountCode());
         verify(accounts).findByTenantIdOrderByAccountCodeAsc(42L);
     }
 
