@@ -51,6 +51,9 @@ jobs:
       - name: Resolve dependencies
         run: flutter pub get
 
+      - name: Analyze Flutter code
+        run: flutter analyze
+
       - name: Run AuthInterceptor tests
         run: flutter test test/core/network/auth_interceptor_test.dart
 
