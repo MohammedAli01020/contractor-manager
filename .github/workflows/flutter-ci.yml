@@ -1,0 +1,74 @@
+name: Flutter CI
+
+on:
+  push:
+    branches:
+      - test/flutter-auth-bloc
+    paths:
+      - "mobile/**"
+      - ".github/workflows/flutter-ci.yml"
+  pull_request:
+    branches:
+      - feature/financial-foundation
+    paths:
+      - "mobile/**"
+      - ".github/workflows/flutter-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: flutter-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  flutter-tests:
+    name: Flutter tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: mobile
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter 3.3.3
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.3.3"
+          channel: stable
+          cache: true
+          cache-key: flutter-3.3.3
+
+      - name: Show toolchain versions
+        run: |
+          flutter --version
+          dart --version
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
+      - name: Run AuthInterceptor tests
+        run: flutter test test/core/network/auth_interceptor_test.dart
+
+      - name: Run Flutter test suite
+        run: flutter test
+
+      - name: Analyze Flutter code
+        run: flutter analyze --no-fatal-infos
+
+      - name: Write CI summary
+        if: always()
+        env:
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          {
+            echo "# Flutter CI"
+            echo
+            echo "- Result: **${JOB_STATUS}**"
+            echo "- Flutter version: 3.3.3"
+            echo "- Commit: ${GITHUB_SHA}"
+          } >> "${GITHUB_STEP_SUMMARY}"
