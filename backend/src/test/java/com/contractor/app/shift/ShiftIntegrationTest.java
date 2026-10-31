@@ -494,6 +494,43 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
     // ---------------------------------------------------------------- cancel & reinstate
 
     @Test
+    void postedWageShiftRejectsChangesToWageSourceFields() throws Exception {
+        JsonNode done = finishShift(token,
+                startShift(token, shiftBody(siteId, driverId, equipmentId, day(1), "MORNING")));
+        long id = done.path("id").asLong();
+        long otherDriver = createDriver(token, "Driver Two", "160", "180", "210");
+        long otherEquipment = createEquipment(token, "EX-02", typeId, "600", "1300");
+
+        Map<String, Object> changedDate = shiftBody(siteId, driverId, equipmentId, day(2), "MORNING");
+        changedDate.put("version", done.path("version").asLong());
+        putJson("/api/v1/shifts/" + id, changedDate, token).andExpect(status().isConflict());
+
+        Map<String, Object> changedType = shiftBody(siteId, driverId, equipmentId, day(1), "EVENING");
+        changedType.put("version", done.path("version").asLong());
+        putJson("/api/v1/shifts/" + id, changedType, token).andExpect(status().isConflict());
+
+        Map<String, Object> changedDriver = shiftBody(siteId, otherDriver, equipmentId, day(1), "MORNING");
+        changedDriver.put("version", done.path("version").asLong());
+        putJson("/api/v1/shifts/" + id, changedDriver, token).andExpect(status().isConflict());
+
+        Map<String, Object> changedEquipment = shiftBody(siteId, driverId, otherEquipment, day(1), "MORNING");
+        changedEquipment.put("version", done.path("version").asLong());
+        putJson("/api/v1/shifts/" + id, changedEquipment, token).andExpect(status().isConflict());
+
+        Map<String, Object> changedWage = shiftBody(siteId, driverId, equipmentId, day(1), "MORNING");
+        changedWage.put("driverWage", new BigDecimal("999.00"));
+        changedWage.put("version", done.path("version").asLong());
+        putJson("/api/v1/shifts/" + id, changedWage, token).andExpect(status().isConflict());
+
+        JsonNode unchanged = body(getJson("/api/v1/shifts/" + id, token));
+        assertThat(unchanged.path("status").asText()).isEqualTo("COMPLETED");
+        assertThat(unchanged.path("driverId").asLong()).isEqualTo(driverId);
+        assertThat(unchanged.path("equipmentId").asLong()).isEqualTo(equipmentId);
+        assertThat(unchanged.path("shiftDate").asText()).isEqualTo(day(1).toString());
+        assertThat(unchanged.path("driverWage").decimalValue()).isEqualByComparingTo("150.00");
+    }
+
+    @Test
     void completedShiftWithPostedWageCannotBeCancelled() throws Exception {
         JsonNode done = finishShift(token,
                 startShift(token, shiftBody(siteId, driverId, equipmentId, day(1), "MORNING")));
