@@ -17,6 +17,7 @@ on:
     paths:
       - "backend/**"
       - ".github/workflows/backend-ci.yml"
+      - "docs/ACCOUNTING-TREASURY-CONCURRENCY-2026-10-31.md"
   pull_request:
     branches:
       - feature/platform-owner-activation
