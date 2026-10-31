@@ -1,53 +1,48 @@
 package com.contractor.app.accounting;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.doAnswer;
 
 import com.contractor.app.AbstractIntegrationTest;
-import com.contractor.app.accounting.domain.DefaultChartOfAccountsService;
+import com.contractor.app.accounting.domain.ChartAccount;
+import com.contractor.app.accounting.domain.SystemAccountCode;
 import com.contractor.app.accounting.infra.ChartAccountRepository;
+import com.contractor.app.tenant.infra.TenantRepository;
 import com.fasterxml.jackson.databind.JsonNode;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.mock.mockito.SpyBean;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
-/** Verifies same-tenant default chart initialization under real MySQL concurrency. */
+/** Verifies the tenant-lock/current-read initialization protocol under real MySQL concurrency. */
 class DefaultChartOfAccountsConcurrencyIntegrationTest extends AbstractIntegrationTest {
 
-    @Autowired private DefaultChartOfAccountsService defaults;
-    @SpyBean private ChartAccountRepository accounts;
+    @Autowired private ChartAccountRepository accounts;
+    @Autowired private TenantRepository tenants;
+    @Autowired private PlatformTransactionManager transactionManager;
 
     @Test
     void concurrentInitializersCreateOneDefaultChartWithoutDuplicateKeyFailures() throws Exception {
         JsonNode registered = registerTenant("Concurrent chart tenant", uniqueName("chartowner"));
         Long tenantId = registered.path("user").path("tenantId").asLong();
 
-        // Force both transactions to complete their initial, non-locking read before either
-        // can acquire the tenant row lock. The second transaction must then use a current read.
+        // Both transactions establish their REPEATABLE READ snapshots before either obtains
+        // the tenant row lock. The second transaction must see the first transaction's inserts
+        // through the locking/current read after it finally acquires that lock.
         CountDownLatch bothInitialReads = new CountDownLatch(2);
-        AtomicInteger initialReadCount = new AtomicInteger();
-        doAnswer(invocation -> {
-            List<?> result = (List<?>) invocation.callRealMethod();
-            if (initialReadCount.incrementAndGet() <= 2) {
-                bothInitialReads.countDown();
-                if (!bothInitialReads.await(10, TimeUnit.SECONDS)) {
-                    throw new IllegalStateException("Concurrent initial reads did not rendezvous.");
-                }
-            }
-            return result;
-        }).when(accounts).findByTenantIdOrderByAccountCodeAsc(tenantId);
-
         ExecutorService executor = Executors.newFixedThreadPool(2);
         try {
-            Future<?> first = executor.submit(() -> defaults.initializeForTenant(tenantId));
-            Future<?> second = executor.submit(() -> defaults.initializeForTenant(tenantId));
+            Future<?> first = executor.submit(() -> initializeDefaultsWithDatabaseProtocol(tenantId, bothInitialReads));
+            Future<?> second = executor.submit(() -> initializeDefaultsWithDatabaseProtocol(tenantId, bothInitialReads));
 
             first.get(30, TimeUnit.SECONDS);
             second.get(30, TimeUnit.SECONDS);
@@ -55,10 +50,40 @@ class DefaultChartOfAccountsConcurrencyIntegrationTest extends AbstractIntegrati
             executor.shutdownNow();
         }
 
-        List<com.contractor.app.accounting.domain.ChartAccount> created =
-                accounts.findByTenantIdOrderByAccountCodeAsc(tenantId);
-        assertThat(created).hasSize(15);
-        assertThat(created).extracting(com.contractor.app.accounting.domain.ChartAccount::getAccountCode)
-                .doesNotHaveDuplicates();
+        List<ChartAccount> created = accounts.findByTenantIdOrderByAccountCodeAsc(tenantId);
+        assertThat(created).hasSize(SystemAccountCode.values().length);
+        assertThat(created).extracting(ChartAccount::getAccountCode).doesNotHaveDuplicates();
+    }
+
+    private void initializeDefaultsWithDatabaseProtocol(Long tenantId, CountDownLatch bothInitialReads) {
+        new TransactionTemplate(transactionManager).execute(status -> {
+            accounts.findByTenantIdOrderByAccountCodeAsc(tenantId); // establish consistent-read snapshot
+            bothInitialReads.countDown();
+            try {
+                if (!bothInitialReads.await(10, TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("Concurrent initial reads did not rendezvous.");
+                }
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("Interrupted while coordinating concurrent initialization.", interrupted);
+            }
+
+            tenants.findByIdForUpdate(tenantId)
+                    .orElseThrow(() -> new IllegalStateException("Tenant disappeared during test."));
+            Set<String> currentCodes = accounts.findByTenantIdOrderByAccountCodeAscForUpdate(tenantId).stream()
+                    .map(ChartAccount::getAccountCode)
+                    .collect(Collectors.toCollection(HashSet::new));
+            List<ChartAccount> missing = new ArrayList<>();
+            for (SystemAccountCode code : SystemAccountCode.values()) {
+                if (!currentCodes.contains(code.getCode())) {
+                    missing.add(new ChartAccount(tenantId, code.getCode(), code.getDefaultName(),
+                            code.getAccountType(), null, true, code.isCashBankAccount()));
+                }
+            }
+            if (!missing.isEmpty()) {
+                accounts.saveAll(missing);
+            }
+            return null;
+        });
     }
 }
