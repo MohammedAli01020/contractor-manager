@@ -68,7 +68,6 @@ The chart now includes worker-advances asset account 1300. Recoverable advances 
 - Do not introduce microservices.
 - Do not merge PRs or modify `main` without explicit approval.
 
-
 ## Concurrent-user safety review
 
 The current branch uses row-level pessimistic locks for state-changing operations on shifts, drivers, equipment and expenses, plus optimistic `@Version` checks for stale edits. Database unique indexes remain the final guard for active driver/equipment reservations, journal posting keys, reversals, idempotency keys and one earning per shift.
@@ -89,7 +88,6 @@ Known follow-up checks before declaring concurrency coverage complete:
 
 A CI-discovered trigger defect was corrected: the posted-shift trigger now permits the one-time `IN_PROGRESS -> COMPLETED` transition and first `finished_at` value, while keeping the financial/source snapshot immutable afterward.
 
-
 ## Concurrency and database integrity review (2026-10-31)
 
 - Existing integration coverage includes simultaneous identical journal postings, competing reversals of the same journal, concurrent payments against one expense (only one may succeed when their sum exceeds the expense), active-shift start/resource-state races, and row locks for driver/shift/equipment/expense mutations.
@@ -99,5 +97,27 @@ A CI-discovered trigger defect was corrected: the posted-shift trigger now permi
 - V18 already enforces unique tenant-scoped idempotency keys for expenses and expense payments. V20/V22 enforce worker-ledger request-key uniqueness and one EARNING row per shift.
 - Important remaining boundary: the current model does not maintain a separately locked, authoritative cash/bank balance row. Cash/bank availability is therefore not yet enforced as a no-negative-balance rule across unrelated payment sources. Do not claim concurrent disbursements cannot exceed available cash/bank until a dedicated cash-account balance/ledger policy and concurrency tests are implemented. Bank overdraft policy must be explicit rather than assumed.
 - V23 protects existing journal rows from mutation/deletion, but does not by itself prevent an additional journal line from being inserted later by privileged direct SQL. Production DB credentials should be least-privilege; a future posting-finalization design can close this remaining insert window without breaking the current atomic header+lines transaction.
-- Optimistic @Version and row locks solve different problems: use optimistic version checks for stale edits, pessimistic row locks for balance/resource decisions, and database unique constraints as the final race barrier.
+- Optimistic `@Version` and row locks solve different problems: use optimistic version checks for stale edits, pessimistic row locks for balance/resource decisions, and database unique constraints as the final race barrier.
 - CI is the verification gate for MySQL trigger behavior; do not treat these safeguards as production-verified until the MySQL integration workflow passes.
+
+## Cash and bank balance protection – approved policy (2026-10-31)
+
+### Business policy
+
+- Cash accounts must never have a negative available balance.
+- Bank accounts must never have a negative available balance in the first release.
+- Overdraft is disabled in the first release. If introduced later, it must be an explicit per-bank-account setting with a defined limit and audit trail; it must not be enabled implicitly.
+- A transaction that would make an account balance negative is rejected atomically. A failed posting must leave neither a journal nor a partial source/ledger mutation.
+
+### Proposed technical approach (implementation pending)
+
+- Keep the general ledger as the single accounting source of truth; do not introduce a separately maintained balance that can drift from journal lines.
+- Serialize every posting that affects a cash/bank account by acquiring a database pessimistic write lock on the relevant tenant-scoped chart-account row(s), in ascending account ID order. Acquire these locks before reading balances. All posting paths must go through the central `JournalPostingService`.
+- Calculate each cash/bank account's current debit-normal balance from its posted journal lines (debits minus credits for asset accounts), then apply the normalized journal's net effect. Reject any result below zero. Reversal journals are subject to the same check.
+- Add repository support for locking tenant-scoped account rows and an efficient aggregate balance query. The implementation must handle journals with multiple cash/bank lines and net effects without double-counting.
+- Identify cash/bank accounts explicitly and safely. The current baseline uses account codes 1000 (cash) and 1010 (bank); before supporting multiple physical cashboxes or multiple bank accounts, introduce explicit account classification/parent-leaf rules rather than relying indefinitely on names or loose code-prefix matching.
+- Keep account locks and journal insertions in the same database transaction. Define and test a consistent lock order to reduce deadlocks. Preserve tenant isolation and existing posting-key idempotency behavior.
+- Add MySQL integration tests with two independent transactions attempting different postings against the same cash/bank account at the same time. When their combined outflow exceeds the opening balance, exactly one may commit; the other must fail with a stable business conflict. Also test concurrent mixed inflow/outflow, exact-zero balance, reversals, multi-line journals, duplicate retries and transaction rollback.
+- Do not treat a unit test or a single-threaded insufficient-funds test as proof of concurrency safety.
+
+Implementation must begin only after reviewing every existing journal-producing workflow to verify that it uses the central posting service and determining the current account-selection contract for each cash/bank source.
