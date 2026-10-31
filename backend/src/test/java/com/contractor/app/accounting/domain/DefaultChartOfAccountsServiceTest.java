@@ -102,13 +102,14 @@ class DefaultChartOfAccountsServiceTest {
 
     @Test
     void rechecksMissingAccountsAfterAcquiringTenantLock() {
-        when(accounts.findByTenantIdOrderByAccountCodeAsc(7L))
-                .thenReturn(Collections.emptyList(), defaultAccountsForTenant());
+        when(accounts.findByTenantIdOrderByAccountCodeAsc(7L)).thenReturn(Collections.emptyList());
+        when(accounts.findByTenantIdOrderByAccountCodeAscForUpdate(7L)).thenReturn(defaultAccountsForTenant());
         when(tenants.findByIdForUpdate(7L)).thenReturn(Optional.of(mock(Tenant.class)));
 
         service.initializeForTenant(7L);
 
-        verify(accounts, org.mockito.Mockito.times(2)).findByTenantIdOrderByAccountCodeAsc(7L);
+        verify(accounts).findByTenantIdOrderByAccountCodeAsc(7L);
+        verify(accounts).findByTenantIdOrderByAccountCodeAscForUpdate(7L);
         verify(accounts, never()).saveAll(anyList());
     }
 
