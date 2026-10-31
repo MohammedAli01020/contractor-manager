@@ -70,7 +70,7 @@ public class DriverLedgerService {
         BigDecimal amount=money(request.getAmount());
         if(request.getPaymentDate()==null) throw ApiException.badRequest("تاريخ الصرف مطلوب.");
 
-        idempotency.reserve(tenantId, "DRIVER_PAYMENT", key,
+        idempotency.reserve(tenantId, "DRIVER_LEDGER", key,
                 RequestFingerprint.of(driverId, request.getPaymentDate(), amount, description,
                         request.getPaymentAccountId()));
         drivers.findByIdAndTenantIdForUpdate(driverId,tenantId)
@@ -93,7 +93,7 @@ public class DriverLedgerService {
         if(cash.getAccountType()!=AccountType.ASSET || !cash.isCashBankAccount())
             throw ApiException.badRequest("الصرف يكون من حساب خزينة أو بنك مُعرّف لهذا الغرض فقط.");
         JournalEntry journal=journals.post(tenantId,user.getUserId(),new JournalPostingRequest(
-                "driver-payment:"+key,"DRIVER_PAYMENT",null,request.getPaymentDate(),description,null,Arrays.asList(
+                "driver-payment:"+key,"DRIVER_LEDGER",null,request.getPaymentDate(),description,null,Arrays.asList(
                 new JournalLineRequest(payable.getId(),"صرف مستحقات العامل",amount,BigDecimal.ZERO,driverId,null),
                 new JournalLineRequest(cash.getId(),"صرف من الخزينة/البنك",BigDecimal.ZERO,amount,null,null))));
         DriverLedgerEntry entry=ledger.saveAndFlush(new DriverLedgerEntry(tenantId,driverId,"PAYMENT",
@@ -115,7 +115,7 @@ public class DriverLedgerService {
         if(!Arrays.asList("AGAINST_EARNED","RECOVERABLE").contains(type))
             throw ApiException.badRequest("نوع السلفة غير صالح.");
 
-        idempotency.reserve(tenantId, "DRIVER_ADVANCE", key,
+        idempotency.reserve(tenantId, "DRIVER_LEDGER", key,
                 RequestFingerprint.of(driverId, request.getAdvanceDate(), amount, description, type,
                         request.getPaymentAccountId()));
         drivers.findByIdAndTenantIdForUpdate(driverId,tenantId)
