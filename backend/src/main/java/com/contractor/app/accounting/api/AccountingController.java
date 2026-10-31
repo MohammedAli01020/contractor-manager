@@ -1,6 +1,7 @@
 package com.contractor.app.accounting.api;
 
 import com.contractor.app.accounting.domain.ChartAccount;
+import com.contractor.app.accounting.domain.DefaultChartOfAccountsService;
 import com.contractor.app.accounting.domain.JournalEntry;
 import com.contractor.app.accounting.domain.JournalLine;
 import com.contractor.app.accounting.domain.JournalPostingRequest;
@@ -36,16 +37,30 @@ import org.springframework.web.bind.annotation.RestController;
 public class AccountingController {
 
     private final ChartAccountRepository accounts;
+    private final DefaultChartOfAccountsService defaultAccounts;
     private final JournalPostingService journals;
     private final JournalEntryRepository entries;
     private final JournalLineRepository lines;
 
-    public AccountingController(ChartAccountRepository accounts, JournalPostingService journals,
-                                JournalEntryRepository entries, JournalLineRepository lines) {
+    public AccountingController(ChartAccountRepository accounts, DefaultChartOfAccountsService defaultAccounts,
+                                JournalPostingService journals, JournalEntryRepository entries,
+                                JournalLineRepository lines) {
         this.accounts = accounts;
+        this.defaultAccounts = defaultAccounts;
         this.journals = journals;
         this.entries = entries;
         this.lines = lines;
+    }
+
+    @PostMapping("/accounts/initialize-defaults")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "تهيئة دليل الحسابات الافتراضي للشركة الحالية")
+    public List<AccountResponse> initializeDefaultAccounts() {
+        Long tenantId = CurrentUser.tenantId();
+        defaultAccounts.initializeForTenant(tenantId);
+        return accounts.findByTenantIdOrderByAccountCodeAsc(tenantId).stream()
+                .map(AccountResponse::new)
+                .collect(Collectors.toList());
     }
 
     @GetMapping("/accounts")
