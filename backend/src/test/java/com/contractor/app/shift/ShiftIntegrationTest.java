@@ -238,7 +238,7 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
     // ---------------------------------------------------------------- finish
 
     @Test
-    void finishChangesOnlyTheIndicator() throws Exception {
+    void finishRecognizesDriverWageExactlyOnce() throws Exception {
         JsonNode running = startShift(token, shiftBody(siteId, driverId, equipmentId, day(1), "MORNING"));
 
         JsonNode done = finishShift(token, running);
@@ -248,6 +248,19 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
         assertThat(done.path("price").decimalValue()).isEqualByComparingTo("1200.00");
         assertThat(done.path("driverWage").decimalValue()).isEqualByComparingTo("150.00");
         assertThat(done.path("version").asLong()).isGreaterThan(running.path("version").asLong());
+        assertThat(done.path("driverWageJournalEntryId").isNull()).isFalse();
+        Long postedCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM journal_entries WHERE tenant_id = (SELECT tenant_id FROM shifts WHERE id = ?) AND source_type = 'SHIFT_WAGE' AND source_id = ?",
+                Long.class, running.path("id").asLong(), running.path("id").asLong());
+        assertThat(postedCount).isEqualTo(1L);
+        BigDecimal debit = jdbcTemplate.queryForObject(
+                "SELECT SUM(debit) FROM journal_lines WHERE journal_entry_id = ?", BigDecimal.class,
+                done.path("driverWageJournalEntryId").asLong());
+        BigDecimal credit = jdbcTemplate.queryForObject(
+                "SELECT SUM(credit) FROM journal_lines WHERE journal_entry_id = ?", BigDecimal.class,
+                done.path("driverWageJournalEntryId").asLong());
+        assertThat(debit).isEqualByComparingTo("150.00");
+        assertThat(credit).isEqualByComparingTo("150.00");
 
         // لا إنهاء ثانٍ، ولا إنهاء بنسخة قديمة أو بدون نسخة
         postJson("/api/v1/shifts/" + running.path("id").asLong() + "/finish", versionBody(done.path("version").asLong()),
