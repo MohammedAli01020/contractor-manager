@@ -19,7 +19,18 @@ BEGIN
        OR NOT (NEW.shift_id <=> OLD.shift_id)
        OR NOT (NEW.created_by_user_id <=> OLD.created_by_user_id)
        OR (OLD.journal_entry_id IS NOT NULL
-           AND NOT (NEW.journal_entry_id <=> OLD.journal_entry_id)) THEN
+           AND NOT (NEW.journal_entry_id <=> OLD.journal_entry_id))
+       OR (OLD.journal_entry_id IS NULL
+           AND NEW.journal_entry_id IS NOT NULL
+           AND NOT EXISTS (
+               SELECT 1
+               FROM journal_entries je
+               WHERE je.id = NEW.journal_entry_id
+                 AND je.tenant_id = NEW.tenant_id
+                 AND je.posting_key = CONCAT('expense:', OLD.client_request_key)
+                 AND je.source_type = 'EXPENSE'
+                 AND je.source_id = OLD.id
+           )) THEN
         SIGNAL SQLSTATE '45000'
             SET MESSAGE_TEXT = 'POSTED_EXPENSE_IS_IMMUTABLE';
     END IF;
@@ -45,7 +56,18 @@ BEGIN
        OR NOT (NEW.payment_account_id <=> OLD.payment_account_id)
        OR NOT (NEW.created_by_user_id <=> OLD.created_by_user_id)
        OR (OLD.journal_entry_id IS NOT NULL
-           AND NOT (NEW.journal_entry_id <=> OLD.journal_entry_id)) THEN
+           AND NOT (NEW.journal_entry_id <=> OLD.journal_entry_id))
+       OR (OLD.journal_entry_id IS NULL
+           AND NEW.journal_entry_id IS NOT NULL
+           AND NOT EXISTS (
+               SELECT 1
+               FROM journal_entries je
+               WHERE je.id = NEW.journal_entry_id
+                 AND je.tenant_id = NEW.tenant_id
+                 AND je.posting_key = CONCAT('expense-payment:', OLD.payment_key)
+                 AND je.source_type = 'EXPENSE_PAYMENT'
+                 AND je.source_id = OLD.id
+           )) THEN
         SIGNAL SQLSTATE '45000'
             SET MESSAGE_TEXT = 'POSTED_EXPENSE_PAYMENT_IS_IMMUTABLE';
     END IF;
