@@ -101,13 +101,8 @@ public class JournalPostingService {
         Collections.sort(accountIds);
         Map<Long, ChartAccount> locked = new LinkedHashMap<>();
         for (Long accountId : accountIds) {
-            ChartAccount account = accounts.findByIdAndTenantId(accountId, tenantId)
-                    .orElseThrow(() -> ApiException.notFound("الحساب المحاسبي غير موجود."));
-            if (isCashOrBank(account)) {
-                ChartAccount lockedAccount = accounts.findByIdAndTenantIdForUpdate(accountId, tenantId)
-                        .orElseThrow(() -> ApiException.notFound("الحساب المحاسبي غير موجود."));
-                locked.put(accountId, lockedAccount);
-            }
+            accounts.findCashOrBankByIdAndTenantIdForUpdate(accountId, tenantId)
+                    .ifPresent(account -> locked.put(accountId, account));
         }
         return locked;
     }
