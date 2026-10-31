@@ -125,11 +125,6 @@ public class JournalPostingService {
         }
     }
 
-    private boolean isCashOrBank(ChartAccount account) {
-        return account.getAccountType() == AccountType.ASSET
-                && ("1000".equals(account.getAccountCode()) || "1010".equals(account.getAccountCode()));
-    }
-
     private JournalEntry postNormalized(Long tenantId, Long actorUserId, NormalizedJournal normalized) {
         Optional<JournalEntry> existing = entries.findByTenantIdAndPostingKey(tenantId, normalized.postingKey);
         if (existing.isPresent()) {
