@@ -3,7 +3,9 @@ package com.contractor.app.accounting.domain;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.mysql.cj.jdbc.MysqlDataSource;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.Statement;
 import java.sql.SQLException;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -14,6 +16,8 @@ import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.support.GeneratedKeyHolder;
+import org.springframework.jdbc.support.KeyHolder;
 import org.testcontainers.DockerClientFactory;
 import org.testcontainers.containers.MySQLContainer;
 
@@ -101,8 +105,19 @@ class CashBankClassificationMigrationIntegrationTest {
     }
 
     private static long insertTenant(JdbcTemplate jdbc, String name) {
-        jdbc.update("INSERT INTO tenants (name, status) VALUES (?, 'ACTIVE')", name);
-        return jdbc.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
+        KeyHolder keyHolder = new GeneratedKeyHolder();
+        jdbc.update(connection -> {
+            PreparedStatement statement = connection.prepareStatement(
+                    "INSERT INTO tenants (name, status) VALUES (?, 'ACTIVE')",
+                    Statement.RETURN_GENERATED_KEYS);
+            statement.setString(1, name);
+            return statement;
+        }, keyHolder);
+        Number generatedId = keyHolder.getKey();
+        if (generatedId == null) {
+            throw new IllegalStateException("MySQL did not return the inserted tenant ID");
+        }
+        return generatedId.longValue();
     }
 
     private static void insertAccount(
