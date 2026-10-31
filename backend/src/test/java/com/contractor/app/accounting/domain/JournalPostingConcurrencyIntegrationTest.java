@@ -39,6 +39,7 @@ class JournalPostingConcurrencyIntegrationTest extends AbstractIntegrationTest {
     private Long debitAccountId;
     private Long creditAccountId;
     private Long cashAccountId;
+    private Long bankAccountId;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -51,6 +52,9 @@ class JournalPostingConcurrencyIntegrationTest extends AbstractIntegrationTest {
                 tenantId, uniqueName("C"), "Credit account", AccountType.REVENUE, null, false)).getId();
         cashAccountId = accounts.findByTenantIdAndAccountCodeIgnoreCase(tenantId, "1000")
                 .orElseThrow(() -> new IllegalStateException("Default cash account was not created"))
+                .getId();
+        bankAccountId = accounts.findByTenantIdAndAccountCodeIgnoreCase(tenantId, "1010")
+                .orElseThrow(() -> new IllegalStateException("Default bank account was not created"))
                 .getId();
     }
 
@@ -88,8 +92,8 @@ class JournalPostingConcurrencyIntegrationTest extends AbstractIntegrationTest {
                         new BigDecimal("100.00"), null, null)));
         postingService.post(tenantId, actorUserId, opening);
 
-        JournalPostingRequest firstRequest = cashOutRequest(uniqueName("cash-out-a"), new BigDecimal("80.00"));
-        JournalPostingRequest secondRequest = cashOutRequest(uniqueName("cash-out-b"), new BigDecimal("80.00"));
+        JournalPostingRequest firstRequest = liquidityOutRequest(uniqueName("cash-out-a"), cashAccountId, new BigDecimal("80.00"));
+        JournalPostingRequest secondRequest = liquidityOutRequest(uniqueName("cash-out-b"), cashAccountId, new BigDecimal("80.00"));
         CountDownLatch ready = new CountDownLatch(2);
         CountDownLatch start = new CountDownLatch(1);
         ExecutorService pool = Executors.newFixedThreadPool(2);
@@ -115,6 +119,83 @@ class JournalPostingConcurrencyIntegrationTest extends AbstractIntegrationTest {
             assertThat(insufficient).isEqualTo(1);
             assertThat(lineRepository.calculateDebitNormalBalance(tenantId, cashAccountId))
                     .isEqualByComparingTo("20.00");
+        } finally {
+            start.countDown();
+            pool.shutdownNow();
+        }
+    }
+
+
+    @Test
+    void concurrentCashAndBankOutflowsCannotSpendEitherBalanceTwice() throws Exception {
+        openLiquidityAccount(cashAccountId, uniqueName("cash-opening"), new BigDecimal("100.00"));
+        openLiquidityAccount(bankAccountId, uniqueName("bank-opening"), new BigDecimal("100.00"));
+
+        JournalPostingRequest[] requests = {
+                liquidityOutRequest(uniqueName("cash-out-a"), cashAccountId, new BigDecimal("80.00")),
+                liquidityOutRequest(uniqueName("cash-out-b"), cashAccountId, new BigDecimal("80.00")),
+                liquidityOutRequest(uniqueName("bank-out-a"), bankAccountId, new BigDecimal("80.00")),
+                liquidityOutRequest(uniqueName("bank-out-b"), bankAccountId, new BigDecimal("80.00"))
+        };
+        CountDownLatch ready = new CountDownLatch(requests.length);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(requests.length);
+        try {
+            java.util.List<Future<JournalEntry>> results = new java.util.ArrayList<>();
+            for (JournalPostingRequest request : requests) {
+                results.add(pool.submit(() -> postTogether(request, ready, start)));
+            }
+            assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+
+            int successes = 0;
+            int insufficient = 0;
+            for (Future<JournalEntry> result : results) {
+                try {
+                    result.get(30, TimeUnit.SECONDS);
+                    successes++;
+                } catch (java.util.concurrent.ExecutionException ex) {
+                    assertThat(ex.getCause()).isInstanceOf(ApiException.class);
+                    assertThat(((ApiException) ex.getCause()).getStatus().value()).isEqualTo(409);
+                    insufficient++;
+                }
+            }
+            assertThat(successes).isEqualTo(2);
+            assertThat(insufficient).isEqualTo(2);
+            assertThat(lineRepository.calculateDebitNormalBalance(tenantId, cashAccountId))
+                    .isEqualByComparingTo("20.00");
+            assertThat(lineRepository.calculateDebitNormalBalance(tenantId, bankAccountId))
+                    .isEqualByComparingTo("20.00");
+        } finally {
+            start.countDown();
+            pool.shutdownNow();
+        }
+    }
+
+    @Test
+    void oppositeDirectionCashBankTransfersUseConsistentLockOrder() throws Exception {
+        openLiquidityAccount(cashAccountId, uniqueName("cash-opening"), new BigDecimal("100.00"));
+        openLiquidityAccount(bankAccountId, uniqueName("bank-opening"), new BigDecimal("100.00"));
+
+        JournalPostingRequest cashToBank = transferRequest(
+                uniqueName("cash-to-bank"), bankAccountId, cashAccountId, new BigDecimal("10.00"));
+        JournalPostingRequest bankToCash = transferRequest(
+                uniqueName("bank-to-cash"), cashAccountId, bankAccountId, new BigDecimal("10.00"));
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            Future<JournalEntry> first = pool.submit(() -> postTogether(cashToBank, ready, start));
+            Future<JournalEntry> second = pool.submit(() -> postTogether(bankToCash, ready, start));
+            assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+
+            assertThat(first.get(30, TimeUnit.SECONDS)).isNotNull();
+            assertThat(second.get(30, TimeUnit.SECONDS)).isNotNull();
+            assertThat(lineRepository.calculateDebitNormalBalance(tenantId, cashAccountId))
+                    .isEqualByComparingTo("100.00");
+            assertThat(lineRepository.calculateDebitNormalBalance(tenantId, bankAccountId))
+                    .isEqualByComparingTo("100.00");
         } finally {
             start.countDown();
             pool.shutdownNow();
@@ -200,11 +281,26 @@ class JournalPostingConcurrencyIntegrationTest extends AbstractIntegrationTest {
         return postingService.post(tenantId, actorUserId, request);
     }
 
-    private JournalPostingRequest cashOutRequest(String key, BigDecimal amount) {
-        return new JournalPostingRequest(key, "CASH_OUTFLOW", 11L, LocalDate.of(2026, 10, 31),
-                "Cash outflow integration test", null, Arrays.asList(
+    private void openLiquidityAccount(Long accountId, String key, BigDecimal amount) {
+        postingService.post(tenantId, actorUserId, new JournalPostingRequest(key, "LIQUIDITY_OPENING", null,
+                LocalDate.of(2026, 10, 31), "Opening liquidity balance", null, Arrays.asList(
+                new JournalLineRequest(accountId, "Opening balance", amount, BigDecimal.ZERO, null, null),
+                new JournalLineRequest(creditAccountId, "Opening offset", BigDecimal.ZERO, amount, null, null))));
+    }
+
+    private JournalPostingRequest liquidityOutRequest(String key, Long accountId, BigDecimal amount) {
+        return new JournalPostingRequest(key, "LIQUIDITY_OUTFLOW", null, LocalDate.of(2026, 10, 31),
+                "Liquidity outflow integration test", null, Arrays.asList(
                 new JournalLineRequest(debitAccountId, "Expense", amount, BigDecimal.ZERO, null, null),
-                new JournalLineRequest(cashAccountId, "Cash payment", BigDecimal.ZERO, amount, null, null)));
+                new JournalLineRequest(accountId, "Cash or bank payment", BigDecimal.ZERO, amount, null, null)));
+    }
+
+    private JournalPostingRequest transferRequest(String key, Long receivingAccountId,
+                                                   Long payingAccountId, BigDecimal amount) {
+        return new JournalPostingRequest(key, "CASH_BANK_TRANSFER", null, LocalDate.of(2026, 10, 31),
+                "Cash/bank transfer integration test", null, Arrays.asList(
+                new JournalLineRequest(receivingAccountId, "Transfer received", amount, BigDecimal.ZERO, null, null),
+                new JournalLineRequest(payingAccountId, "Transfer paid", BigDecimal.ZERO, amount, null, null)));
     }
 
     private JournalPostingRequest request(String key) {
