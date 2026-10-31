@@ -4,6 +4,7 @@ import com.contractor.app.common.error.ApiException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
 
 /**
  * Reserves one tenant-scoped idempotency key for one operation and request fingerprint.
@@ -22,7 +23,7 @@ public class FinancialIdempotencyService {
         this.jdbc = jdbc;
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.MANDATORY)
     public void reserve(Long tenantId, String scope, String requestKey, String fingerprint) {
         jdbc.update("INSERT IGNORE INTO financial_idempotency_keys "
                         + "(tenant_id, operation_scope, request_key, request_fingerprint) "
