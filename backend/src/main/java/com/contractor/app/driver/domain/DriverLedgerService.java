@@ -79,8 +79,8 @@ public class DriverLedgerService {
         ChartAccount payable=account(tenantId,"2100");
         ChartAccount cash=accounts.findByIdAndTenantId(request.getPaymentAccountId(),tenantId)
                 .filter(ChartAccount::isActive).orElseThrow(()->ApiException.notFound("حساب الخزينة أو البنك غير موجود."));
-        if(cash.getAccountType()!=AccountType.ASSET || !Arrays.asList("1000","1010").contains(cash.getAccountCode()))
-            throw ApiException.badRequest("الصرف يكون من حساب الخزينة 1000 أو البنك 1010 فقط.");
+        if(cash.getAccountType()!=AccountType.ASSET || !cash.isCashBankAccount())
+            throw ApiException.badRequest("الصرف يكون من حساب خزينة أو بنك مُعرّف لهذا الغرض فقط.");
         JournalEntry journal=journals.post(tenantId,user.getUserId(),new JournalPostingRequest(
                 "driver-payment:"+key,"DRIVER_PAYMENT",null,request.getPaymentDate(),description,null,Arrays.asList(
                 new JournalLineRequest(payable.getId(),"صرف مستحقات العامل",amount,BigDecimal.ZERO,driverId,null),
@@ -123,7 +123,7 @@ public class DriverLedgerService {
         ChartAccount cash=accounts.findByIdAndTenantId(request.getPaymentAccountId(),tenantId)
                 .filter(ChartAccount::isActive).orElseThrow(()->ApiException.notFound("حساب الخزينة أو البنك غير موجود."));
         if(cash.getAccountType()!=AccountType.ASSET || !Arrays.asList("1000","1010").contains(cash.getAccountCode()))
-            throw ApiException.badRequest("صرف السلفة يكون من حساب الخزينة 1000 أو البنك 1010 فقط.");
+            throw ApiException.badRequest("صرف السلفة يكون من حساب خزينة أو بنك مُعرّف لهذا الغرض فقط.");
         JournalEntry journal=journals.post(tenantId,user.getUserId(),new JournalPostingRequest(
                 "driver-advance:"+key,"AGAINST_EARNED".equals(type)?"DRIVER_ADVANCE_EARNED":"DRIVER_ADVANCE_RECOVERABLE",
                 null,request.getAdvanceDate(),description,null,Arrays.asList(
