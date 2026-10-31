@@ -49,8 +49,9 @@ class JournalPostingConcurrencyIntegrationTest extends AbstractIntegrationTest {
                 tenantId, uniqueName("D"), "Debit account", AccountType.ASSET, null, false)).getId();
         creditAccountId = accounts.saveAndFlush(new ChartAccount(
                 tenantId, uniqueName("C"), "Credit account", AccountType.REVENUE, null, false)).getId();
-        cashAccountId = accounts.saveAndFlush(new ChartAccount(
-                tenantId, "1000", "Cash", AccountType.ASSET, null, true)).getId();
+        cashAccountId = accounts.findByTenantIdAndAccountCodeIgnoreCase(tenantId, "1000")
+                .orElseThrow(() -> new IllegalStateException("Default cash account was not created"))
+                .getId();
     }
 
     @Test
