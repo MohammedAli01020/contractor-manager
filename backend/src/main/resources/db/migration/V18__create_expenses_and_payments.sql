@@ -4,6 +4,7 @@ CREATE TABLE expenses (
     id                    BIGINT        NOT NULL AUTO_INCREMENT,
     tenant_id             BIGINT        NOT NULL,
     expense_number        VARCHAR(60)   NOT NULL,
+    client_request_key    VARCHAR(120)  NOT NULL,
     expense_date          DATE          NOT NULL,
     category_code         VARCHAR(40)   NOT NULL,
     description           VARCHAR(300)  NOT NULL,
@@ -20,6 +21,7 @@ CREATE TABLE expenses (
     PRIMARY KEY (id),
     UNIQUE KEY uq_expenses_id_tenant (id, tenant_id),
     UNIQUE KEY uq_expenses_number (tenant_id, expense_number),
+    UNIQUE KEY uq_expenses_request_key (tenant_id, client_request_key),
     UNIQUE KEY uq_expenses_journal (tenant_id, journal_entry_id),
     KEY ix_expenses_tenant_date (tenant_id, expense_date, id),
     KEY ix_expenses_equipment (tenant_id, equipment_id, expense_date),
@@ -38,7 +40,8 @@ CREATE TABLE expenses (
     CONSTRAINT ck_expenses_amount CHECK (amount > 0),
     CONSTRAINT ck_expenses_category CHECK (CHAR_LENGTH(TRIM(category_code)) > 0),
     CONSTRAINT ck_expenses_description CHECK (CHAR_LENGTH(TRIM(description)) > 0),
-    CONSTRAINT ck_expenses_number CHECK (CHAR_LENGTH(TRIM(expense_number)) > 0)
+    CONSTRAINT ck_expenses_number CHECK (CHAR_LENGTH(TRIM(expense_number)) > 0),
+    CONSTRAINT ck_expenses_request_key CHECK (CHAR_LENGTH(TRIM(client_request_key)) > 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE expense_payments (
