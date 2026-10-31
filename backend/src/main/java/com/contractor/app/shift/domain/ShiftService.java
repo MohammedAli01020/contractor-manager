@@ -280,6 +280,27 @@ public class ShiftService {
                     shift.getShiftDate(), shift.getDriverWage(), shift.getDriverWage(),
                     "أجر الوردية رقم " + shift.getId(), "shift-wage-" + shift.getId(),
                     shift.getId(), wageJournal.getId(), actorUserId));
+            BigDecimal recoverable = driverLedger.sumRecoverableAdvanceBalance(tenantId, shift.getDriverId());
+            if (recoverable.signum() > 0) {
+                BigDecimal recovery = recoverable.min(shift.getDriverWage());
+                ChartAccount advancesAsset = chartAccounts.findByTenantIdAndAccountCodeIgnoreCase(tenantId, "1300")
+                        .filter(ChartAccount::isActive)
+                        .orElseThrow(() -> ApiException.conflict("حساب سلف العاملين القابلة للاسترداد غير مهيأ."));
+                String recoveryKey = "shift-advance-recovery-" + shift.getId();
+                com.contractor.app.accounting.domain.JournalEntry recoveryJournal = journalPosting.post(
+                        tenantId, actorUserId, new JournalPostingRequest(recoveryKey, "DRIVER_ADVANCE_RECOVERY",
+                                shift.getId(), shift.getShiftDate(),
+                                "استرداد جزء من سلفة العامل من أجر الوردية رقم " + shift.getId(), null,
+                                java.util.Arrays.asList(
+                                        new JournalLineRequest(driverPayable.getId(), "خصم سلفة من مستحق العامل",
+                                                recovery, BigDecimal.ZERO, shift.getDriverId(), null),
+                                        new JournalLineRequest(advancesAsset.getId(), "تخفيض رصيد سلف العامل",
+                                                BigDecimal.ZERO, recovery, shift.getDriverId(), null))));
+                driverLedger.saveAndFlush(new DriverLedgerEntry(tenantId, shift.getDriverId(), "ADVANCE_RECOVERY",
+                        shift.getShiftDate(), recovery, recovery.negate(),
+                        "استرداد سلفة من أجر الوردية رقم " + shift.getId(), recoveryKey,
+                        shift.getId(), recoveryJournal.getId(), actorUserId));
+            }
         }
         shift.setStatus(ShiftStatus.COMPLETED);
         shift.setFinishedAt(LocalDateTime.now(ZoneOffset.UTC));
