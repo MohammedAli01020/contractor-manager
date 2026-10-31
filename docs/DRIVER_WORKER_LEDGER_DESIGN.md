@@ -121,3 +121,22 @@ A CI-discovered trigger defect was corrected: the posted-shift trigger now permi
 - Do not treat a unit test or a single-threaded insufficient-funds test as proof of concurrency safety.
 
 Implementation must begin only after reviewing every existing journal-producing workflow to verify that it uses the central posting service and determining the current account-selection contract for each cash/bank source.
+
+
+## Journal-producing workflow audit (2026-10-31)
+
+Reviewed the accounting-related service implementations on `feature/driver-worker-ledger`:
+
+- `ExpenseService.create()`: posts the expense recognition journal through `JournalPostingService`; this is an accrual entry (expense debit / supplier payable credit) and does not move cash or bank.
+- `ExpenseService.addPayment()`: records the payment source row and posts supplier payable debit / selected cash-or-bank credit through `JournalPostingService`. The source row and journal are in the surrounding Spring transaction.
+- `DriverLedgerService.pay()`: posts worker payable debit / selected cash-or-bank credit through `JournalPostingService`.
+- `DriverLedgerService.advance()`: posts either worker payable or recoverable worker-advance asset debit / selected cash-or-bank credit through `JournalPostingService`.
+- `ShiftService.finish()`: posts the wage recognition journal (wage expense debit / worker payable credit) and, when applicable, a recoverable-advance offset journal (worker payable debit / worker-advance asset credit) through `JournalPostingService`. Neither journal moves cash/bank.
+- No direct construction/persistence of `JournalEntry` or `JournalLine` was found in these reviewed business workflows. The central posting service owns journal header and line persistence.
+- The currently identified cash/bank outflow sources are therefore supplier expense payments, worker payable payments and worker advances. They all submit a journal containing a credit line to the selected account; this is the enforcement point for the shared cash/bank balance floor.
+- The account-selection contract is currently hard-coded to active asset accounts with code `1000` (cash) or `1010` (bank) in `ExpenseService` and `DriverLedgerService`. The baseline chart creates one account for each code per tenant. This supports the current single-cash/single-bank baseline, not multiple physical cashboxes or multiple bank accounts yet.
+- `JournalPostingService.postNormalized()` currently validates account existence and active status, then saves the journal header and lines. It does not acquire account row locks or calculate cash/bank balances. This confirms the identified protection gap.
+- Implementation must centralize cash/bank classification and balance-floor enforcement in `JournalPostingService`, rather than adding separate balance checks to each source workflow. The existing source-specific code restrictions should be retained until a deliberate multi-account model is designed.
+- The source business methods are transactional and the posting service uses a REQUIRED `TransactionTemplate`; verify transaction propagation and rollback behavior in MySQL integration tests while adding account locks. Keep account locking, balance read, source row changes and journal persistence in one transaction.
+- Audit scope: the accounting-related business service files in the current branch tree (expense, driver ledger, shift) and the central accounting domain/repositories. Re-run this audit whenever a new journal-producing module is introduced.
+
