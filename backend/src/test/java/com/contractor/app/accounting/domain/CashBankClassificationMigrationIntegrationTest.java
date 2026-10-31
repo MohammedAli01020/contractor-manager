@@ -31,7 +31,10 @@ class CashBankClassificationMigrationIntegrationTest {
             container = new MySQLContainer<>("mysql:8.0")
                     .withDatabaseName("migration_test")
                     .withUsername("test")
-                    .withPassword("test");
+                    .withPassword("test")
+                    // Earlier migrations create triggers; this setting lets the disposable CI
+                    // database create them while binary logging is enabled.
+                    .withCommand("--log-bin-trust-function-creators=1");
             container.start();
         }
         MYSQL = container;
