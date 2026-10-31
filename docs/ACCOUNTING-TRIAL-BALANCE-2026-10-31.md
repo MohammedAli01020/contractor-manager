@@ -29,3 +29,8 @@ This slice adds a read-only, tenant-scoped trial-balance report over immutable p
 - **Verified 2026-10-31:** push run [41229634484](https://github.com/MohammedAli01020/contractor-manager/actions/runs/41229634484) and PR run [41229638627](https://github.com/MohammedAli01020/contractor-manager/actions/runs/41229638627) succeeded on code commit `1c4b42a84b2d72e1647803af8b6dd223ca49fa8f`. Surefire artifact: 30 XML reports, 175 tests, 0 failures, 0 errors and 0 skipped. The trial-balance suite executed all 7 MySQL integration tests.
 - CI requires the trial-balance integration suite to execute at least seven tests with no skips, failures or errors.
 - This report is a financial read model, not a reconciliation/closing workflow. Monthly close, account statements and controlled period locking remain separate future work.
+
+
+## Dependency-stack checkpoint — 2026-10-31
+- Parent PR #18 currently points to `723f5c4500359d95c757f69f83b82dc61d3a26f6`, including the tenant-lock/current-read concurrency hardening.
+- The earlier trial-balance CI evidence predates this parent update. The combined PR #18 + PR #19 stack must pass a fresh CI run before either branch is considered merge-ready.
