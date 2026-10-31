@@ -282,10 +282,10 @@ class ExpenseIntegrationTest extends AbstractIntegrationTest {
         CountDownLatch start = new CountDownLatch(1);
         ExecutorService executor = Executors.newFixedThreadPool(2);
         try {
-            Future<Integer> first = executor.submit(() -> concurrentPayment(
-                    firstId, "same-payment-key-race", ready, start));
-            Future<Integer> second = executor.submit(() -> concurrentPayment(
-                    secondId, "same-payment-key-race", ready, start));
+            Future<Integer> first = executor.submit(() -> concurrentPaymentAmount(
+                    firstId, "same-payment-key-race", "100.00", ready, start));
+            Future<Integer> second = executor.submit(() -> concurrentPaymentAmount(
+                    secondId, "same-payment-key-race", "100.00", ready, start));
             ready.await();
             start.countDown();
 
@@ -304,6 +304,15 @@ class ExpenseIntegrationTest extends AbstractIntegrationTest {
                 tenantId, "expense-payment:same-payment-key-race")).hasValueSatisfying(entry ->
                 assertThat(journalLines.findByTenantIdAndJournalEntryIdOrderByLineNumberAsc(
                         tenantId, entry.getId())).hasSize(2));
+    }
+
+    private int concurrentPaymentAmount(long expenseId, String key, String amount,
+                                         CountDownLatch ready, CountDownLatch start) throws Exception {
+        ready.countDown();
+        start.await();
+        MvcResult result = postJson("/api/v1/expenses/" + expenseId + "/payments",
+                paymentBody(key, amount), token).andReturn();
+        return result.getResponse().getStatus();
     }
 
     private MvcResult concurrentCreateExpense(String key, CountDownLatch ready,
