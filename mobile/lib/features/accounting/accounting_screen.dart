@@ -15,6 +15,7 @@ class _AccountingScreenState extends State<AccountingScreen>
   late final TabController _tabs;
   bool _loadingAccounts = true;
   bool _loadingJournals = true;
+  bool _initializingAccounts = false;
   String? _accountsError;
   String? _journalsError;
   List<_Account> _accounts = [];
@@ -58,6 +59,32 @@ class _AccountingScreenState extends State<AccountingScreen>
         _accountsError = _errorMessage(error);
         _loadingAccounts = false;
       });
+    }
+  }
+
+  Future<void> _initializeDefaultAccounts() async {
+    setState(() {
+      _initializingAccounts = true;
+      _accountsError = null;
+    });
+    try {
+      await getIt<Dio>().post('/accounting/accounts/initialize-defaults');
+      await _loadAccounts();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تم تجهيز دليل الحسابات بنجاح')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _accountsError = _errorMessage(error);
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _initializingAccounts = false;
+        });
+      }
     }
   }
 
@@ -124,6 +151,8 @@ class _AccountingScreenState extends State<AccountingScreen>
             loading: _loadingAccounts,
             error: _accountsError,
             onRefresh: _loadAccounts,
+            onInitializeDefaults: _initializeDefaultAccounts,
+            initializingDefaults: _initializingAccounts,
           ),
           _JournalsTab(
             journals: _journals,
@@ -143,12 +172,16 @@ class _AccountsTab extends StatelessWidget {
     required this.loading,
     required this.error,
     required this.onRefresh,
+    required this.onInitializeDefaults,
+    required this.initializingDefaults,
   });
 
   final List<_Account> accounts;
   final bool loading;
   final String? error;
   final Future<void> Function() onRefresh;
+  final Future<void> Function() onInitializeDefaults;
+  final bool initializingDefaults;
 
   @override
   Widget build(BuildContext context) {
@@ -160,11 +193,33 @@ class _AccountsTab extends StatelessWidget {
       return RefreshIndicator(
         onRefresh: onRefresh,
         child: ListView(
-          children: const [
-            SizedBox(height: 120),
-            Icon(Icons.account_tree_outlined, size: 48),
-            SizedBox(height: 12),
-            Center(child: Text('لا توجد حسابات لعرضها')),
+          children: [
+            const SizedBox(height: 100),
+            const Icon(Icons.account_tree_outlined, size: 48),
+            const SizedBox(height: 12),
+            const Center(child: Text('لا توجد حسابات لعرضها')),
+            const SizedBox(height: 8),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 24),
+              child: Text(
+                'يمكن لمدير الشركة تجهيز دليل الحسابات الافتراضي للبدء.',
+                textAlign: TextAlign.center,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Center(
+              child: ElevatedButton.icon(
+                onPressed: initializingDefaults ? null : onInitializeDefaults,
+                icon: initializingDefaults
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.account_tree_outlined),
+                label: Text(initializingDefaults ? 'جارٍ التجهيز...' : 'تجهيز دليل الحسابات'),
+              ),
+            ),
           ],
         ),
       );
