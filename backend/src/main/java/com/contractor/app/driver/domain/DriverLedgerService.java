@@ -136,8 +136,13 @@ public class DriverLedgerService {
     }
 
     private ChartAccount account(Long tenantId,String code) {
-        return accounts.findByTenantIdAndAccountCodeIgnoreCase(tenantId,code).filter(ChartAccount::isActive)
+        ChartAccount account=accounts.findByTenantIdAndAccountCodeIgnoreCase(tenantId,code)
+                .filter(ChartAccount::isActive)
                 .orElseThrow(()->ApiException.conflict("الحساب الافتراضي "+code+" غير مهيأ."));
+        AccountType expected="2100".equals(code)?AccountType.LIABILITY:AccountType.ASSET;
+        if(account.getAccountType()!=expected)
+            throw ApiException.conflict("نوع الحساب الافتراضي "+code+" غير صحيح.");
+        return account;
     }
     private BigDecimal money(BigDecimal v) {
         if(v==null||v.signum()<=0) throw ApiException.badRequest("المبلغ يجب أن يكون أكبر من صفر.");
