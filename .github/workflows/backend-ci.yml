@@ -125,6 +125,7 @@ jobs:
 
           required = {
               "DefaultChartOfAccountsServiceTest": 8,
+              "DefaultChartOfAccountsConcurrencyIntegrationTest": 1,
               "ShiftIntegrationTest": 1,
               "ExpenseIntegrationTest": 1,
           }
