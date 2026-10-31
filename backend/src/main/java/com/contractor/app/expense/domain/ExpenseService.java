@@ -19,6 +19,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
@@ -27,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ExpenseService {
     private static final String PAYABLES_CODE = "2000";
+    private static final List<String> PAYMENT_ACCOUNT_CODES = Arrays.asList("1000", "1010");
     private final ExpenseRepository expenses;
     private final ExpensePaymentRepository payments;
     private final ChartAccountRepository accounts;
@@ -42,21 +44,37 @@ public class ExpenseService {
         AuthenticatedUser user=CurrentUser.get();
         Long tenantId=user.getTenantId();
         if(request==null) throw ApiException.badRequest("بيانات المصروف مطلوبة.");
+        String requestKey=required(request.getClientRequestKey(),120,"مفتاح طلب المصروف");
+        if(request.getExpenseDate()==null) throw ApiException.badRequest("تاريخ المصروف مطلوب.");
         BigDecimal amount=money(request.getAmount());
         String category=required(request.getCategoryCode(),40,"تصنيف المصروف");
         String description=required(request.getDescription(),300,"وصف المصروف");
+        String supplier=trimToNull(request.getSupplierName());
+        if(supplier!=null && supplier.length()>150) throw ApiException.badRequest("اسم المورد أطول من المسموح.");
+        validateOptionalId(request.getEquipmentId(),"المعدة");
+        validateOptionalId(request.getShiftId(),"الوردية");
+
+        Optional<Expense> prior=expenses.findByTenantIdAndClientRequestKey(tenantId,requestKey);
+        if(prior.isPresent()) {
+            Expense existing=prior.get();
+            if(!sameExpenseRequest(existing,request,amount,category,description,supplier))
+                throw ApiException.conflict("مفتاح طلب المصروف مستخدم لبيانات مختلفة.");
+            return response(existing);
+        }
+
         ChartAccount expenseAccount=account(tenantId,request.getExpenseAccountId());
         if(expenseAccount.getAccountType()!=AccountType.EXPENSE)
             throw ApiException.badRequest("يجب اختيار حساب من نوع المصروفات.");
         ChartAccount payable=accountByCode(tenantId,PAYABLES_CODE);
         if(payable.getAccountType()!=AccountType.LIABILITY)
             throw ApiException.conflict("الحساب الافتراضي للموردين غير مضبوط كالتزام.");
+
         String number="EXP-"+UUID.randomUUID().toString().replace("-","").substring(0,20).toUpperCase();
-        Expense expense=expenses.saveAndFlush(new Expense(tenantId,number,request.getExpenseDate(),category,
-                description,trimToNull(request.getSupplierName()),amount,expenseAccount.getId(),
-                request.getEquipmentId(),request.getShiftId(),user.getUserId()));
+        Expense expense=expenses.saveAndFlush(new Expense(tenantId,number,requestKey,request.getExpenseDate(),
+                category,description,supplier,amount,expenseAccount.getId(),request.getEquipmentId(),
+                request.getShiftId(),user.getUserId()));
         JournalEntry journal=journals.post(tenantId,user.getUserId(),new JournalPostingRequest(
-                "expense:"+number,"EXPENSE",expense.getId(),request.getExpenseDate(),description,null,
+                "expense:"+requestKey,"EXPENSE",expense.getId(),request.getExpenseDate(),description,null,
                 Arrays.asList(
                     new JournalLineRequest(expenseAccount.getId(),description,amount,BigDecimal.ZERO,null,request.getEquipmentId()),
                     new JournalLineRequest(payable.getId(),"مستحق للموردين",BigDecimal.ZERO,amount,null,null))));
@@ -72,9 +90,10 @@ public class ExpenseService {
         if(request==null) throw ApiException.badRequest("بيانات السداد مطلوبة.");
         String key=required(request.getPaymentKey(),120,"مفتاح السداد");
         BigDecimal amount=money(request.getAmount());
+        if(request.getPaymentDate()==null) throw ApiException.badRequest("تاريخ السداد مطلوب.");
         Expense expense=expenses.findByIdAndTenantIdForUpdate(expenseId,tenantId)
                 .orElseThrow(()->ApiException.notFound("المصروف غير موجود."));
-        java.util.Optional<ExpensePayment> prior=payments.findByTenantIdAndPaymentKey(tenantId,key);
+        Optional<ExpensePayment> prior=payments.findByTenantIdAndPaymentKey(tenantId,key);
         if(prior.isPresent()){
             ExpensePayment p=prior.get();
             if(!p.getExpenseId().equals(expenseId)||p.getAmount().compareTo(amount)!=0
@@ -90,8 +109,9 @@ public class ExpenseService {
         ChartAccount paymentAccount=account(tenantId,request.getPaymentAccountId());
         if(payable.getAccountType()!=AccountType.LIABILITY)
             throw ApiException.conflict("حساب الموردين الافتراضي غير صالح.");
-        if(paymentAccount.getAccountType()!=AccountType.ASSET)
-            throw ApiException.badRequest("حساب السداد يجب أن يكون من الأصول مثل الخزينة أو البنك.");
+        if(paymentAccount.getAccountType()!=AccountType.ASSET
+                || !PAYMENT_ACCOUNT_CODES.contains(paymentAccount.getAccountCode()))
+            throw ApiException.badRequest("السداد يكون من حساب الخزينة 1000 أو البنك 1010 فقط.");
         ExpensePayment payment=payments.saveAndFlush(new ExpensePayment(tenantId,expenseId,key,
                 request.getPaymentDate(),amount,paymentAccount.getId(),user.getUserId()));
         JournalEntry journal=journals.post(tenantId,user.getUserId(),new JournalPostingRequest(
@@ -111,6 +131,17 @@ public class ExpenseService {
                 .map(this::response).collect(Collectors.toList());
     }
 
+    private boolean sameExpenseRequest(Expense e,CreateExpenseRequest r,BigDecimal amount,
+                                       String category,String description,String supplier) {
+        return e.getAmount().compareTo(amount)==0
+                && e.getExpenseDate().equals(r.getExpenseDate())
+                && e.getCategoryCode().equals(category)
+                && e.getDescription().equals(description)
+                && java.util.Objects.equals(e.getSupplierName(),supplier)
+                && e.getExpenseAccountId().equals(r.getExpenseAccountId())
+                && java.util.Objects.equals(e.getEquipmentId(),r.getEquipmentId())
+                && java.util.Objects.equals(e.getShiftId(),r.getShiftId());
+    }
     private ExpenseResponse response(Expense expense) {
         BigDecimal paid=payments.sumAmountByTenantAndExpense(expense.getTenantId(),expense.getId());
         return new ExpenseResponse(expense,paid.setScale(2,RoundingMode.UNNECESSARY));
@@ -136,6 +167,9 @@ public class ExpenseService {
         String v=value==null?"":value.trim();
         if(v.isEmpty()||v.length()>max) throw ApiException.badRequest(label+" مطلوب وبحد أقصى "+max+" حرفًا.");
         return v;
+    }
+    private void validateOptionalId(Long id,String label) {
+        if(id!=null&&id<=0) throw ApiException.badRequest("معرّف "+label+" غير صالح.");
     }
     private String trimToNull(String value){return value==null||value.trim().isEmpty()?null:value.trim();}
 }
