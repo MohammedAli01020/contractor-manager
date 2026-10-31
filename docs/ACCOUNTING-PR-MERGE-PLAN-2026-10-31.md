@@ -142,3 +142,19 @@ This section supersedes the earlier planned sequence where branch state or PR st
 - Fresh PR merge-result CI run `41239857728` (run #333) is pending/in progress on exact head `e929d7e49776c52a9928f6ed909827ec7f84f99e`. The previous 175-test success on run #332 predates this synchronization and is not a substitute for run #333.
 - Issue #21 remains open. Existing MySQL tests now cover same-key concurrent expense creation with identical payloads, expense-payment key reuse across different expenses, driver-payment key reuse across different drivers, driver-advance key reuse across different drivers, and payment-account mismatch on driver retries. Add an explicit concurrent expense-create same-key/different-payload test and verify stable 409 behavior before treating the issue's full acceptance criteria as satisfied.
 - No production Flyway migration was run.
+
+
+## PR #20 idempotency validation checkpoint — 2026-10-31 (final)
+
+- PR #20 head: `8bb58b0784f7498b6653def80cbe4774b2aefcda`.
+- PR merge-result CI run #340: `41240482346` — success.
+- Head push CI run #339: `41240476942` — success.
+- Surefire report: **176 tests, 0 failures, 0 errors, 0 skipped**.
+- Expense integration: **13 passed**, including concurrent same-key/different-payload create returning stable HTTP 409, identical concurrent create replay, and payment-key collision across different expenses.
+- Driver-ledger idempotency integration: **7 passed**, including cross-driver payment/advance key reuse and cash/bank account mismatch conflict.
+- Journal posting concurrency: **8 passed**; V24 populated-data migration guard: **1 passed**.
+- All workflow execution guards passed, confirming MySQL accounting/idempotency integration tests and the V24 populated-data migration test executed.
+- Issue #21 was closed as completed after this validation: https://github.com/MohammedAli01020/contractor-manager/issues/21.
+- Current branch comparison: `feature/driver-worker-ledger` is **122 commits ahead / 0 behind** `feature/financial-foundation`; GitHub reports PR #20 mergeable.
+- PR #20 remains **Draft and unmerged** pending final review and explicit owner approval. This checkpoint does not authorize merging it or changing `main`.
+- No production Flyway migration was run.
