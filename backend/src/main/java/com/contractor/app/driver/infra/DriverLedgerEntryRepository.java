@@ -13,4 +13,6 @@ public interface DriverLedgerEntryRepository extends JpaRepository<DriverLedgerE
     List<DriverLedgerEntry> findByTenantIdAndDriverIdOrderByTransactionDateAscIdAsc(Long tenantId, Long driverId);
     @Query("select coalesce(sum(e.balanceEffect), 0) from DriverLedgerEntry e where e.tenantId=:tenantId and e.driverId=:driverId")
     BigDecimal sumBalance(@Param("tenantId") Long tenantId, @Param("driverId") Long driverId);
+    @Query("select coalesce(sum(case when e.transactionType='RECOVERABLE_ADVANCE' then e.amount when e.transactionType='ADVANCE_RECOVERY' then -e.amount else 0 end), 0) from DriverLedgerEntry e where e.tenantId=:tenantId and e.driverId=:driverId")
+    BigDecimal sumRecoverableAdvanceBalance(@Param("tenantId") Long tenantId, @Param("driverId") Long driverId);
 }
