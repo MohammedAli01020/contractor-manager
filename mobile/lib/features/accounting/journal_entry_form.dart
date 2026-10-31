@@ -13,7 +13,7 @@ class JournalEntryFormScreen extends StatefulWidget {
 class _JournalEntryFormScreenState extends State<JournalEntryFormScreen> {
   final _formKey = GlobalKey<FormState>();
   final _description = TextEditingController();
-  final _postingKey = 'manual-\${DateTime.now().microsecondsSinceEpoch}';
+  final _postingKey = 'manual-${DateTime.now().microsecondsSinceEpoch}';
   final List<_JournalLineInput> _lines = [
     _JournalLineInput(),
     _JournalLineInput(),
@@ -101,12 +101,12 @@ class _JournalEntryFormScreenState extends State<JournalEntryFormScreen> {
   }
 
   String _money(int cents) =>
-      '\${cents ~/ 100}.\${(cents % 100).toString().padLeft(2, '0')}';
+      '${cents ~/ 100}.${(cents % 100).toString().padLeft(2, '0')}';
 
   String _dateValue(DateTime date) =>
-      '\${date.year.toString().padLeft(4, '0')}-'
-      '\${date.month.toString().padLeft(2, '0')}-'
-      '\${date.day.toString().padLeft(2, '0')}';
+      '${date.year.toString().padLeft(4, '0')}-'
+      '${date.month.toString().padLeft(2, '0')}-'
+      '${date.day.toString().padLeft(2, '0')}';
 
   String _apiError(Object error) {
     if (error is DioError) {
@@ -246,7 +246,7 @@ class _JournalEntryFormScreenState extends State<JournalEntryFormScreen> {
                           OutlinedButton.icon(
                             onPressed: _saving ? null : _pickDate,
                             icon: const Icon(Icons.calendar_today_outlined),
-                            label: Text('تاريخ القيد: \${_dateValue(_date)}'),
+                            label: Text('تاريخ القيد: ${_dateValue(_date)}'),
                           ),
                           const SizedBox(height: 20),
                           Row(
@@ -314,7 +314,7 @@ class _JournalEntryFormScreenState extends State<JournalEntryFormScreen> {
             Row(
               children: [
                 Expanded(
-                  child: Text('السطر \${index + 1}',
+                  child: Text('السطر ${index + 1}',
                       style: const TextStyle(fontWeight: FontWeight.w700)),
                 ),
                 if (_lines.length > 2)
@@ -335,7 +335,7 @@ class _JournalEntryFormScreenState extends State<JournalEntryFormScreen> {
               items: _accounts
                   .map((account) => DropdownMenuItem<int>(
                         value: account.id,
-                        child: Text('\${account.code} - \${account.name}'),
+                        child: Text('${account.code} - ${account.name}'),
                       ))
                   .toList(),
               onChanged: _saving
