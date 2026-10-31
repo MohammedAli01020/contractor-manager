@@ -52,6 +52,10 @@ public class Shift extends BaseTenantEntity {
     @Column(name = "equipment_operating_cost", nullable = false, precision = 15, scale = 2)
     private BigDecimal equipmentOperatingCost;
 
+    /** One-time journal that recognizes this shift driver wage. */
+    @Column(name = "driver_wage_journal_entry_id", unique = true)
+    private Long driverWageJournalEntryId;
+
     @Column(length = 500)
     private String notes;
 
@@ -150,6 +154,12 @@ public class Shift extends BaseTenantEntity {
 
     public void setDriverWage(BigDecimal driverWage) {
         this.driverWage = driverWage;
+    }
+
+    public Long getDriverWageJournalEntryId() { return driverWageJournalEntryId; }
+
+    public void setDriverWageJournalEntryId(Long driverWageJournalEntryId) {
+        this.driverWageJournalEntryId = driverWageJournalEntryId;
     }
 
     public BigDecimal getEquipmentOperatingCost() {
