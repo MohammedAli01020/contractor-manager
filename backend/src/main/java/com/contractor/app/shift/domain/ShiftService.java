@@ -9,6 +9,8 @@ import com.contractor.app.accounting.domain.JournalPostingRequest;
 import com.contractor.app.accounting.domain.JournalPostingService;
 import com.contractor.app.accounting.infra.ChartAccountRepository;
 import com.contractor.app.accounting.infra.JournalEntryRepository;
+import com.contractor.app.driver.domain.DriverLedgerEntry;
+import com.contractor.app.driver.infra.DriverLedgerEntryRepository;
 import com.contractor.app.accounting.domain.ChartAccount;
 import com.contractor.app.common.api.PageParams;
 import com.contractor.app.common.api.PageResponse;
@@ -64,13 +66,15 @@ public class ShiftService {
     private final JournalPostingService journalPosting;
     private final ChartAccountRepository chartAccounts;
     private final JournalEntryRepository journalEntries;
+    private final DriverLedgerEntryRepository driverLedger;
     private final DefaultChartOfAccountsService defaultAccounts;
     private final ZoneId businessZone;
 
     public ShiftService(ShiftRepository shifts, SiteRepository sites, DriverRepository drivers,
                         EquipmentRepository equipment, AuditService audit,
                         JournalPostingService journalPosting, ChartAccountRepository chartAccounts,
-                        JournalEntryRepository journalEntries, DefaultChartOfAccountsService defaultAccounts,
+                        JournalEntryRepository journalEntries, DriverLedgerEntryRepository driverLedger,
+                        DefaultChartOfAccountsService defaultAccounts,
                         @Value("${app.business-timezone:Africa/Cairo}") String businessTimezone) {
         this.shifts = shifts;
         this.sites = sites;
@@ -80,6 +84,7 @@ public class ShiftService {
         this.journalPosting = journalPosting;
         this.chartAccounts = chartAccounts;
         this.journalEntries = journalEntries;
+        this.driverLedger = driverLedger;
         this.defaultAccounts = defaultAccounts;
         this.businessZone = ZoneId.of(businessTimezone);
     }
@@ -259,7 +264,7 @@ public class ShiftService {
             throw ApiException.conflict("أجر الوردية غير صالح للترحيل.");
         }
         if (shift.getDriverWage().signum() > 0) {
-            journalPosting.post(tenantId, actorUserId, new JournalPostingRequest(
+            com.contractor.app.accounting.domain.JournalEntry wageJournal = journalPosting.post(tenantId, actorUserId, new JournalPostingRequest(
                     "shift-wage-" + shift.getId(), "SHIFT_WAGE", shift.getId(), shift.getShiftDate(),
                     "استحقاق أجر السائق عن الوردية رقم " + shift.getId(), null,
                     java.util.Arrays.asList(
@@ -267,7 +272,11 @@ public class ShiftService {
                                     shift.getDriverWage(), BigDecimal.ZERO, shift.getDriverId(), null),
                             new JournalLineRequest(driverPayable.getId(), "مستحق للسائق عن الوردية",
                                     BigDecimal.ZERO, shift.getDriverWage(), shift.getDriverId(), null))));
-            shift.setDriverWageJournalEntryId(journalPostingEntryId(tenantId, "shift-wage-" + shift.getId()));
+            shift.setDriverWageJournalEntryId(wageJournal.getId());
+            driverLedger.saveAndFlush(new DriverLedgerEntry(tenantId, shift.getDriverId(), "EARNING",
+                    shift.getShiftDate(), shift.getDriverWage(), shift.getDriverWage(),
+                    "أجر الوردية رقم " + shift.getId(), "shift-wage-" + shift.getId(),
+                    shift.getId(), wageJournal.getId(), actorUserId));
         }
         shift.setStatus(ShiftStatus.COMPLETED);
         shift.setFinishedAt(LocalDateTime.now(ZoneOffset.UTC));
