@@ -2,6 +2,8 @@ package com.contractor.app.expense.domain;
 
 import com.contractor.app.accounting.domain.AccountType;
 import com.contractor.app.accounting.domain.ChartAccount;
+import com.contractor.app.accounting.domain.DefaultChartOfAccountsService;
+import com.contractor.app.accounting.domain.SystemAccountCode;
 import com.contractor.app.accounting.domain.JournalEntry;
 import com.contractor.app.accounting.domain.JournalLineRequest;
 import com.contractor.app.accounting.domain.JournalPostingRequest;
@@ -27,15 +29,17 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class ExpenseService {
-    private static final String PAYABLES_CODE = "2000";
     private final ExpenseRepository expenses;
     private final ExpensePaymentRepository payments;
     private final ChartAccountRepository accounts;
     private final JournalPostingService journals;
+    private final DefaultChartOfAccountsService defaultAccounts;
 
     public ExpenseService(ExpenseRepository expenses, ExpensePaymentRepository payments,
-                          ChartAccountRepository accounts, JournalPostingService journals) {
-        this.expenses=expenses; this.payments=payments; this.accounts=accounts; this.journals=journals;
+                          ChartAccountRepository accounts, JournalPostingService journals,
+                          DefaultChartOfAccountsService defaultAccounts) {
+        this.expenses=expenses; this.payments=payments; this.accounts=accounts;
+        this.journals=journals; this.defaultAccounts=defaultAccounts;
     }
 
     @Transactional
@@ -64,7 +68,7 @@ public class ExpenseService {
         ChartAccount expenseAccount=account(tenantId,request.getExpenseAccountId());
         if(expenseAccount.getAccountType()!=AccountType.EXPENSE)
             throw ApiException.badRequest("يجب اختيار حساب من نوع المصروفات.");
-        ChartAccount payable=accountByCode(tenantId,PAYABLES_CODE);
+        ChartAccount payable=defaultAccounts.requireSystemAccount(tenantId,SystemAccountCode.SUPPLIER_PAYABLE);
         if(payable.getAccountType()!=AccountType.LIABILITY)
             throw ApiException.conflict("الحساب الافتراضي للموردين غير مضبوط كالتزام.");
 
@@ -150,11 +154,6 @@ public class ExpenseService {
                 .orElseThrow(()->ApiException.notFound("الحساب المحاسبي غير موجود."));
         if(!a.isActive()) throw ApiException.badRequest("الحساب المحاسبي معطّل.");
         return a;
-    }
-    private ChartAccount accountByCode(Long tenantId,String code) {
-        return accounts.findByTenantIdAndAccountCodeIgnoreCase(tenantId,code)
-                .filter(ChartAccount::isActive)
-                .orElseThrow(()->ApiException.conflict("لم يتم إعداد الحساب الافتراضي رقم "+code+"."));
     }
     private BigDecimal money(BigDecimal value) {
         if(value==null||value.signum()<=0) throw ApiException.badRequest("المبلغ يجب أن يكون أكبر من صفر.");

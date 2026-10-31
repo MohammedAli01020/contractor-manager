@@ -14,6 +14,7 @@ on:
       - feature/equipment-expenses-accounting
       - feature/driver-worker-ledger
       - fix/treasury-concurrency-hardening
+      - feature/accounting-default-chart-completion
     paths:
       - "backend/**"
       - ".github/workflows/backend-ci.yml"
@@ -25,6 +26,7 @@ on:
       - feature/platform-owner-totp-2fa
       - feature/request-tracking
       - feature/driver-worker-ledger
+      - fix/treasury-concurrency-hardening
     paths:
       - "backend/**"
       - ".github/workflows/backend-ci.yml"
