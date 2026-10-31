@@ -12,6 +12,7 @@ on:
       - feature/financial-foundation
       - feature/default-chart-of-accounts
       - feature/equipment-expenses-accounting
+      - feature/driver-worker-ledger
     paths:
       - "backend/**"
       - ".github/workflows/backend-ci.yml"
