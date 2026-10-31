@@ -179,10 +179,10 @@ public class ShiftService {
         }
         shift.requireVersion(request.getVersion());
         if (shift.getDriverWageJournalEntryId() != null
-                && (!request.getShiftDate().equals(shift.getShiftDate())
-                    || !request.getShiftType().equals(shift.getShiftType())
-                    || !request.getDriverId().equals(shift.getDriverId())
-                    || !request.getEquipmentId().equals(shift.getEquipmentId())
+                && (!java.util.Objects.equals(request.getShiftDate(), shift.getShiftDate())
+                    || !java.util.Objects.equals(request.getShiftType(), shift.getShiftType())
+                    || !java.util.Objects.equals(request.getDriverId(), shift.getDriverId())
+                    || !java.util.Objects.equals(request.getEquipmentId(), shift.getEquipmentId())
                     || (request.getDriverWage() != null
                         && request.getDriverWage().compareTo(shift.getDriverWage()) != 0))) {
             throw ApiException.conflict("لا يمكن تعديل بيانات تؤثر على أجر وردية تم ترحيلها. استخدم قيد تصحيح بدلًا من ذلك.");
