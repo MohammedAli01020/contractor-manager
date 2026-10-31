@@ -272,6 +272,49 @@ class ExpenseIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void concurrentExpenseCreateSameKeyWithDifferentPayloadReturnsStableConflict() throws Exception {
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<MvcResult> first = executor.submit(() -> concurrentCreateExpense(
+                    "expense-conflicting-payload-race", "125.00", ready, start));
+            Future<MvcResult> second = executor.submit(() -> concurrentCreateExpense(
+                    "expense-conflicting-payload-race", "225.00", ready, start));
+            ready.await();
+            start.countDown();
+
+            MvcResult firstResult = first.get();
+            MvcResult secondResult = second.get();
+            assertThat(java.util.Arrays.asList(firstResult.getResponse().getStatus(),
+                    secondResult.getResponse().getStatus()))
+                    .containsExactlyInAnyOrder(201, 409);
+
+            MvcResult conflict = firstResult.getResponse().getStatus() == 409 ? firstResult : secondResult;
+            JsonNode conflictBody = objectMapper.readTree(conflict.getResponse().getContentAsString());
+            assertThat(conflictBody.path("code").asText()).isEqualTo("CONFLICT");
+            assertThat(conflictBody.path("message").asText())
+                    .isEqualTo("مفتاح طلب المصروف مستخدم لبيانات مختلفة.");
+
+            var savedExpenses = expenseRepository.findByTenantIdOrderByExpenseDateDescIdDesc(tenantId);
+            assertThat(savedExpenses).hasSize(1);
+            assertThat(savedExpenses.get(0).getAmount()).isIn(
+                    new BigDecimal("125.00"), new BigDecimal("225.00"));
+            assertThat(journalEntries.findByTenantIdAndPostingKey(
+                    tenantId, "expense:expense-conflicting-payload-race")).hasValueSatisfying(entry -> {
+                var lines = journalLines.findByTenantIdAndJournalEntryIdOrderByLineNumberAsc(
+                        tenantId, entry.getId());
+                assertThat(lines).hasSize(2);
+                assertThat(lines).extracting(line -> line.getDebit())
+                        .contains(savedExpenses.get(0).getAmount(), BigDecimal.ZERO.setScale(2));
+            });
+        } finally {
+            start.countDown();
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
     void concurrentPaymentKeyAcrossDifferentExpensesProducesOnePaymentAndOneConflict() throws Exception {
         seedCashBalance(new BigDecimal("1000.00"));
         JsonNode firstExpense = createExpense("expense-payment-race-a", "500.00");
@@ -317,9 +360,14 @@ class ExpenseIntegrationTest extends AbstractIntegrationTest {
 
     private MvcResult concurrentCreateExpense(String key, CountDownLatch ready,
                                                CountDownLatch start) throws Exception {
+        return concurrentCreateExpense(key, "125.00", ready, start);
+    }
+
+    private MvcResult concurrentCreateExpense(String key, String amount, CountDownLatch ready,
+                                               CountDownLatch start) throws Exception {
         ready.countDown();
         start.await();
-        return postJson("/api/v1/expenses", expenseBody(key, "125.00"), token).andReturn();
+        return postJson("/api/v1/expenses", expenseBody(key, amount), token).andReturn();
     }
 
     private int concurrentPayment(long expenseId, String key, CountDownLatch ready,
