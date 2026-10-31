@@ -79,7 +79,8 @@ class CashBankClassificationMigrationIntegrationTest {
 
         Map<String, Boolean> classifications = new LinkedHashMap<>();
         jdbc.query("SELECT tenant_id, account_code, cash_bank_account FROM chart_of_accounts",
-                rs -> classifications.put(key(rs), rs.getBoolean("cash_bank_account")));
+                (org.springframework.jdbc.core.RowCallbackHandler) rs ->
+                        classifications.put(key(rs), rs.getBoolean("cash_bank_account")));
 
         assertThat(classifications)
                 .containsEntry(assetTenantId + ":1000", true)
