@@ -291,7 +291,7 @@ class ExpenseIntegrationTest extends AbstractIntegrationTest {
                     .containsExactlyInAnyOrder(201, 409);
 
             MvcResult conflict = firstResult.getResponse().getStatus() == 409 ? firstResult : secondResult;
-            JsonNode conflictBody = objectMapper.readTree(conflict.getResponse().getContentAsString());
+            JsonNode conflictBody = objectMapper.readTree(conflict.getResponse().getContentAsByteArray());
             assertThat(conflictBody.path("code").asText()).isEqualTo("CONFLICT");
             assertThat(conflictBody.path("message").asText())
                     .isEqualTo("مفتاح طلب المصروف مستخدم لبيانات مختلفة.");
