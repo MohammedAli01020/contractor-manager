@@ -26,6 +26,7 @@ import java.util.concurrent.Future;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 class DriverLedgerIdempotencyIntegrationTest extends AbstractIntegrationTest {
 
@@ -34,6 +35,7 @@ class DriverLedgerIdempotencyIntegrationTest extends AbstractIntegrationTest {
     @Autowired private JournalEntryRepository journals;
     @Autowired private JournalPostingService postingService;
     @Autowired private DriverLedgerEntryRepository ledger;
+    @Autowired private JdbcTemplate jdbcTemplate;
 
     private Long tenantId;
     private Long actorId;
@@ -145,6 +147,48 @@ class DriverLedgerIdempotencyIntegrationTest extends AbstractIntegrationTest {
         assertThat(ledger.findByTenantIdAndClientRequestKey(tenantId, "driver-payment-account")).isPresent();
         assertThat(journals.findByTenantIdAndPostingKey(tenantId, "driver-payment:driver-payment-account"))
                 .isPresent();
+    }
+
+    @Test
+    void legacyDriverPaymentRetryChecksOriginalJournalAccountWithoutReservationRow() throws Exception {
+        Long driverId = createDriver("legacy-account-driver");
+        earn(driverId, "legacy-account-earned");
+        String key = "legacy-driver-payment-account";
+        assertThat(postPayment(driverId, key, cashId).andReturn().getResponse().getStatus())
+                .isEqualTo(201);
+
+        // Simulate a driver payment created before V25 introduced the reservation table.
+        jdbcTemplate.update("DELETE FROM financial_idempotency_keys "
+                        + "WHERE tenant_id = ? AND operation_scope = ? AND request_key = ?",
+                tenantId, "DRIVER_LEDGER", key);
+
+        assertThat(postPayment(driverId, key, bankId).andReturn().getResponse().getStatus())
+                .isEqualTo(409);
+        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM financial_idempotency_keys "
+                        + "WHERE tenant_id = ? AND operation_scope = ? AND request_key = ?",
+                Integer.class, tenantId, "DRIVER_LEDGER", key)).isZero();
+        assertThat(ledger.findByTenantIdAndClientRequestKey(tenantId, key)).isPresent();
+    }
+
+    @Test
+    void driverPaymentAndAdvanceCannotReuseOneLedgerKeyAcrossOperationTypes() throws Exception {
+        Long driverId = createDriver("cross-operation-driver");
+        earn(driverId, "cross-operation-earned");
+        String key = "driver-payment-then-advance";
+        assertThat(postPayment(driverId, key, cashId).andReturn().getResponse().getStatus())
+                .isEqualTo(201);
+
+        Map<String, Object> request = new HashMap<>();
+        request.put("clientRequestKey", key);
+        request.put("advanceDate", LocalDate.of(2026, 10, 31));
+        request.put("amount", new BigDecimal("50.00"));
+        request.put("paymentAccountId", cashId);
+        request.put("description", "Recoverable advance");
+        request.put("advanceType", "RECOVERABLE");
+        assertThat(postJson("/api/v1/drivers/" + driverId + "/ledger/advances", request, token)
+                .andReturn().getResponse().getStatus()).isEqualTo(409);
+        assertThat(ledger.findByTenantIdAndClientRequestKey(tenantId, key))
+                .hasValueSatisfying(entry -> assertThat(entry.getTransactionType()).isEqualTo("PAYMENT"));
     }
 
     private Long createDriver(String suffix) throws Exception {
