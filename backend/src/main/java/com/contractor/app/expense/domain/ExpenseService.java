@@ -108,7 +108,7 @@ public class ExpenseService {
         BigDecimal paid=payments.sumAmountByTenantAndExpense(tenantId,expenseId);
         if(paid.add(amount).compareTo(expense.getAmount())>0)
             throw ApiException.badRequest("قيمة السداد أكبر من المبلغ المتبقي على المصروف.");
-        ChartAccount payable=accountByCode(tenantId,PAYABLES_CODE);
+        ChartAccount payable=defaultAccounts.requireSystemAccount(tenantId,SystemAccountCode.SUPPLIER_PAYABLE);
         ChartAccount paymentAccount=account(tenantId,request.getPaymentAccountId());
         if(payable.getAccountType()!=AccountType.LIABILITY)
             throw ApiException.conflict("حساب الموردين الافتراضي غير صالح.");
