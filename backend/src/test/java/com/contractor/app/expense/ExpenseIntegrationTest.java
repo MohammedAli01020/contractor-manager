@@ -29,6 +29,8 @@ import java.util.concurrent.Future;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataAccessException;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.boot.test.mock.mockito.SpyBean;
 import org.springframework.test.web.servlet.MvcResult;
 
@@ -40,6 +42,7 @@ class ExpenseIntegrationTest extends AbstractIntegrationTest {
     @Autowired private JournalLineRepository journalLines;
     @Autowired private ExpenseRepository expenseRepository;
     @Autowired private ExpensePaymentRepository paymentRepository;
+    @Autowired private JdbcTemplate jdbcTemplate;
     @SpyBean private JournalPostingService journalPostingService;
 
     private Long tenantId;
@@ -118,6 +121,44 @@ class ExpenseIntegrationTest extends AbstractIntegrationTest {
         assertThat(body(getJson("/api/v1/expenses", token))).hasSize(1);
         assertThat(journalEntries.findByTenantIdAndPostingKey(tenantId, "expense-payment:payment-too-large"))
                 .isEmpty();
+    }
+
+    @Test
+    void databaseRejectsDirectMutationAndDeletionOfPostedExpensesAndPayments() throws Exception {
+        seedCashBalance(new BigDecimal("5000.00"));
+        JsonNode expense = createExpense("expense-immutable-source", "1000.00");
+        long expenseId = expense.path("id").asLong();
+        addPayment(expenseId, "expense-immutable-source-payment", "250.00");
+        Long paymentId = paymentRepository.findByTenantIdAndPaymentKey(
+                tenantId, "expense-immutable-source-payment")
+                .orElseThrow(() -> new AssertionError("Missing posted expense payment"))
+                .getId();
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                jdbcTemplate.update("UPDATE expenses SET amount = ? WHERE id = ?",
+                        new BigDecimal("999.00"), expenseId))
+                .isInstanceOf(DataAccessException.class)
+                .hasMessageContaining("POSTED_EXPENSE_IS_IMMUTABLE");
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                jdbcTemplate.update("DELETE FROM expenses WHERE id = ?", expenseId))
+                .isInstanceOf(DataAccessException.class)
+                .hasMessageContaining("POSTED_EXPENSE_CANNOT_BE_DELETED");
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                jdbcTemplate.update("UPDATE expense_payments SET amount = ? WHERE id = ?",
+                        new BigDecimal("200.00"), paymentId))
+                .isInstanceOf(DataAccessException.class)
+                .hasMessageContaining("POSTED_EXPENSE_PAYMENT_IS_IMMUTABLE");
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                jdbcTemplate.update("DELETE FROM expense_payments WHERE id = ?", paymentId))
+                .isInstanceOf(DataAccessException.class)
+                .hasMessageContaining("POSTED_EXPENSE_PAYMENT_CANNOT_BE_DELETED");
+
+        assertThat(expenseRepository.findByIdAndTenantId(expenseId, tenantId))
+                .get().extracting(e -> e.getAmount())
+                .isEqualTo(new BigDecimal("1000.00"));
+        assertThat(paymentRepository.findByTenantIdAndPaymentKey(
+                tenantId, "expense-immutable-source-payment")).isPresent();
     }
 
     @Test
