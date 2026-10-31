@@ -26,5 +26,6 @@ This slice adds a read-only, tenant-scoped trial-balance report over immutable p
 
 ## Verification
 - MySQL/Testcontainers integration tests cover opening/period/closing balances, both inclusive date boundaries, excluding entries after the end date, zero-balance and inactive accounts, tenant isolation, invalid date order and viewer/authentication permissions.
-- CI requires the trial-balance integration suite to execute at least six tests with no skips, failures or errors.
+- **Verified 2026-10-31:** push run [41229634484](https://github.com/MohammedAli01020/contractor-manager/actions/runs/41229634484) and PR run [41229638627](https://github.com/MohammedAli01020/contractor-manager/actions/runs/41229638627) succeeded on code commit `1c4b42a84b2d72e1647803af8b6dd223ca49fa8f`. Surefire artifact: 30 XML reports, 175 tests, 0 failures, 0 errors and 0 skipped. The trial-balance suite executed all 7 MySQL integration tests.
+- CI requires the trial-balance integration suite to execute at least seven tests with no skips, failures or errors.
 - This report is a financial read model, not a reconciliation/closing workflow. Monthly close, account statements and controlled period locking remain separate future work.
