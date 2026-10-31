@@ -94,6 +94,20 @@ class TrialBalanceIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void retainsInactiveAccountsInHistoricalTrialBalance() throws Exception {
+        jdbcTemplate.update(
+                "UPDATE chart_of_accounts SET active = false WHERE tenant_id = ? AND account_code = '1400'",
+                tenantId);
+
+        JsonNode report = body(getJson(reportPath("2026-02-01", "2026-02-28"), token)
+                .andExpect(status().isOk()));
+
+        JsonNode historicalInventory = row(report, "1400");
+        assertThat(historicalInventory.path("active").asBoolean()).isFalse();
+        assertMoney(historicalInventory, "closingDebit", "0.00");
+    }
+
+    @Test
     void reportIsIsolatedBetweenTenants() throws Exception {
         postJournal("tb-private-entry", LocalDate.of(2026, 2, 10), "5000", "2100", "300.00");
         JsonNode otherTenant = registerTenant("Other Trial Balance", uniqueName("otherowner"));
