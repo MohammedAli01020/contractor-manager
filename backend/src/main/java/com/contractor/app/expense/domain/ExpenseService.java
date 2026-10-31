@@ -8,6 +8,8 @@ import com.contractor.app.accounting.domain.JournalPostingRequest;
 import com.contractor.app.accounting.domain.JournalPostingService;
 import com.contractor.app.accounting.infra.ChartAccountRepository;
 import com.contractor.app.common.error.ApiException;
+import com.contractor.app.common.idempotency.FinancialIdempotencyService;
+import com.contractor.app.common.idempotency.RequestFingerprint;
 import com.contractor.app.common.security.AuthenticatedUser;
 import com.contractor.app.common.security.CurrentUser;
 import com.contractor.app.expense.api.dto.CreateExpensePaymentRequest;
@@ -28,14 +30,17 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ExpenseService {
     private static final String PAYABLES_CODE = "2000";
+    private final FinancialIdempotencyService idempotency;
     private final ExpenseRepository expenses;
     private final ExpensePaymentRepository payments;
     private final ChartAccountRepository accounts;
     private final JournalPostingService journals;
 
-    public ExpenseService(ExpenseRepository expenses, ExpensePaymentRepository payments,
-                          ChartAccountRepository accounts, JournalPostingService journals) {
-        this.expenses=expenses; this.payments=payments; this.accounts=accounts; this.journals=journals;
+    public ExpenseService(FinancialIdempotencyService idempotency, ExpenseRepository expenses,
+                          ExpensePaymentRepository payments, ChartAccountRepository accounts,
+                          JournalPostingService journals) {
+        this.idempotency=idempotency; this.expenses=expenses; this.payments=payments;
+        this.accounts=accounts; this.journals=journals;
     }
 
     @Transactional
@@ -53,6 +58,9 @@ public class ExpenseService {
         validateOptionalId(request.getEquipmentId(),"المعدة");
         validateOptionalId(request.getShiftId(),"الوردية");
 
+        idempotency.reserve(tenantId, "EXPENSE_CREATE", requestKey,
+                RequestFingerprint.of(request.getExpenseDate(), category, description, supplier, amount,
+                        request.getExpenseAccountId(), request.getEquipmentId(), request.getShiftId()));
         Optional<Expense> prior=expenses.findByTenantIdAndClientRequestKey(tenantId,requestKey);
         if(prior.isPresent()) {
             Expense existing=prior.get();
@@ -92,6 +100,8 @@ public class ExpenseService {
         if(request.getPaymentDate()==null) throw ApiException.badRequest("تاريخ السداد مطلوب.");
         Expense expense=expenses.findByIdAndTenantIdForUpdate(expenseId,tenantId)
                 .orElseThrow(()->ApiException.notFound("المصروف غير موجود."));
+        idempotency.reserve(tenantId, "EXPENSE_PAYMENT", key,
+                RequestFingerprint.of(expenseId, request.getPaymentDate(), amount, request.getPaymentAccountId()));
         Optional<ExpensePayment> prior=payments.findByTenantIdAndPaymentKey(tenantId,key);
         if(prior.isPresent()){
             ExpensePayment p=prior.get();
