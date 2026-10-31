@@ -123,6 +123,61 @@ class ExpenseIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void viewerCanReadExpensesButCannotCreateOrPay() throws Exception {
+        JsonNode expense = createExpense("expense-viewer-access", "250.00");
+        String viewerName = uniqueName("expenseviewer");
+        Map<String, Object> viewerRequest = new HashMap<>(userBody(viewerName));
+        viewerRequest.put("role", "VIEWER");
+        body(postJson("/api/v1/users", viewerRequest, token).andExpect(status().isCreated()));
+        String viewerToken = login(viewerName);
+
+        getJson("/api/v1/expenses", viewerToken).andExpect(status().isOk());
+        postJson("/api/v1/expenses", expenseBody("viewer-must-not-create", "50.00"), viewerToken)
+                .andExpect(status().isForbidden());
+        postJson("/api/v1/expenses/" + expense.path("id").asLong() + "/payments",
+                paymentBody("viewer-must-not-pay", "50.00"), viewerToken)
+                .andExpect(status().isForbidden());
+
+        assertThat(journalEntries.findByTenantIdAndPostingKey(tenantId, "expense-payment:viewer-must-not-pay"))
+                .isEmpty();
+    }
+
+    @Test
+    void anotherTenantCannotPayExpenseOrUseForeignExpenseAccount() throws Exception {
+        JsonNode expense = createExpense("expense-cross-tenant", "600.00");
+        JsonNode otherTenant = registerTenant("Other Expense Tenant", uniqueName("otherexpense"));
+        Long otherTenantId = otherTenant.path("user").path("tenantId").asLong();
+        String otherToken = otherTenant.path("accessToken").asText();
+
+        postJson("/api/v1/expenses/" + expense.path("id").asLong() + "/payments",
+                paymentBody("foreign-tenant-payment", "100.00"), otherToken)
+                .andExpect(status().isNotFound());
+
+        postJson("/api/v1/expenses",
+                expenseBody("foreign-account-expense", "100.00"), otherToken)
+                .andExpect(status().isNotFound());
+
+        assertThat(journalEntries.findByTenantIdAndPostingKey(tenantId, "expense-payment:foreign-tenant-payment"))
+                .isEmpty();
+        assertThat(expensesForTenant(otherToken)).isEmpty();
+        assertThat(otherTenantId).isNotEqualTo(tenantId);
+    }
+
+    @Test
+    void operatorCanCreateExpenseAndRecordPayment() throws Exception {
+        String operatorName = uniqueName("expenseoperator");
+        body(postJson("/api/v1/users", userBody(operatorName), token).andExpect(status().isCreated()));
+        String operatorToken = login(operatorName);
+
+        JsonNode created = body(postJson("/api/v1/expenses",
+                expenseBody("operator-expense", "200.00"), operatorToken)
+                .andExpect(status().isCreated()));
+        postJson("/api/v1/expenses/" + created.path("id").asLong() + "/payments",
+                paymentBody("operator-payment", "50.00"), operatorToken)
+                .andExpect(status().isCreated());
+    }
+
+    @Test
     void identicalExpenseRetryReturnsExistingRecordInsteadOfDuplicating() throws Exception {
         JsonNode first = createExpense("expense-idempotent", "125.00");
         JsonNode retry = createExpense("expense-idempotent", "125.00");
@@ -184,6 +239,18 @@ class ExpenseIntegrationTest extends AbstractIntegrationTest {
         MvcResult result = postJson("/api/v1/expenses/" + expenseId + "/payments",
                 paymentBody(key, "700.00"), token).andReturn();
         return result.getResponse().getStatus();
+    }
+
+    private String login(String username) throws Exception {
+        Map<String, Object> credentials = new HashMap<>();
+        credentials.put("username", username);
+        credentials.put("password", PASSWORD);
+        return body(postJson("/api/v1/auth/login", credentials, null)
+                .andExpect(status().isOk())).path("accessToken").asText();
+    }
+
+    private JsonNode expensesForTenant(String accessToken) throws Exception {
+        return body(getJson("/api/v1/expenses", accessToken).andExpect(status().isOk()));
     }
 
     private JsonNode createExpense(String key, String amount) throws Exception {
