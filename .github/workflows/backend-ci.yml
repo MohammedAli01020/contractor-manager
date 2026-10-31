@@ -20,6 +20,7 @@ on:
       - feature/platform-owner-web
       - feature/platform-owner-totp-2fa
       - feature/request-tracking
+      - feature/financial-foundation
     paths:
       - "backend/**"
       - ".github/workflows/backend-ci.yml"
