@@ -15,13 +15,15 @@ import java.time.LocalDate;
 import java.util.Arrays;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;\nimport org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 class TrialBalanceIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired private DefaultChartOfAccountsService defaultAccounts;
     @Autowired private ChartAccountRepository accounts;
-    @Autowired private JournalPostingService journalPostingService;\n    @Autowired private JdbcTemplate jdbcTemplate;
+    @Autowired private JournalPostingService journalPostingService;
+    @Autowired private JdbcTemplate jdbcTemplate;
 
     private Long tenantId;
     private Long actorUserId;
