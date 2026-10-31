@@ -6,6 +6,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.contractor.app.accounting.domain.ChartAccount;
+import com.contractor.app.accounting.domain.JournalLineRequest;
+import com.contractor.app.accounting.domain.JournalPostingRequest;
+import com.contractor.app.accounting.domain.JournalPostingService;
+import com.contractor.app.accounting.domain.DefaultChartOfAccountsService;
+import com.contractor.app.accounting.infra.ChartAccountRepository;
 import com.contractor.app.common.error.ApiError;
 import com.contractor.app.common.error.GlobalExceptionHandler;
 import com.contractor.app.shift.domain.Shift;
@@ -36,8 +42,13 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
     @Autowired private ShiftRepository shiftRepository;
     @Autowired private JdbcTemplate jdbcTemplate;
     @Autowired private GlobalExceptionHandler globalExceptionHandler;
+    @Autowired private DefaultChartOfAccountsService defaultAccounts;
+    @Autowired private ChartAccountRepository chartAccounts;
+    @Autowired private JournalPostingService journalPostingService;
 
     private String token;
+    private long tenantId;
+    private long actorUserId;
     private long siteId;
     private long driverId;
     private long typeId;
@@ -45,11 +56,28 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        token = registerTenant("Shift Co", uniqueName("owner")).path("accessToken").asText();
+        JsonNode registered = registerTenant("Shift Co", uniqueName("owner"));
+        token = registered.path("accessToken").asText();
+        tenantId = registered.path("user").path("tenantId").asLong();
+        actorUserId = registered.path("user").path("id").asLong();
+        defaultAccounts.initializeForTenant(tenantId);
         siteId = createSite(token, "Main Site");
         driverId = createDriver(token, "Driver One", "150", "175", "200");
         typeId = createType(token, "Excavator");
         equipmentId = createEquipment(token, "EX-01", typeId, "500", "1200");
+    }
+
+
+    private void seedCashBalance(BigDecimal amount) {
+        ChartAccount cash = chartAccounts.findByTenantIdAndAccountCodeIgnoreCase(tenantId, "1000")
+                .orElseThrow(() -> new IllegalStateException("Default cash account was not created"));
+        ChartAccount capital = chartAccounts.findByTenantIdAndAccountCodeIgnoreCase(tenantId, "3000")
+                .orElseThrow(() -> new IllegalStateException("Default capital account was not created"));
+        journalPostingService.post(tenantId, actorUserId, new JournalPostingRequest(
+                "test-cash-opening:" + java.util.UUID.randomUUID(), "TEST_CASH_OPENING", null,
+                today(), "Test fixture opening cash", null, java.util.Arrays.asList(
+                new JournalLineRequest(cash.getId(), "Opening cash", amount, BigDecimal.ZERO, null, null),
+                new JournalLineRequest(capital.getId(), "Opening capital", BigDecimal.ZERO, amount, null, null))));
     }
 
     private LocalDate day(int daysAgo) {
@@ -690,6 +718,7 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
 
     @Test
     void recoverableAdvanceIsAnAssetAndIsAutomaticallyRecoveredFromLaterWages() throws Exception {
+        seedCashBalance(new BigDecimal("1000.00"));
         JsonNode first = finishShift(token,
                 startShift(token, shiftBody(siteId, driverId, equipmentId, day(3), "MORNING")));
         Long cashId = jdbcTemplate.queryForObject(
@@ -724,6 +753,7 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
 
     @Test
     void concurrentWorkerPaymentsCannotSpendTheSameEarnedBalanceTwice() throws Exception {
+        seedCashBalance(new BigDecimal("500.00"));
         JsonNode earned = finishShift(token,
                 startShift(token, shiftBody(siteId, driverId, equipmentId, day(1), "MORNING")));
         Long tenantId = jdbcTemplate.queryForObject(
@@ -782,6 +812,7 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
 
     @Test
     void advanceAgainstEarnedPayableReducesAvailableWorkerBalance() throws Exception {
+        seedCashBalance(new BigDecimal("500.00"));
         JsonNode earned = finishShift(token,
                 startShift(token, shiftBody(siteId, driverId, equipmentId, day(2), "MORNING")));
         Long cashId = jdbcTemplate.queryForObject(

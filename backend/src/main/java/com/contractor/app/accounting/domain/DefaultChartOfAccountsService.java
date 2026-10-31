@@ -19,20 +19,20 @@ import org.springframework.transaction.annotation.Transactional;
 public class DefaultChartOfAccountsService {
 
     private static final List<AccountTemplate> DEFAULT_ACCOUNTS = Arrays.asList(
-            new AccountTemplate("1000", "الخزينة", AccountType.ASSET),
-            new AccountTemplate("1010", "البنوك", AccountType.ASSET),
-            new AccountTemplate("1100", "العملاء والمستحقات", AccountType.ASSET),
-            new AccountTemplate("1200", "الأصول الثابتة", AccountType.ASSET),
-            new AccountTemplate("1300", "سلف العاملين القابلة للاسترداد", AccountType.ASSET),
-            new AccountTemplate("2000", "الموردون", AccountType.LIABILITY),
-            new AccountTemplate("2100", "مستحقات السائقين", AccountType.LIABILITY),
-            new AccountTemplate("2200", "مستحقات الملاك والشركاء", AccountType.LIABILITY),
-            new AccountTemplate("3000", "رأس المال", AccountType.EQUITY),
-            new AccountTemplate("4000", "إيرادات الورديات", AccountType.REVENUE),
-            new AccountTemplate("4100", "إيرادات أخرى", AccountType.REVENUE),
-            new AccountTemplate("5000", "مصروف أجور السائقين", AccountType.EXPENSE),
-            new AccountTemplate("5100", "مصروفات تشغيل المعدات", AccountType.EXPENSE),
-            new AccountTemplate("5200", "مصروفات أخرى", AccountType.EXPENSE)
+            new AccountTemplate("1000", "الخزينة", AccountType.ASSET, true),
+            new AccountTemplate("1010", "البنوك", AccountType.ASSET, true),
+            new AccountTemplate("1100", "العملاء والمستحقات", AccountType.ASSET, false),
+            new AccountTemplate("1200", "الأصول الثابتة", AccountType.ASSET, false),
+            new AccountTemplate("1300", "سلف العاملين القابلة للاسترداد", AccountType.ASSET, false),
+            new AccountTemplate("2000", "الموردون", AccountType.LIABILITY, false),
+            new AccountTemplate("2100", "مستحقات السائقين", AccountType.LIABILITY, false),
+            new AccountTemplate("2200", "مستحقات الملاك والشركاء", AccountType.LIABILITY, false),
+            new AccountTemplate("3000", "رأس المال", AccountType.EQUITY, false),
+            new AccountTemplate("4000", "إيرادات الورديات", AccountType.REVENUE, false),
+            new AccountTemplate("4100", "إيرادات أخرى", AccountType.REVENUE, false),
+            new AccountTemplate("5000", "مصروف أجور السائقين", AccountType.EXPENSE, false),
+            new AccountTemplate("5100", "مصروفات تشغيل المعدات", AccountType.EXPENSE, false),
+            new AccountTemplate("5200", "مصروفات أخرى", AccountType.EXPENSE, false)
     );
 
     private final ChartAccountRepository accounts;
@@ -60,7 +60,7 @@ public class DefaultChartOfAccountsService {
         List<ChartAccount> missing = new ArrayList<>();
         for (AccountTemplate template : DEFAULT_ACCOUNTS) {
             if (!existingCodes.contains(template.code)) {
-                missing.add(new ChartAccount(tenantId, template.code, template.name, template.type, null, true));
+                missing.add(new ChartAccount(tenantId, template.code, template.name, template.type, null, true, template.cashBankAccount));
             }
         }
 
@@ -73,11 +73,13 @@ public class DefaultChartOfAccountsService {
         private final String code;
         private final String name;
         private final AccountType type;
+        private final boolean cashBankAccount;
 
-        private AccountTemplate(String code, String name, AccountType type) {
+        private AccountTemplate(String code, String name, AccountType type, boolean cashBankAccount) {
             this.code = code;
             this.name = name;
             this.type = type;
+            this.cashBankAccount = cashBankAccount;
         }
     }
 }

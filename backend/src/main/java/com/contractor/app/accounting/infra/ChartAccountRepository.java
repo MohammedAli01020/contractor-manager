@@ -13,7 +13,7 @@ public interface ChartAccountRepository extends JpaRepository<ChartAccount, Long
     Optional<ChartAccount> findByIdAndTenantId(Long id, Long tenantId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select a from ChartAccount a where a.id = :id and a.tenantId = :tenantId and a.accountType = com.contractor.app.accounting.domain.AccountType.ASSET and a.accountCode in ('1000', '1010')")
+    @Query("select a from ChartAccount a where a.id = :id and a.tenantId = :tenantId and a.accountType = com.contractor.app.accounting.domain.AccountType.ASSET and a.cashBankAccount = true")
     Optional<ChartAccount> findCashOrBankByIdAndTenantIdForUpdate(@Param("id") Long id, @Param("tenantId") Long tenantId);
     List<ChartAccount> findByTenantIdOrderByAccountCodeAsc(Long tenantId);
     boolean existsByTenantIdAndAccountCodeIgnoreCase(Long tenantId, String accountCode);

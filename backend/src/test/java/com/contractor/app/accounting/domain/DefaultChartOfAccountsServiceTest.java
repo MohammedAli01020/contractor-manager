@@ -40,6 +40,9 @@ class DefaultChartOfAccountsServiceTest {
         assertThat(created).hasSize(14);
         assertThat(created).extracting(ChartAccount::getAccountCode)
                 .contains("1000", "1010", "2100", "4000", "5000", "5200");
+        assertThat(created.stream().filter(ChartAccount::isCashBankAccount)
+                .map(ChartAccount::getAccountCode))
+                .containsExactlyInAnyOrder("1000", "1010");
         assertThat(created).allSatisfy(account -> {
             assertThat(account.getTenantId()).isEqualTo(7L);
             assertThat(account.isSystemManaged()).isTrue();
@@ -86,6 +89,17 @@ class DefaultChartOfAccountsServiceTest {
         service.initializeForTenant(7L);
 
         verify(accounts, never()).saveAll(anyList());
+    }
+
+    @Test
+    void legacyConstructorOnlyClassifiesAssetAccountsAsCashOrBank() {
+        ChartAccount cash = new ChartAccount(
+                7L, "1000", "Cash", AccountType.ASSET, null, false);
+        ChartAccount liabilityWithSameCode = new ChartAccount(
+                8L, "1000", "Legacy liability code", AccountType.LIABILITY, null, false);
+
+        assertThat(cash.isCashBankAccount()).isTrue();
+        assertThat(liabilityWithSameCode.isCashBankAccount()).isFalse();
     }
 
     @Test

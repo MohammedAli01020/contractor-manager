@@ -30,17 +30,31 @@ public class ChartAccount extends BaseTenantEntity {
     @Column(nullable = false)
     private boolean active = true;
 
+    @Column(name = "cash_bank_account", nullable = false)
+    private boolean cashBankAccount;
+
     protected ChartAccount() {
     }
 
     public ChartAccount(Long tenantId, String accountCode, String name, AccountType accountType,
                         Long parentAccountId, boolean systemManaged) {
+        this(tenantId, accountCode, name, accountType, parentAccountId, systemManaged,
+                accountType == AccountType.ASSET
+                        && ("1000".equals(accountCode) || "1010".equals(accountCode)));
+    }
+
+    public ChartAccount(Long tenantId, String accountCode, String name, AccountType accountType,
+                        Long parentAccountId, boolean systemManaged, boolean cashBankAccount) {
         super(tenantId);
+        if (cashBankAccount && accountType != AccountType.ASSET) {
+            throw new IllegalArgumentException("Cash/bank accounts must use ASSET account type.");
+        }
         this.accountCode = accountCode;
         this.name = name;
         this.accountType = accountType;
         this.parentAccountId = parentAccountId;
         this.systemManaged = systemManaged;
+        this.cashBankAccount = cashBankAccount;
         this.active = true;
     }
 
@@ -66,5 +80,9 @@ public class ChartAccount extends BaseTenantEntity {
 
     public boolean isActive() {
         return active;
+    }
+
+    public boolean isCashBankAccount() {
+        return cashBankAccount;
     }
 }

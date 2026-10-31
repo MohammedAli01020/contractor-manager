@@ -28,7 +28,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ExpenseService {
     private static final String PAYABLES_CODE = "2000";
-    private static final List<String> PAYMENT_ACCOUNT_CODES = Arrays.asList("1000", "1010");
     private final ExpenseRepository expenses;
     private final ExpensePaymentRepository payments;
     private final ChartAccountRepository accounts;
@@ -109,9 +108,8 @@ public class ExpenseService {
         ChartAccount paymentAccount=account(tenantId,request.getPaymentAccountId());
         if(payable.getAccountType()!=AccountType.LIABILITY)
             throw ApiException.conflict("حساب الموردين الافتراضي غير صالح.");
-        if(paymentAccount.getAccountType()!=AccountType.ASSET
-                || !PAYMENT_ACCOUNT_CODES.contains(paymentAccount.getAccountCode()))
-            throw ApiException.badRequest("السداد يكون من حساب الخزينة 1000 أو البنك 1010 فقط.");
+        if(paymentAccount.getAccountType()!=AccountType.ASSET || !paymentAccount.isCashBankAccount())
+            throw ApiException.badRequest("السداد يكون من حساب خزينة أو بنك مُعرّف لهذا الغرض فقط.");
         ExpensePayment payment=payments.saveAndFlush(new ExpensePayment(tenantId,expenseId,key,
                 request.getPaymentDate(),amount,paymentAccount.getId(),user.getUserId()));
         JournalEntry journal=journals.post(tenantId,user.getUserId(),new JournalPostingRequest(
