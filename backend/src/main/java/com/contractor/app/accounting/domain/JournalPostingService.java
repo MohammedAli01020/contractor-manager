@@ -118,7 +118,7 @@ public class JournalPostingService {
             }
             BigDecimal currentBalance = lines.calculateDebitNormalBalance(tenantId, account.getId());
             if (currentBalance.add(netChange).compareTo(ZERO) < 0) {
-                String name = "1000".equals(account.getAccountCode()) ? "الخزينة" : "البنك";
+                String name = "الخزينة أو البنك";
                 throw ApiException.conflict("الرصيد المتاح في حساب " + name
                         + " غير كافٍ لإتمام العملية. لا يمكن أن يصبح الرصيد سالبًا.");
             }
