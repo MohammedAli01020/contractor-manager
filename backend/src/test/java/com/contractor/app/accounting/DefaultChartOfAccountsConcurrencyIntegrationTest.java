@@ -34,13 +34,14 @@ class DefaultChartOfAccountsConcurrencyIntegrationTest extends AbstractIntegrati
         CountDownLatch bothInitialReads = new CountDownLatch(2);
         AtomicInteger initialReadCount = new AtomicInteger();
         doAnswer(invocation -> {
+            List<?> result = (List<?>) invocation.callRealMethod();
             if (initialReadCount.incrementAndGet() <= 2) {
                 bothInitialReads.countDown();
                 if (!bothInitialReads.await(10, TimeUnit.SECONDS)) {
                     throw new IllegalStateException("Concurrent initial reads did not rendezvous.");
                 }
             }
-            return invocation.callRealMethod();
+            return result;
         }).when(accounts).findByTenantIdOrderByAccountCodeAsc(tenantId);
 
         ExecutorService executor = Executors.newFixedThreadPool(2);
