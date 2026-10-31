@@ -66,3 +66,11 @@
 - Perform a real Android-device smoke test against the paginated API.
 - Verify the merged API/mobile contract and tenant isolation with MySQL integration tests.
 - Confirm production migration/back-up/rollback plan separately; CI migration tests do not authorize running migrations against production.
+
+
+## Follow-up: Flutter pagination unit tests — 2026-10-31
+- PR #15 latest head: `e0add33ffa0540304223ea584fed04147468824e`.
+- Added a pure-Dart page parser and unique-ID append helper in `mobile/lib/features/accounting/journal_pagination.dart`.
+- Added four tests covering page metadata, malformed response, duplicate IDs across pages, and empty next page.
+- Flutter 3.3.3 analyze + tests passed in PR validation run `41233389375`; log reports 8 passing tests.
+- Remaining: widget/integration-level retry and refresh tests plus real Android-device smoke test; branch synchronization with #14 is still required before merge.
