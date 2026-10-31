@@ -264,6 +264,27 @@ The roadmap below is the only source of truth for phase order and overall status
 - Automate subscription activation only after trusted confirmation.
 - Add FCM only if external push is needed while app is closed. WebSocket is not required for ordinary update checks or payment status polling.
 
+### Cross-cutting workstream — Offline-first mobile (agreed direction)
+
+**Decision:** The Flutter mobile application will follow an **offline-first** model backed by the existing centralized Spring Boot API and MySQL database. The server remains authoritative for authorization, tenant isolation, shared state, and final financial/inventory posting. This does not require a microservices migration or a change to the current technology stack.
+
+**Status:** Architecture direction agreed on 2026-10-31. **Implementation has not started**; do not describe the app as offline-capable yet.
+
+**Detailed architecture:** [OFFLINE_FIRST_ARCHITECTURE.md](OFFLINE_FIRST_ARCHITECTURE.md).
+
+**Delivery approach:**
+- Apply offline-readiness rules during current feature work: stable operation IDs, idempotent server behavior, tenant-scoped APIs, and explicit handling of retryable vs permanent failures.
+- Do not pause the current accounting foundation to build the full sync engine.
+- After core operational workflows and API contracts are stable, inspect the Flutter codebase and design a narrow end-to-end offline pilot using local persistence, a durable outbox, server acknowledgements, and incremental synchronization.
+- Expand to financial and inventory workflows only after server-side idempotency, audit, conflict, and reconciliation behavior is proven.
+- Before release, test offline writes across app termination/restart, duplicate retries, intermittent connectivity, token expiry, account/tenant switching, and multi-device conflicts.
+
+**Non-negotiable safeguards:** queued financial work is not a posted ledger entry; server validation remains authoritative; no blind last-write-wins for important business records; no silent loss of queued operations; no duplicate financial or inventory effects.
+
+**Open design decisions:** local database package compatible with the current Flutter/Dart constraints, offline data scope and retention, sync API/cursor contract, per-entity conflict policy, local data protection, permission revocation while offline, and which actions require online confirmation. Resolve these through codebase inspection and focused design before implementation.
+
+---
+
 ## 5. Decisions to settle in focused discussions
 
 Do not guess these choices during implementation. Discuss and record them here before the related phase:
