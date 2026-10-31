@@ -130,18 +130,18 @@ jobs:
           summary = os.environ["GITHUB_STEP_SUMMARY"]
 
           with open(summary, "a", encoding="utf-8") as out:
-              out.write("# Backend test results\\n\\n")
+              out.write("# Backend test results\n\n")
               out.write(
-                  f"- Maven test step: **{os.environ['TEST_OUTCOME']}**\\n"
+                  f"- Maven test step: **{os.environ['TEST_OUTCOME']}**\n"
               )
               out.write(
-                  f"- Commit: `{os.environ.get('GITHUB_SHA', 'unknown')}`\\n"
+                  f"- Commit: `{os.environ.get('GITHUB_SHA', 'unknown')}`\n"
               )
 
               if not files:
                   out.write(
                       "- Surefire reports: **not generated**; "
-                      "inspect the job logs.\\n"
+                      "inspect the job logs.\n"
                   )
                   sys.exit(0)
 
@@ -157,11 +157,11 @@ jobs:
                   for key in totals:
                       totals[key] += int(root.attrib.get(key, 0))
 
-              out.write("\\n## Surefire totals\\n\\n")
-              out.write("| Metric | Count |\\n")
-              out.write("|---|---:|\\n")
+              out.write("\n## Surefire totals\n\n")
+              out.write("| Metric | Count |\n")
+              out.write("|---|---:|\n")
               for key, value in totals.items():
-                  out.write(f"| {key.capitalize()} | {value} |\\n")
+                  out.write(f"| {key.capitalize()} | {value} |\n")
 
               passed = (
                   totals["tests"]
@@ -169,7 +169,7 @@ jobs:
                   - totals["errors"]
                   - totals["skipped"]
               )
-              out.write(f"| Passed (calculated) | {passed} |\\n")
+              out.write(f"| Passed (calculated) | {passed} |\n")
           PY
 
       - name: Upload Maven test reports
