@@ -17,7 +17,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Arrays;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
@@ -127,10 +126,10 @@ class DriverLedgerIdempotencyIntegrationTest extends AbstractIntegrationTest {
         Long driverId = createDriver("retry-driver");
         earn(driverId, "retry-driver-earned");
 
-        assertThat(pay(driverId, "driver-payment-retry", cashId, new CountDownLatch(0),
-                new CountDownLatch(0))).isEqualTo(201);
-        assertThat(postPayment(driverId, "driver-payment-retry", cashId).getResponse().getStatus())
-                .isEqualTo(201);
+        assertThat(postPayment(driverId, "driver-payment-retry", cashId).andReturn()
+                .getResponse().getStatus()).isEqualTo(201);
+        assertThat(postPayment(driverId, "driver-payment-retry", cashId).andReturn()
+                .getResponse().getStatus()).isEqualTo(201);
         assertThat(ledger.findByTenantIdAndClientRequestKey(tenantId, "driver-payment-retry")).isPresent();
         assertThat(journals.findByTenantIdAndPostingKey(tenantId, "driver-payment:driver-payment-retry"))
                 .isPresent();
