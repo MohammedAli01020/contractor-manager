@@ -35,16 +35,13 @@
 
 ## Verification status
 
-- Verified head after final documentation correction: `88fd380ade49eb2506be9b7d886eb840af9dbd58`.
-- Successful Backend CI push run on the preceding source-and-documentation head: [41225452808](https://github.com/MohammedAli01020/contractor-manager/actions/runs/41225452808).
-- Successful Backend CI pull-request run on the preceding source-and-documentation head: [41225457241](https://github.com/MohammedAli01020/contractor-manager/actions/runs/41225457241).
-- The Surefire artifact from the verified `88fd380` head was independently aggregated: 29 test-suite XML reports, **164 tests, 0 failures, 0 errors, 0 skipped**. Push and PR workflows [41225793226](https://github.com/MohammedAli01020/contractor-manager/actions/runs/41225793226) and [41225797046](https://github.com/MohammedAli01020/contractor-manager/actions/runs/41225797046) both succeeded on this exact SHA.
-- `JournalPostingConcurrencyIntegrationTest`: **8 tests, 0 failures, 0 errors, 0 skipped**.
-- `CashBankClassificationMigrationIntegrationTest`: **1 test, 0 failures, 0 errors, 0 skipped**. The test migrated a disposable MySQL database through V23, inserted representative existing tenant/account data, applied V24, and verified the intended classifications and unchanged existing account data.
-- Both CI runs passed the dedicated guards requiring the MySQL accounting integration tests and V24 existing-data migration test to execute; neither required test was skipped.
-- The earlier fixture-ID failure was fixed by retrieving tenant IDs from the same insert operation via `GeneratedKeyHolder`.
-- No migration was run against a real/deployed database.
-- PR #17 remains Draft and unmerged. No changes were made to `main`.
+- Previous verified source head: `97daa6101450eae7e5c5591738c0d0b37fbb63da`; Backend CI run [41226085164](https://github.com/MohammedAli01020/contractor-manager/actions/runs/41226085164) passed with **164 tests, 0 failures, 0 errors, 0 skipped**.
+- On that previous head, `JournalPostingConcurrencyIntegrationTest`: **8 tests, 0 failures, 0 errors, 0 skipped**.
+- On that previous head, `CashBankClassificationMigrationIntegrationTest`: **1 test, 0 failures, 0 errors, 0 skipped**.
+- Both dedicated CI guards passed; Docker/MySQL integration tests were executed, not skipped.
+- Final review identified a defensive-construction edge case: the compatibility constructor could classify a non-ASSET account with code 1000/1010 as cash/bank and then reject it. The constructor now infers liquidity classification only for ASSET accounts, with a regression test for a LIABILITY account using the same code.
+- Latest source/test/documentation changes are awaiting fresh CI; update this section with the resulting exact head and run after completion.
+- V24 was tested only against a disposable MySQL container. No migration was run against a deployed database.
 
 ## Review outcome
 

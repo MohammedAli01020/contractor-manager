@@ -39,7 +39,8 @@ public class ChartAccount extends BaseTenantEntity {
     public ChartAccount(Long tenantId, String accountCode, String name, AccountType accountType,
                         Long parentAccountId, boolean systemManaged) {
         this(tenantId, accountCode, name, accountType, parentAccountId, systemManaged,
-                "1000".equals(accountCode) || "1010".equals(accountCode));
+                accountType == AccountType.ASSET
+                        && ("1000".equals(accountCode) || "1010".equals(accountCode)));
     }
 
     public ChartAccount(Long tenantId, String accountCode, String name, AccountType accountType,
