@@ -15,6 +15,8 @@ import com.contractor.app.accounting.domain.JournalPostingService;
 import com.contractor.app.accounting.infra.ChartAccountRepository;
 import com.contractor.app.accounting.infra.JournalEntryRepository;
 import com.contractor.app.accounting.infra.JournalLineRepository;
+import com.contractor.app.expense.infra.ExpenseRepository;
+import com.contractor.app.expense.infra.ExpensePaymentRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -36,6 +38,8 @@ class ExpenseIntegrationTest extends AbstractIntegrationTest {
     @Autowired private ChartAccountRepository accounts;
     @Autowired private JournalEntryRepository journalEntries;
     @Autowired private JournalLineRepository journalLines;
+    @Autowired private ExpenseRepository expenseRepository;
+    @Autowired private ExpensePaymentRepository paymentRepository;
     @SpyBean private JournalPostingService journalPostingService;
 
     private Long tenantId;
@@ -236,6 +240,77 @@ class ExpenseIntegrationTest extends AbstractIntegrationTest {
         assertThat(journalEntries.findByTenantIdAndPostingKey(tenantId, "expense-payment:concurrent-payment-a")
                 .isPresent() ^ journalEntries.findByTenantIdAndPostingKey(
                         tenantId, "expense-payment:concurrent-payment-b").isPresent()).isTrue();
+    }
+
+    @Test
+    void concurrentIdenticalExpenseCreatesReturnTheSameSourceAndJournal() throws Exception {
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<MvcResult> first = executor.submit(() -> concurrentCreateExpense(
+                    "expense-same-key-race", ready, start));
+            Future<MvcResult> second = executor.submit(() -> concurrentCreateExpense(
+                    "expense-same-key-race", ready, start));
+            ready.await();
+            start.countDown();
+
+            MvcResult firstResult = first.get();
+            MvcResult secondResult = second.get();
+            assertThat(firstResult.getResponse().getStatus()).isEqualTo(201);
+            assertThat(secondResult.getResponse().getStatus()).isEqualTo(201);
+            JsonNode firstBody = objectMapper.readTree(firstResult.getResponse().getContentAsString());
+            JsonNode secondBody = objectMapper.readTree(secondResult.getResponse().getContentAsString());
+            assertThat(firstBody.path("id").asLong()).isEqualTo(secondBody.path("id").asLong());
+            assertThat(expenseRepository.findByTenantIdOrderByExpenseDateDescIdDesc(tenantId)).hasSize(1);
+            assertThat(journalEntries.findByTenantIdAndPostingKey(tenantId,
+                    "expense:expense-same-key-race")).isPresent();
+        } finally {
+            start.countDown();
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
+    void concurrentPaymentKeyAcrossDifferentExpensesProducesOnePaymentAndOneConflict() throws Exception {
+        seedCashBalance(new BigDecimal("1000.00"));
+        JsonNode firstExpense = createExpense("expense-payment-race-a", "500.00");
+        JsonNode secondExpense = createExpense("expense-payment-race-b", "500.00");
+        long firstId = firstExpense.path("id").asLong();
+        long secondId = secondExpense.path("id").asLong();
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<Integer> first = executor.submit(() -> concurrentPayment(
+                    firstId, "same-payment-key-race", ready, start));
+            Future<Integer> second = executor.submit(() -> concurrentPayment(
+                    secondId, "same-payment-key-race", ready, start));
+            ready.await();
+            start.countDown();
+
+            assertThat(java.util.Arrays.asList(first.get(), second.get()))
+                    .containsExactlyInAnyOrder(201, 409);
+        } finally {
+            start.countDown();
+            executor.shutdownNow();
+        }
+
+        assertThat(paymentRepository.findByTenantIdAndPaymentKey(tenantId, "same-payment-key-race"))
+                .isPresent();
+        assertThat(journalEntries.findByTenantIdAndPostingKey(
+                tenantId, "expense-payment:same-payment-key-race")).isPresent();
+        assertThat(journalEntries.findByTenantIdAndPostingKey(
+                tenantId, "expense-payment:same-payment-key-race")).hasValueSatisfying(entry ->
+                assertThat(journalLines.findByTenantIdAndJournalEntryIdOrderByLineNumberAsc(
+                        tenantId, entry.getId())).hasSize(2));
+    }
+
+    private MvcResult concurrentCreateExpense(String key, CountDownLatch ready,
+                                               CountDownLatch start) throws Exception {
+        ready.countDown();
+        start.await();
+        return postJson("/api/v1/expenses", expenseBody(key, "125.00"), token).andReturn();
     }
 
     private int concurrentPayment(long expenseId, String key, CountDownLatch ready,
