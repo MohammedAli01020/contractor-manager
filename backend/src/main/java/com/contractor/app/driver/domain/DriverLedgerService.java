@@ -8,7 +8,10 @@ import com.contractor.app.accounting.domain.JournalPostingRequest;
 import com.contractor.app.accounting.domain.JournalPostingService;
 import com.contractor.app.accounting.infra.ChartAccountRepository;
 import com.contractor.app.accounting.infra.JournalEntryRepository;
+import com.contractor.app.accounting.infra.JournalLineRepository;
 import com.contractor.app.common.error.ApiException;
+import com.contractor.app.common.idempotency.FinancialIdempotencyService;
+import com.contractor.app.common.idempotency.RequestFingerprint;
 import com.contractor.app.common.security.AuthenticatedUser;
 import com.contractor.app.common.security.CurrentUser;
 import com.contractor.app.driver.api.dto.DriverLedgerEntryResponse;
@@ -33,11 +36,15 @@ public class DriverLedgerService {
     private final DriverLedgerEntryRepository ledger;
     private final ChartAccountRepository accounts;
     private final JournalEntryRepository journalsRepo;
+    private final JournalLineRepository journalLines;
+    private final FinancialIdempotencyService idempotency;
     private final JournalPostingService journals;
 
     public DriverLedgerService(DriverRepository drivers, DriverLedgerEntryRepository ledger,
-            ChartAccountRepository accounts, JournalEntryRepository journalsRepo, JournalPostingService journals) {
-        this.drivers=drivers; this.ledger=ledger; this.accounts=accounts; this.journalsRepo=journalsRepo; this.journals=journals;
+            ChartAccountRepository accounts, JournalEntryRepository journalsRepo, JournalLineRepository journalLines,
+            FinancialIdempotencyService idempotency, JournalPostingService journals) {
+        this.drivers=drivers; this.ledger=ledger; this.accounts=accounts; this.journalsRepo=journalsRepo;
+        this.journalLines=journalLines; this.idempotency=idempotency; this.journals=journals;
     }
 
     @Transactional(readOnly=true)
@@ -63,6 +70,9 @@ public class DriverLedgerService {
         BigDecimal amount=money(request.getAmount());
         if(request.getPaymentDate()==null) throw ApiException.badRequest("تاريخ الصرف مطلوب.");
 
+        idempotency.reserve(tenantId, "DRIVER_PAYMENT", key,
+                RequestFingerprint.of(driverId, request.getPaymentDate(), amount, description,
+                        request.getPaymentAccountId()));
         drivers.findByIdAndTenantIdForUpdate(driverId,tenantId)
                 .orElseThrow(()->ApiException.notFound("العامل غير موجود."));
         Optional<DriverLedgerEntry> prior=ledger.findByTenantIdAndClientRequestKey(tenantId,key);
@@ -70,7 +80,8 @@ public class DriverLedgerService {
             DriverLedgerEntry p=prior.get();
             if(!p.getDriverId().equals(driverId)||!p.getAmount().equals(amount)
                     ||!p.getTransactionDate().equals(request.getPaymentDate())
-                    ||!p.getDescription().equals(description)||!"PAYMENT".equals(p.getTransactionType()))
+                    ||!p.getDescription().equals(description)||!"PAYMENT".equals(p.getTransactionType())
+                    ||!journalCreditsAccount(p.getJournalEntryId(), tenantId, request.getPaymentAccountId()))
                 throw ApiException.conflict("مفتاح العملية مستخدم لعملية أخرى.");
             return new DriverLedgerEntryResponse(p,ledger.sumBalance(tenantId,driverId));
         }
@@ -104,6 +115,9 @@ public class DriverLedgerService {
         if(!Arrays.asList("AGAINST_EARNED","RECOVERABLE").contains(type))
             throw ApiException.badRequest("نوع السلفة غير صالح.");
 
+        idempotency.reserve(tenantId, "DRIVER_ADVANCE", key,
+                RequestFingerprint.of(driverId, request.getAdvanceDate(), amount, description, type,
+                        request.getPaymentAccountId()));
         drivers.findByIdAndTenantIdForUpdate(driverId,tenantId)
                 .orElseThrow(()->ApiException.notFound("العامل غير موجود."));
         String ledgerType="AGAINST_EARNED".equals(type)?"ADVANCE":"RECOVERABLE_ADVANCE";
@@ -112,7 +126,8 @@ public class DriverLedgerService {
             DriverLedgerEntry p=prior.get();
             if(!p.getDriverId().equals(driverId)||p.getAmount().compareTo(amount)!=0
                     ||!p.getTransactionDate().equals(request.getAdvanceDate())
-                    ||!p.getDescription().equals(description)||!ledgerType.equals(p.getTransactionType()))
+                    ||!p.getDescription().equals(description)||!ledgerType.equals(p.getTransactionType())
+                    ||!journalCreditsAccount(p.getJournalEntryId(), tenantId, request.getPaymentAccountId()))
                 throw ApiException.conflict("مفتاح العملية مستخدم بالفعل لحركة مالية مختلفة.");
             return new DriverLedgerEntryResponse(p,ledger.sumBalance(tenantId,driverId));
         }
@@ -133,6 +148,11 @@ public class DriverLedgerService {
         DriverLedgerEntry entry=ledger.saveAndFlush(new DriverLedgerEntry(tenantId,driverId,ledgerType,
                 request.getAdvanceDate(),amount,effect,description,key,null,journal.getId(),user.getUserId()));
         return new DriverLedgerEntryResponse(entry,balance.add(effect));
+    }
+
+    private boolean journalCreditsAccount(Long journalId, Long tenantId, Long accountId) {
+        return journalLines.findByTenantIdAndJournalEntryIdOrderByLineNumberAsc(tenantId, journalId).stream()
+                .anyMatch(line -> line.getAccountId().equals(accountId) && line.getCredit().signum() > 0);
     }
 
     private ChartAccount account(Long tenantId,String code) {
