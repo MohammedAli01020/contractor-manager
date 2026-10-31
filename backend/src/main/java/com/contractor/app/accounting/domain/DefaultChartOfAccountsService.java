@@ -39,7 +39,13 @@ public class DefaultChartOfAccountsService {
                 .orElseThrow(() -> ApiException.notFound("الشركة غير موجودة لتهيئة دليل الحسابات."));
 
         // Another request may have initialized the chart while this transaction waited.
-        existingCodes = existingCodes(tenantId);
+        // A locking query is a MySQL current read under REPEATABLE READ. The first
+        // non-locking read above may already have established an older transaction snapshot.
+        existingCodes = accounts.findByTenantIdOrderByAccountCodeAscForUpdate(tenantId).stream()
+                .map(ChartAccount::getAccountCode)
+                .filter(code -> code != null)
+                .map(code -> code.toUpperCase(Locale.ROOT))
+                .collect(Collectors.toCollection(HashSet::new));
         List<ChartAccount> missing = missingAccounts(tenantId, existingCodes);
         if (!missing.isEmpty()) {
             accounts.saveAll(missing);
