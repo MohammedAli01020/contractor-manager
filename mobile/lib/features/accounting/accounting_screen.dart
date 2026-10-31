@@ -172,7 +172,6 @@ class _AccountingScreenState extends State<AccountingScreen>
             fontSize: 14,
             fontWeight: FontWeight.w600,
           ),
-          dividerColor: const Color(0xFFD8E0E8),
           tabs: const [
             Tab(text: 'دليل الحسابات', icon: Icon(Icons.account_tree_outlined)),
             Tab(text: 'القيود اليومية', icon: Icon(Icons.receipt_long_outlined)),
