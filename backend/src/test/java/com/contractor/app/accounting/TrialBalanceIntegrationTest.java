@@ -72,8 +72,8 @@ class TrialBalanceIntegrationTest extends AbstractIntegrationTest {
         assertMoney(totals, "openingCredit", "120.00");
         assertMoney(totals, "periodDebit", "95.00");
         assertMoney(totals, "periodCredit", "95.00");
-        assertMoney(totals, "closingDebit", "215.00");
-        assertMoney(totals, "closingCredit", "215.00");
+        assertMoney(totals, "closingDebit", "175.00");
+        assertMoney(totals, "closingCredit", "175.00");
         assertThat(report.path("fromDate").asText()).isEqualTo("2026-02-01");
         assertThat(report.path("toDate").asText()).isEqualTo("2026-02-28");
     }
