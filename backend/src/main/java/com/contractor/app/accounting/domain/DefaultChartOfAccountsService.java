@@ -23,6 +23,7 @@ public class DefaultChartOfAccountsService {
             new AccountTemplate("1010", "البنوك", AccountType.ASSET),
             new AccountTemplate("1100", "العملاء والمستحقات", AccountType.ASSET),
             new AccountTemplate("1200", "الأصول الثابتة", AccountType.ASSET),
+            new AccountTemplate("1300", "سلف العاملين القابلة للاسترداد", AccountType.ASSET),
             new AccountTemplate("2000", "الموردون", AccountType.LIABILITY),
             new AccountTemplate("2100", "مستحقات السائقين", AccountType.LIABILITY),
             new AccountTemplate("2200", "مستحقات الملاك والشركاء", AccountType.LIABILITY),
