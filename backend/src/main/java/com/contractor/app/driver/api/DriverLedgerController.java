@@ -2,6 +2,7 @@ package com.contractor.app.driver.api;
 
 import com.contractor.app.driver.api.dto.DriverLedgerEntryResponse;
 import com.contractor.app.driver.api.dto.DriverLedgerPaymentRequest;
+import com.contractor.app.driver.api.dto.DriverLedgerAdvanceRequest;
 import com.contractor.app.driver.domain.DriverLedgerService;
 import java.util.List;
 import javax.validation.Valid;
@@ -17,6 +18,12 @@ public class DriverLedgerController {
     public DriverLedgerController(DriverLedgerService service){this.service=service;}
     @GetMapping
     public List<DriverLedgerEntryResponse> statement(@PathVariable Long driverId){return service.statement(driverId);}
+    @PostMapping("/advances")
+    @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasAnyRole('ADMIN','OPERATOR')")
+    public DriverLedgerEntryResponse advance(@PathVariable Long driverId,
+            @Valid @RequestBody DriverLedgerAdvanceRequest request){return service.advance(driverId,request);}
+
     @PostMapping("/payments")
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasAnyRole('ADMIN','OPERATOR')")
