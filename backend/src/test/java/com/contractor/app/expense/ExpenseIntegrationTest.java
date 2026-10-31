@@ -15,6 +15,8 @@ import com.contractor.app.accounting.domain.JournalPostingService;
 import com.contractor.app.accounting.infra.ChartAccountRepository;
 import com.contractor.app.accounting.infra.JournalEntryRepository;
 import com.contractor.app.accounting.infra.JournalLineRepository;
+import com.contractor.app.expense.domain.Expense;
+import com.contractor.app.expense.domain.ExpensePayment;
 import com.contractor.app.expense.infra.ExpenseRepository;
 import com.contractor.app.expense.infra.ExpensePaymentRepository;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -133,6 +135,27 @@ class ExpenseIntegrationTest extends AbstractIntegrationTest {
                 tenantId, "expense-immutable-source-payment")
                 .orElseThrow(() -> new AssertionError("Missing posted expense payment"))
                 .getId();
+
+        JsonNode otherExpense = createExpense("expense-link-target", "50.00");
+        Long otherJournalId = otherExpense.path("journalEntryId").asLong();
+        Expense source = expenseRepository.saveAndFlush(new Expense(
+                tenantId, "EXP-UNLINKED", "expense-unlinked-source", LocalDate.now(),
+                "OTHER", "Unlinked source", null, new BigDecimal("25.00"),
+                expenseAccountId, null, null, actorUserId));
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                jdbcTemplate.update("UPDATE expenses SET journal_entry_id = ? WHERE id = ?",
+                        otherJournalId, source.getId()))
+                .isInstanceOf(DataAccessException.class)
+                .hasMessageContaining("POSTED_EXPENSE_IS_IMMUTABLE");
+
+        ExpensePayment paymentSource = paymentRepository.saveAndFlush(new ExpensePayment(
+                tenantId, expenseId, "unlinked-payment-source", LocalDate.now(),
+                new BigDecimal("10.00"), cashAccountId, actorUserId));
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                jdbcTemplate.update("UPDATE expense_payments SET journal_entry_id = ? WHERE id = ?",
+                        otherJournalId, paymentSource.getId()))
+                .isInstanceOf(DataAccessException.class)
+                .hasMessageContaining("POSTED_EXPENSE_PAYMENT_IS_IMMUTABLE");
 
         org.assertj.core.api.Assertions.assertThatThrownBy(() ->
                 jdbcTemplate.update("UPDATE expenses SET amount = ? WHERE id = ?",
