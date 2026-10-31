@@ -40,6 +40,7 @@ class JournalPostingConcurrencyIntegrationTest extends AbstractIntegrationTest {
     private Long creditAccountId;
     private Long cashAccountId;
     private Long bankAccountId;
+    private Long customLiquidityAccountId;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -56,6 +57,8 @@ class JournalPostingConcurrencyIntegrationTest extends AbstractIntegrationTest {
         bankAccountId = accounts.findByTenantIdAndAccountCodeIgnoreCase(tenantId, "1010")
                 .orElseThrow(() -> new IllegalStateException("Default bank account was not created"))
                 .getId();
+        customLiquidityAccountId = accounts.saveAndFlush(new ChartAccount(
+                tenantId, "1020", "Additional bank account", AccountType.ASSET, null, false, true)).getId();
     }
 
     @Test
@@ -196,6 +199,46 @@ class JournalPostingConcurrencyIntegrationTest extends AbstractIntegrationTest {
                     .isEqualByComparingTo("100.00");
             assertThat(lineRepository.calculateDebitNormalBalance(tenantId, bankAccountId))
                     .isEqualByComparingTo("100.00");
+        } finally {
+            start.countDown();
+            pool.shutdownNow();
+        }
+    }
+
+
+    @Test
+    void explicitlyClassifiedAdditionalBankAccountIsLockedAgainstConcurrentOverspending() throws Exception {
+        openLiquidityAccount(customLiquidityAccountId, uniqueName("custom-bank-opening"),
+                new BigDecimal("100.00"));
+        JournalPostingRequest firstRequest = liquidityOutRequest(
+                uniqueName("custom-bank-out-a"), customLiquidityAccountId, new BigDecimal("80.00"));
+        JournalPostingRequest secondRequest = liquidityOutRequest(
+                uniqueName("custom-bank-out-b"), customLiquidityAccountId, new BigDecimal("80.00"));
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            Future<JournalEntry> first = pool.submit(() -> postTogether(firstRequest, ready, start));
+            Future<JournalEntry> second = pool.submit(() -> postTogether(secondRequest, ready, start));
+            assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+
+            int successes = 0;
+            int insufficient = 0;
+            for (Future<JournalEntry> result : Arrays.asList(first, second)) {
+                try {
+                    result.get(30, TimeUnit.SECONDS);
+                    successes++;
+                } catch (java.util.concurrent.ExecutionException ex) {
+                    assertThat(ex.getCause()).isInstanceOf(ApiException.class);
+                    assertThat(((ApiException) ex.getCause()).getStatus().value()).isEqualTo(409);
+                    insufficient++;
+                }
+            }
+            assertThat(successes).isEqualTo(1);
+            assertThat(insufficient).isEqualTo(1);
+            assertThat(lineRepository.calculateDebitNormalBalance(tenantId, customLiquidityAccountId))
+                    .isEqualByComparingTo("20.00");
         } finally {
             start.countDown();
             pool.shutdownNow();
