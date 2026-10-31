@@ -7,10 +7,11 @@
 ## Scope
 
 - Centralize the platform-owned account catalog in `SystemAccountCode`; account codes are stable identifiers, while database account IDs remain tenant-specific.
-- Keep tenant initialization idempotent and non-destructive: create missing defaults only, preserving existing names, active state and custom accounts.
+- Keep tenant initialization idempotent and non-destructive: create missing defaults only, preserving existing names, active state and custom accounts. If defaults are missing, serialize initialization by locking the tenant row and re-reading after the lock; fully initialized tenants do not take that lock.
 - Add the inventory asset account (1400) as a chart foundation for the later inventory phase. This does not implement inventory movement or stock valuation.
 - Resolve required system accounts inside the tenant and reject missing, inactive, non-system-managed, wrongly typed or wrongly classified accounts before a business workflow posts a journal.
 - Use the same account resolver for shift wage accrual/recoverable advance recovery, driver payments/advances and supplier expense/payment postings. The resolved tenant account ID is then passed to the existing `JournalPostingService`, which remains the only journal-posting entry point.
+- MySQL integration assertions verify that shift wages debit 5000 and credit 2100, and supplier expense/payment journals use the configured expense, supplier-payable and cash/bank accounts.
 
 ## Default catalog
 

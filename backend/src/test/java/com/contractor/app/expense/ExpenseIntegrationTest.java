@@ -71,6 +71,8 @@ class ExpenseIntegrationTest extends AbstractIntegrationTest {
                 .contains("3000.00", "0.00");
         assertThat(lines).extracting(line -> line.getCredit().toPlainString())
                 .contains("0.00", "3000.00");
+        assertThat(lines).extracting(line -> line.getAccountId())
+                .containsExactly(expenseAccountId, account("2000").getId());
         assertThat(journalEntries.findByTenantIdAndPostingKey(tenantId, "expense:expense-create-1"))
                 .isPresent();
     }
@@ -97,6 +99,8 @@ class ExpenseIntegrationTest extends AbstractIntegrationTest {
                 .contains("1000.00", "0.00");
         assertThat(paymentLines).extracting(line -> line.getCredit().toPlainString())
                 .contains("0.00", "1000.00");
+        assertThat(paymentLines).extracting(line -> line.getAccountId())
+                .containsExactly(account("2000").getId(), cashAccountId);
 
         JsonNode paid = addPayment(expenseId, "payment-final", "2000.00");
         assertThat(paid.path("paidAmount").decimalValue()).isEqualByComparingTo("3000.00");

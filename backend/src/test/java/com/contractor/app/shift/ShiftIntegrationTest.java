@@ -295,6 +295,18 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
                 done.path("driverWageJournalEntryId").asLong());
         assertThat(debit).isEqualByComparingTo("150.00");
         assertThat(credit).isEqualByComparingTo("150.00");
+        Long wageExpenseAccountId = jdbcTemplate.queryForObject(
+                "SELECT id FROM chart_of_accounts WHERE tenant_id = ? AND account_code = '5000'",
+                Long.class, tenantId);
+        Long driverPayableAccountId = jdbcTemplate.queryForObject(
+                "SELECT id FROM chart_of_accounts WHERE tenant_id = ? AND account_code = '2100'",
+                Long.class, tenantId);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT account_id FROM journal_lines WHERE journal_entry_id = ? AND debit > 0",
+                Long.class, done.path("driverWageJournalEntryId").asLong())).isEqualTo(wageExpenseAccountId);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT account_id FROM journal_lines WHERE journal_entry_id = ? AND credit > 0",
+                Long.class, done.path("driverWageJournalEntryId").asLong())).isEqualTo(driverPayableAccountId);
 
         // لا إنهاء ثانٍ، ولا إنهاء بنسخة قديمة أو بدون نسخة
         postJson("/api/v1/shifts/" + running.path("id").asLong() + "/finish", versionBody(done.path("version").asLong()),
