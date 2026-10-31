@@ -1,6 +1,7 @@
 package com.contractor.app.driver;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.contractor.app.AbstractIntegrationTest;
@@ -27,6 +28,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.IllegalTransactionStateException;
+import com.contractor.app.common.idempotency.FinancialIdempotencyService;
 
 class DriverLedgerIdempotencyIntegrationTest extends AbstractIntegrationTest {
 
@@ -36,6 +39,7 @@ class DriverLedgerIdempotencyIntegrationTest extends AbstractIntegrationTest {
     @Autowired private JournalPostingService postingService;
     @Autowired private DriverLedgerEntryRepository ledger;
     @Autowired private JdbcTemplate jdbcTemplate;
+    @Autowired private FinancialIdempotencyService financialIdempotency;
 
     private Long tenantId;
     private Long actorId;
@@ -60,6 +64,13 @@ class DriverLedgerIdempotencyIntegrationTest extends AbstractIntegrationTest {
         equityId = account("3000").getId();
         openLiquidity(cashId, "cash-opening", new BigDecimal("2000.00"));
         openLiquidity(bankId, "bank-opening", new BigDecimal("2000.00"));
+    }
+
+    @Test
+    void idempotencyReservationRequiresTheOuterFinancialTransaction() {
+        assertThatThrownBy(() -> financialIdempotency.reserve(
+                tenantId, "DRIVER_LEDGER", "outside-transaction", "a".repeat(64)))
+                .isInstanceOf(IllegalTransactionStateException.class);
     }
 
     @Test
