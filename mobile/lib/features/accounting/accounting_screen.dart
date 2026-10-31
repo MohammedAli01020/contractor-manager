@@ -137,6 +137,20 @@ class _AccountingScreenState extends State<AccountingScreen>
         title: const Text('المحاسبة'),
         bottom: TabBar(
           controller: _tabs,
+          indicatorColor: const Color(0xFF0D9488),
+          indicatorWeight: 3,
+          indicatorSize: TabBarIndicatorSize.tab,
+          labelColor: const Color(0xFF17324D),
+          unselectedLabelColor: const Color(0xFF526273),
+          labelStyle: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+          ),
+          unselectedLabelStyle: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+          ),
+          dividerColor: const Color(0xFFD8E0E8),
           tabs: const [
             Tab(text: 'دليل الحسابات', icon: Icon(Icons.account_tree_outlined)),
             Tab(text: 'القيود اليومية', icon: Icon(Icons.receipt_long_outlined)),
