@@ -25,6 +25,7 @@ on:
       - feature/platform-owner-totp-2fa
       - feature/request-tracking
       - feature/driver-worker-ledger
+      - feature/financial-foundation
     paths:
       - "backend/**"
       - ".github/workflows/backend-ci.yml"
