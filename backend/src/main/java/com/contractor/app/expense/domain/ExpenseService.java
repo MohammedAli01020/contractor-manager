@@ -65,9 +65,11 @@ public class ExpenseService {
             return response(existing);
         }
 
+        defaultAccounts.initializeForTenant(tenantId);
         ChartAccount expenseAccount=account(tenantId,request.getExpenseAccountId());
         if(expenseAccount.getAccountType()!=AccountType.EXPENSE)
             throw ApiException.badRequest("يجب اختيار حساب من نوع المصروفات.");
+        defaultAccounts.initializeForTenant(tenantId);
         ChartAccount payable=defaultAccounts.requireSystemAccount(tenantId,SystemAccountCode.SUPPLIER_PAYABLE);
         if(payable.getAccountType()!=AccountType.LIABILITY)
             throw ApiException.conflict("الحساب الافتراضي للموردين غير مضبوط كالتزام.");

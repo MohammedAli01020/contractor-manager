@@ -81,6 +81,7 @@ public class DriverLedgerService {
         }
         BigDecimal balance=ledger.sumBalance(tenantId,driverId);
         if(balance.compareTo(amount)<0) throw ApiException.badRequest("المبلغ أكبر من مستحقات العامل المتاحة للصرف.");
+        defaultAccounts.initializeForTenant(tenantId);
         ChartAccount payable=defaultAccounts.requireSystemAccount(tenantId,SystemAccountCode.DRIVER_PAYABLE);
         ChartAccount cash=accounts.findByIdAndTenantId(request.getPaymentAccountId(),tenantId)
                 .filter(ChartAccount::isActive).orElseThrow(()->ApiException.notFound("حساب الخزينة أو البنك غير موجود."));
@@ -124,6 +125,7 @@ public class DriverLedgerService {
         BigDecimal balance=ledger.sumBalance(tenantId,driverId);
         if("AGAINST_EARNED".equals(type) && balance.compareTo(amount)<0)
             throw ApiException.badRequest("السلفة أكبر من مستحقات العامل المتاحة.");
+        defaultAccounts.initializeForTenant(tenantId);
         ChartAccount debitAccount="AGAINST_EARNED".equals(type)
                 ?defaultAccounts.requireSystemAccount(tenantId,SystemAccountCode.DRIVER_PAYABLE)
                 :defaultAccounts.requireSystemAccount(tenantId,SystemAccountCode.RECOVERABLE_WORKER_ADVANCES);
