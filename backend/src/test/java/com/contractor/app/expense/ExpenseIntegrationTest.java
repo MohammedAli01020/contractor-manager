@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.contractor.app.AbstractIntegrationTest;
 import com.contractor.app.accounting.domain.ChartAccount;
 import com.contractor.app.accounting.domain.DefaultChartOfAccountsService;
+import com.contractor.app.accounting.domain.JournalLineRequest;
 import com.contractor.app.accounting.domain.JournalPostingRequest;
 import com.contractor.app.accounting.domain.JournalPostingService;
 import com.contractor.app.accounting.infra.ChartAccountRepository;
@@ -38,6 +39,7 @@ class ExpenseIntegrationTest extends AbstractIntegrationTest {
     @SpyBean private JournalPostingService journalPostingService;
 
     private Long tenantId;
+    private Long actorUserId;
     private String token;
     private Long expenseAccountId;
     private Long cashAccountId;
@@ -46,6 +48,7 @@ class ExpenseIntegrationTest extends AbstractIntegrationTest {
     void setUp() throws Exception {
         JsonNode registered = registerTenant("Expense " + uniqueName("tenant"), uniqueName("owner"));
         tenantId = registered.path("user").path("tenantId").asLong();
+        actorUserId = registered.path("user").path("id").asLong();
         token = registered.path("accessToken").asText();
         defaultAccounts.initializeForTenant(tenantId);
         expenseAccountId = account("5100").getId();
@@ -74,6 +77,7 @@ class ExpenseIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void partialPaymentUpdatesRemainingAndDuplicateRetryDoesNotPostTwice() throws Exception {
+        seedCashBalance(new BigDecimal("5000.00"));
         JsonNode expense = createExpense("expense-payment-base", "3000.00");
         long expenseId = expense.path("id").asLong();
 
@@ -165,6 +169,7 @@ class ExpenseIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void operatorCanCreateExpenseAndRecordPayment() throws Exception {
+        seedCashBalance(new BigDecimal("500.00"));
         String operatorName = uniqueName("expenseoperator");
         body(postJson("/api/v1/users", userBody(operatorName), token).andExpect(status().isCreated()));
         String operatorToken = login(operatorName);
@@ -204,6 +209,7 @@ class ExpenseIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void concurrentPaymentsCannotOverpayTheSameExpense() throws Exception {
+        seedCashBalance(new BigDecimal("1000.00"));
         JsonNode expense = createExpense("expense-concurrent", "1000.00");
         long expenseId = expense.path("id").asLong();
         CountDownLatch ready = new CountDownLatch(2);
@@ -282,6 +288,16 @@ class ExpenseIntegrationTest extends AbstractIntegrationTest {
         request.put("amount", new BigDecimal(amount));
         request.put("paymentAccountId", cashAccountId);
         return request;
+    }
+
+
+    private void seedCashBalance(BigDecimal amount) {
+        Long equityAccountId = account("3000").getId();
+        journalPostingService.post(tenantId, actorUserId, new JournalPostingRequest(
+                "test-cash-opening:" + uniqueName("expense"), "TEST_CASH_OPENING", null,
+                LocalDate.of(2026, 10, 31), "Test fixture opening cash", null, java.util.Arrays.asList(
+                new JournalLineRequest(cashAccountId, "Opening cash", amount, BigDecimal.ZERO, null, null),
+                new JournalLineRequest(equityAccountId, "Opening capital", BigDecimal.ZERO, amount, null, null))));
     }
 
     private ChartAccount account(String code) {
