@@ -164,7 +164,7 @@ jobs:
           totals = {key: int(root.attrib.get(key, 0))
                     for key in ("tests", "failures", "errors", "skipped")}
           print(f"TrialBalanceIntegrationTest: {totals}")
-          if totals["tests"] < 6:
+          if totals["tests"] < 7:
               sys.exit("Trial-balance integration tests did not all execute.")
           if totals["skipped"] != 0 or totals["failures"] != 0 or totals["errors"] != 0:
               sys.exit("Trial-balance integration tests were skipped or reported failures/errors.")
