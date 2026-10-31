@@ -600,4 +600,59 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
 
         getJson("/api/v1/shifts?from=" + day(1) + "&to=" + day(3), token).andExpect(status().isBadRequest());
     }
+
+    @Test
+    void recoverableAdvanceIsAnAssetAndIsAutomaticallyRecoveredFromLaterWages() throws Exception {
+        JsonNode first = finishShift(token,
+                startShift(token, shiftBody(siteId, driverId, equipmentId, day(3), "MORNING")));
+        Long cashId = jdbcTemplate.queryForObject(
+                "SELECT id FROM chart_of_accounts WHERE tenant_id=(SELECT tenant_id FROM shifts WHERE id=?) AND account_code='1000'",
+                Long.class, first.path("id").asLong());
+        Map<String,Object> advance = new HashMap<>();
+        advance.put("clientRequestKey", "recoverable-" + first.path("id").asLong());
+        advance.put("advanceDate", day(2).toString());
+        advance.put("amount", new BigDecimal("200.00"));
+        advance.put("paymentAccountId", cashId);
+        advance.put("description", "سلفة قابلة للاسترداد");
+        advance.put("advanceType", "RECOVERABLE");
+        JsonNode advanced = body(postJson("/api/v1/drivers/" + driverId + "/ledger/advances", advance, token)
+                .andExpect(status().isCreated()));
+        assertThat(advanced.path("transactionType").asText()).isEqualTo("RECOVERABLE_ADVANCE");
+        assertThat(advanced.path("balanceEffect").decimalValue()).isEqualByComparingTo("0.00");
+        JsonNode second = finishShift(token,
+                startShift(token, shiftBody(siteId, driverId, equipmentId, day(2), "MORNING")));
+        Long recoveries = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM driver_ledger_entries WHERE tenant_id=(SELECT tenant_id FROM shifts WHERE id=?) AND shift_id=? AND transaction_type='ADVANCE_RECOVERY'",
+                Long.class, second.path("id").asLong(), second.path("id").asLong());
+        assertThat(recoveries).isEqualTo(1L);
+        BigDecimal recovered = jdbcTemplate.queryForObject(
+                "SELECT amount FROM driver_ledger_entries WHERE shift_id=? AND transaction_type='ADVANCE_RECOVERY'",
+                BigDecimal.class, second.path("id").asLong());
+        assertThat(recovered).isEqualByComparingTo("150.00");
+        BigDecimal outstanding = jdbcTemplate.queryForObject(
+                "SELECT SUM(CASE WHEN transaction_type='RECOVERABLE_ADVANCE' THEN amount WHEN transaction_type='ADVANCE_RECOVERY' THEN -amount ELSE 0 END) FROM driver_ledger_entries WHERE driver_id=?",
+                BigDecimal.class, driverId);
+        assertThat(outstanding).isEqualByComparingTo("50.00");
+    }
+
+    @Test
+    void advanceAgainstEarnedPayableReducesAvailableWorkerBalance() throws Exception {
+        JsonNode earned = finishShift(token,
+                startShift(token, shiftBody(siteId, driverId, equipmentId, day(2), "MORNING")));
+        Long cashId = jdbcTemplate.queryForObject(
+                "SELECT id FROM chart_of_accounts WHERE tenant_id=(SELECT tenant_id FROM shifts WHERE id=?) AND account_code='1000'",
+                Long.class, earned.path("id").asLong());
+        Map<String,Object> advance = new HashMap<>();
+        advance.put("clientRequestKey", "earned-advance-" + earned.path("id").asLong());
+        advance.put("advanceDate", day(1).toString());
+        advance.put("amount", new BigDecimal("50.00"));
+        advance.put("paymentAccountId", cashId);
+        advance.put("description", "سلفة من أجر مستحق");
+        advance.put("advanceType", "AGAINST_EARNED");
+        JsonNode result = body(postJson("/api/v1/drivers/" + driverId + "/ledger/advances", advance, token)
+                .andExpect(status().isCreated()));
+        assertThat(result.path("transactionType").asText()).isEqualTo("ADVANCE");
+        assertThat(result.path("balanceAfter").decimalValue()).isEqualByComparingTo("100.00");
+    }
+
 }
