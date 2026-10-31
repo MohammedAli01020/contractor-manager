@@ -105,7 +105,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return new ResponseEntity<Object>(
                 new ApiError(HttpStatus.SERVICE_UNAVAILABLE.value(), "LOCK_TIMEOUT",
                         "العملية المالية ما زالت قيد التنفيذ بواسطة طلب آخر. أعد المحاولة بعد قليل باستخدام نفس مفتاح العملية.",
-                        requestPath(request), requestId(request), null),
+                        requestPath(request), null, null, requestId(request)),
                 headers, HttpStatus.SERVICE_UNAVAILABLE);
     }
 
