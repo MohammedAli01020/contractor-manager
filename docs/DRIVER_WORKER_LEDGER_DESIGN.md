@@ -1,6 +1,6 @@
 # Driver and Worker Ledger – Design Notes
 
-Status: incremental implementation on `feature/driver-worker-ledger`; backend CI passed for the first ledger/payment milestone, and advance milestone tests are pending.
+Status: incremental implementation on `feature/driver-worker-ledger`; initial ledger/advance tests and the first posted-shift API guard tests passed. MySQL database-guard migration and direct-SQL integration tests are now added; CI verification is pending.
 Base: `feature/equipment-expenses-accounting`.
 This document does not change `main` and does not merge any pull request.
 
@@ -25,7 +25,8 @@ This document does not change `main` and does not merge any pull request.
 - `POST /api/v1/drivers/{driverId}/ledger/payments` settles earned payable from cash/bank.
 - `POST /api/v1/drivers/{driverId}/ledger/advances` supports two explicit advance types: `AGAINST_EARNED` (reduces payable) and `RECOVERABLE` (records a worker-advance asset in account 1300).
 - Recoverable advances are automatically offset against subsequent earned wages, up to the amount earned, with a separate balanced journal and ledger entry. Generic expense records are not used for driver advances or wage settlement.
-- Every source event has a tenant-scoped idempotency key and is committed atomically with its journal.
+- Every source event has a tenant-scoped idempotency key backed by a database unique constraint and is committed atomically with its journal.
+- The worker ledger is append-only at the MySQL layer: UPDATE and DELETE are rejected by triggers. Corrections must be compensating entries, not row edits.
 - Posted financial events are immutable. Corrections use explicit reversal/adjustment entries.
 - Tenant scope is always taken from the authenticated user; actor IDs are never accepted from request bodies.
 - Worker statement shows dated transactions, source shift/reference, debit/credit effect, paid amount and running balance.
@@ -33,9 +34,9 @@ This document does not change `main` and does not merge any pull request.
 
 ## Completion and editing safety
 
-Before posting wages from `finish()`, implement a persisted recognition marker/source relation with a unique tenant+shift constraint. The finish operation, wage-ledger transaction and journal posting must share one database transaction.
+The persisted recognition marker is `shifts.driver_wage_journal_entry_id`, unique per tenant. The ledger also has a generated `earning_shift_id` with a unique tenant+shift index, plus a composite foreign key tying the ledger row to the same tenant and driver as its shift. The finish operation, wage-ledger transaction and journal posting share one database transaction.
 
-A completed shift whose wage has been recognized must not silently change driver, shift type or wage. The implementation must either reject those edits and require a dedicated correction workflow, or atomically reverse the prior recognition and post a replacement. Prefer rejection plus explicit correction in the first release to preserve auditability.
+A completed shift whose wage has been recognized must not silently change its financial/source fields. Backend validation rejects edits; MySQL triggers independently protect the persisted shift against direct SQL changes to date, type, site, driver, equipment, wage, price, equipment operating cost, start/finish timestamps, journal link or completion status. Notes remain editable. Deletion is blocked. Corrections require a dedicated reversal/adjustment workflow.
 
 Cancelling a completed, wage-recognized shift must not erase the earned wage. It must require a reversal/correction workflow. Reinstating a completed shift must not post a second earning.
 
@@ -53,7 +54,8 @@ The chart now includes worker-advances asset account 1300. Recoverable advances 
 - Repeated finish/retry cannot create a duplicate earning or journal.
 - Concurrent completion requests cannot double-post.
 - Cancel/reinstate of recognized completed shifts cannot duplicate or erase earnings.
-- Recognized shift wage/driver edits are rejected or corrected through a tested reversal workflow.
+- Recognized shift financial/source edits and deletion are rejected by both Backend and MySQL triggers.
+- Direct SQL attempts to edit/delete worker-ledger rows are rejected; duplicate shift earnings are blocked by a unique generated-column index.
 - Partial and full worker payments reduce payable correctly; overpayment is rejected.
 - Advance types post to the correct accounts and reconcile to the worker subledger.
 - Tenant isolation, role boundaries, idempotency, rollback atomicity and concurrent payment safety.
