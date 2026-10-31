@@ -67,3 +67,24 @@ The chart now includes worker-advances asset account 1300. Recoverable advances 
 - Do not implement hourly wage calculation until the tenant wage model is configurable and explicitly selected.
 - Do not introduce microservices.
 - Do not merge PRs or modify `main` without explicit approval.
+
+
+## Concurrent-user safety review
+
+The current branch uses row-level pessimistic locks for state-changing operations on shifts, drivers, equipment and expenses, plus optimistic `@Version` checks for stale edits. Database unique indexes remain the final guard for active driver/equipment reservations, journal posting keys, reversals, idempotency keys and one earning per shift.
+
+Existing MySQL integration race tests cover:
+- Starting a shift while another request changes driver availability.
+- Starting a shift while another request moves equipment into maintenance.
+- Two payments attempting to overpay the same expense.
+
+Added worker-ledger race coverage:
+- Two simultaneous payments against one driver's earned payable balance must serialize on the driver row; only one may spend the same available balance.
+
+Known follow-up checks before declaring concurrency coverage complete:
+- Same idempotency key submitted simultaneously for expense creation and driver-ledger writes should return a stable idempotent response rather than an unexpected server error.
+- Concurrent duplicate journal posting and reversal requests should be exercised against MySQL.
+- Cash/bank account balance policy must be explicitly defined before enforcing a non-negative balance. Posting rows are append-only, but this is not equivalent to a cash-balance floor.
+- Inventory concurrency is out of scope until inventory issue/receipt workflows are implemented.
+
+A CI-discovered trigger defect was corrected: the posted-shift trigger now permits the one-time `IN_PROGRESS -> COMPLETED` transition and first `finished_at` value, while keeping the financial/source snapshot immutable afterward.
