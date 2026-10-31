@@ -35,10 +35,20 @@
 
 ## Verification status
 
-- PR #17 was opened as Draft to trigger the repository's Backend CI.
-- Backend CI was observed running on commit `dd478e90a1d1ecb124b8ef38f61d99495fe0a8fd`; Maven tests and the required MySQL integration-test guard had not yet reported a final result when this note was written.
-- Do not describe this branch as verified until both the Maven step and the guard requiring non-skipped MySQL concurrency tests pass.
-- CI workflow now includes this working branch and `feature/driver-worker-ledger` as a pull-request base so the checks run for this increment.
+- Previous verified head: `9944b4a030f4d0b3864ec56f5209b7e15f393197`.
+- Previous successful Backend CI run: [41224106120](https://github.com/MohammedAli01020/contractor-manager/actions/runs/41224106120).
+- On that previous head, Maven reported **163 tests, 0 failures, 0 errors, 0 skipped**.
+- On that previous head, the required MySQL concurrency suite reported **8 tests, 0 failures, 0 errors, 0 skipped**.
+- Those results apply only to `9944b4a...`; they do not verify the migration-upgrade test or the newer commits below.
+- Added `CashBankClassificationMigrationIntegrationTest`: it migrates an isolated disposable MySQL database through V23, inserts representative existing tenant/account rows, applies V24, and verifies:
+  - Existing ASSET accounts 1000 and 1010 are classified as cash/bank.
+  - Other account codes remain unclassified.
+  - A 1000 LIABILITY account remains unclassified.
+  - The classification is tenant-scoped (including an existing 1010 account for another tenant).
+  - Existing account data and row count are unchanged.
+- Backend CI now has a separate guard requiring this V24 migration test to execute exactly once with zero skips, failures, or errors.
+- The new migration test and CI guard are committed on this branch; their CI result is **pending**. Do not treat the previous 163/8 results as validation of the new head.
+- PR #17 remains Draft and unmerged. No production database was used for migration testing.
 
 ## Next steps
 
