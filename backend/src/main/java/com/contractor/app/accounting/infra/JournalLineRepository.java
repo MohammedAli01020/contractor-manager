@@ -11,6 +11,6 @@ public interface JournalLineRepository extends JpaRepository<JournalLine, Long> 
 
     List<JournalLine> findByTenantIdAndJournalEntryIdOrderByLineNumberAsc(Long tenantId, Long journalEntryId);
 
-    @Query("select coalesce(sum(l.debit - l.credit), 0) from JournalLine l where l.tenantId = :tenantId and l.accountId = :accountId")
+    @Query(value = "select coalesce(sum(debit - credit), 0) from journal_lines where tenant_id = :tenantId and account_id = :accountId for update", nativeQuery = true)
     BigDecimal calculateDebitNormalBalance(@Param("tenantId") Long tenantId, @Param("accountId") Long accountId);
 }
