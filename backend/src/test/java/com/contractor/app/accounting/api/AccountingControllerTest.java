@@ -1,6 +1,7 @@
 package com.contractor.app.accounting.api;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -22,6 +23,8 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.Arrays;
 import java.util.Collections;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -79,6 +82,44 @@ class AccountingControllerTest {
         verify(accounts).findByTenantIdOrderByAccountCodeAsc(42L);
         assertEquals(1, response.size());
         assertEquals("1000", response.get(0).getAccountCode());
+    }
+
+    @Test
+    void journalListIsPagedAndScopedToAuthenticatedTenantWithStableOrdering() {
+        JournalEntry entry = org.mockito.Mockito.mock(JournalEntry.class);
+        when(entry.getId()).thenReturn(91L);
+        when(entry.getPostingKey()).thenReturn("page-key");
+        when(entry.getSourceType()).thenReturn("MANUAL");
+        when(entry.getAccountingDate()).thenReturn(LocalDate.of(2026, 10, 31));
+        when(entry.getDescription()).thenReturn("Paged journal");
+        when(entry.getStatus()).thenReturn(com.contractor.app.accounting.domain.JournalEntryStatus.POSTED);
+        when(entry.getPostedAt()).thenReturn(LocalDateTime.of(2026, 10, 31, 9, 0));
+        when(entries.findByTenantIdOrderByAccountingDateDescPostedAtDescIdDesc(
+                42L, PageRequest.of(0, 20)))
+                .thenReturn(new PageImpl<>(Collections.singletonList(entry), PageRequest.of(0, 20), 41));
+
+        AccountingController.JournalPageResponse response = controller.listJournals(0, 20);
+
+        verify(entries).findByTenantIdOrderByAccountingDateDescPostedAtDescIdDesc(
+                42L, PageRequest.of(0, 20));
+        assertEquals(1, response.getItems().size());
+        assertEquals(0, response.getPage());
+        assertEquals(20, response.getSize());
+        assertEquals(41L, response.getTotalElements());
+        assertEquals(3, response.getTotalPages());
+        assertEquals(true, response.isHasNext());
+        assertEquals(false, response.isHasPrevious());
+    }
+
+    @Test
+    void rejectsInvalidJournalPaginationParameters() {
+        assertThrows(com.contractor.app.common.error.ApiException.class,
+                () -> controller.listJournals(-1, 20));
+        assertThrows(com.contractor.app.common.error.ApiException.class,
+                () -> controller.listJournals(0, 101));
+        assertThrows(com.contractor.app.common.error.ApiException.class,
+                () -> controller.listJournals(0, 0));
+        org.mockito.Mockito.verifyNoInteractions(entries);
     }
 
     @Test
