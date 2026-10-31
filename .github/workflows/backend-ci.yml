@@ -119,6 +119,34 @@ jobs:
               sys.exit("V24 migration test reported failures or errors.")
           PY
 
+      - name: Require financial idempotency MySQL integration tests to execute
+        run: |
+          python3 - <<'PY'
+          import glob
+          import sys
+          import xml.etree.ElementTree as ET
+
+          required = {
+              "DriverLedgerIdempotencyIntegrationTest": 4,
+              "ExpenseIntegrationTest": 12,
+          }
+          for name, expected in required.items():
+              pattern = f"target/surefire-reports/TEST-com.contractor.app.{'driver' if name.startswith('Driver') else 'expense'}.{name}.xml"
+              reports = glob.glob(pattern)
+              if not reports:
+                  sys.exit(f"Required financial idempotency report missing: {pattern}")
+              root = ET.parse(reports[0]).getroot()
+              totals = {key: int(root.attrib.get(key, 0))
+                        for key in ("tests", "failures", "errors", "skipped")}
+              print(f"{name}: {totals}")
+              if totals["tests"] < expected:
+                  sys.exit(f"{name} must execute at least {expected} tests.")
+              if totals["skipped"] != 0:
+                  sys.exit(f"{name} was skipped; Docker/MySQL must be available in CI.")
+              if totals["failures"] != 0 or totals["errors"] != 0:
+                  sys.exit(f"{name} reported failures or errors.")
+          PY
+
       - name: Write test summary
         if: always()
         env:
