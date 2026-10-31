@@ -22,10 +22,13 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.dao.DataAccessException;
 import org.springframework.boot.test.mock.mockito.SpyBean;
 
 class JournalPostingConcurrencyIntegrationTest extends AbstractIntegrationTest {
     @Autowired private JournalPostingService postingService;
+    @Autowired private JdbcTemplate jdbcTemplate;
     @Autowired private ChartAccountRepository accounts;
     @Autowired private JournalEntryRepository entries;
     @Autowired private JournalLineRepository lineRepository;
@@ -35,6 +38,9 @@ class JournalPostingConcurrencyIntegrationTest extends AbstractIntegrationTest {
     private Long actorUserId;
     private Long debitAccountId;
     private Long creditAccountId;
+    private Long cashAccountId;
+    private Long bankAccountId;
+    private Long customLiquidityAccountId;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -45,6 +51,14 @@ class JournalPostingConcurrencyIntegrationTest extends AbstractIntegrationTest {
                 tenantId, uniqueName("D"), "Debit account", AccountType.ASSET, null, false)).getId();
         creditAccountId = accounts.saveAndFlush(new ChartAccount(
                 tenantId, uniqueName("C"), "Credit account", AccountType.REVENUE, null, false)).getId();
+        cashAccountId = accounts.findByTenantIdAndAccountCodeIgnoreCase(tenantId, "1000")
+                .orElseThrow(() -> new IllegalStateException("Default cash account was not created"))
+                .getId();
+        bankAccountId = accounts.findByTenantIdAndAccountCodeIgnoreCase(tenantId, "1010")
+                .orElseThrow(() -> new IllegalStateException("Default bank account was not created"))
+                .getId();
+        customLiquidityAccountId = accounts.saveAndFlush(new ChartAccount(
+                tenantId, "1020", "Additional bank account", AccountType.ASSET, null, false, true)).getId();
     }
 
     @Test
@@ -65,6 +79,166 @@ class JournalPostingConcurrencyIntegrationTest extends AbstractIntegrationTest {
             assertThat(entries.findByTenantIdAndPostingKey(tenantId, request.getPostingKey())).isPresent();
             assertThat(lineRepository.findByTenantIdAndJournalEntryIdOrderByLineNumberAsc(
                     tenantId, firstResult.getId())).hasSize(2);
+        } finally {
+            start.countDown();
+            pool.shutdownNow();
+        }
+    }
+
+    @Test
+    void concurrentCashOutflowsCannotSpendTheSameAvailableBalanceTwice() throws Exception {
+        JournalPostingRequest opening = new JournalPostingRequest(uniqueName("cash-opening"), "CASH_OPENING",
+                10L, LocalDate.of(2026, 10, 31), "Opening cash balance", null, Arrays.asList(
+                new JournalLineRequest(cashAccountId, "Opening cash", new BigDecimal("100.00"),
+                        BigDecimal.ZERO.setScale(2), null, null),
+                new JournalLineRequest(creditAccountId, "Opening equity", BigDecimal.ZERO.setScale(2),
+                        new BigDecimal("100.00"), null, null)));
+        postingService.post(tenantId, actorUserId, opening);
+
+        JournalPostingRequest firstRequest = liquidityOutRequest(uniqueName("cash-out-a"), cashAccountId, new BigDecimal("80.00"));
+        JournalPostingRequest secondRequest = liquidityOutRequest(uniqueName("cash-out-b"), cashAccountId, new BigDecimal("80.00"));
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            Future<JournalEntry> first = pool.submit(() -> postTogether(firstRequest, ready, start));
+            Future<JournalEntry> second = pool.submit(() -> postTogether(secondRequest, ready, start));
+            assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+
+            int successes = 0;
+            int insufficient = 0;
+            for (Future<JournalEntry> result : Arrays.asList(first, second)) {
+                try {
+                    result.get(30, TimeUnit.SECONDS);
+                    successes++;
+                } catch (java.util.concurrent.ExecutionException ex) {
+                    assertThat(ex.getCause()).isInstanceOf(ApiException.class);
+                    assertThat(((ApiException) ex.getCause()).getStatus().value()).isEqualTo(409);
+                    insufficient++;
+                }
+            }
+            assertThat(successes).isEqualTo(1);
+            assertThat(insufficient).isEqualTo(1);
+            assertThat(lineRepository.calculateDebitNormalBalance(tenantId, cashAccountId))
+                    .isEqualByComparingTo("20.00");
+        } finally {
+            start.countDown();
+            pool.shutdownNow();
+        }
+    }
+
+
+    @Test
+    void concurrentCashAndBankOutflowsCannotSpendEitherBalanceTwice() throws Exception {
+        openLiquidityAccount(cashAccountId, uniqueName("cash-opening"), new BigDecimal("100.00"));
+        openLiquidityAccount(bankAccountId, uniqueName("bank-opening"), new BigDecimal("100.00"));
+
+        JournalPostingRequest[] requests = {
+                liquidityOutRequest(uniqueName("cash-out-a"), cashAccountId, new BigDecimal("80.00")),
+                liquidityOutRequest(uniqueName("cash-out-b"), cashAccountId, new BigDecimal("80.00")),
+                liquidityOutRequest(uniqueName("bank-out-a"), bankAccountId, new BigDecimal("80.00")),
+                liquidityOutRequest(uniqueName("bank-out-b"), bankAccountId, new BigDecimal("80.00"))
+        };
+        CountDownLatch ready = new CountDownLatch(requests.length);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(requests.length);
+        try {
+            java.util.List<Future<JournalEntry>> results = new java.util.ArrayList<>();
+            for (JournalPostingRequest request : requests) {
+                results.add(pool.submit(() -> postTogether(request, ready, start)));
+            }
+            assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+
+            int successes = 0;
+            int insufficient = 0;
+            for (Future<JournalEntry> result : results) {
+                try {
+                    result.get(30, TimeUnit.SECONDS);
+                    successes++;
+                } catch (java.util.concurrent.ExecutionException ex) {
+                    assertThat(ex.getCause()).isInstanceOf(ApiException.class);
+                    assertThat(((ApiException) ex.getCause()).getStatus().value()).isEqualTo(409);
+                    insufficient++;
+                }
+            }
+            assertThat(successes).isEqualTo(2);
+            assertThat(insufficient).isEqualTo(2);
+            assertThat(lineRepository.calculateDebitNormalBalance(tenantId, cashAccountId))
+                    .isEqualByComparingTo("20.00");
+            assertThat(lineRepository.calculateDebitNormalBalance(tenantId, bankAccountId))
+                    .isEqualByComparingTo("20.00");
+        } finally {
+            start.countDown();
+            pool.shutdownNow();
+        }
+    }
+
+    @Test
+    void oppositeDirectionCashBankTransfersUseConsistentLockOrder() throws Exception {
+        openLiquidityAccount(cashAccountId, uniqueName("cash-opening"), new BigDecimal("100.00"));
+        openLiquidityAccount(bankAccountId, uniqueName("bank-opening"), new BigDecimal("100.00"));
+
+        JournalPostingRequest cashToBank = transferRequest(
+                uniqueName("cash-to-bank"), bankAccountId, cashAccountId, new BigDecimal("10.00"));
+        JournalPostingRequest bankToCash = transferRequest(
+                uniqueName("bank-to-cash"), cashAccountId, bankAccountId, new BigDecimal("10.00"));
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            Future<JournalEntry> first = pool.submit(() -> postTogether(cashToBank, ready, start));
+            Future<JournalEntry> second = pool.submit(() -> postTogether(bankToCash, ready, start));
+            assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+
+            assertThat(first.get(30, TimeUnit.SECONDS)).isNotNull();
+            assertThat(second.get(30, TimeUnit.SECONDS)).isNotNull();
+            assertThat(lineRepository.calculateDebitNormalBalance(tenantId, cashAccountId))
+                    .isEqualByComparingTo("100.00");
+            assertThat(lineRepository.calculateDebitNormalBalance(tenantId, bankAccountId))
+                    .isEqualByComparingTo("100.00");
+        } finally {
+            start.countDown();
+            pool.shutdownNow();
+        }
+    }
+
+
+    @Test
+    void explicitlyClassifiedAdditionalBankAccountIsLockedAgainstConcurrentOverspending() throws Exception {
+        openLiquidityAccount(customLiquidityAccountId, uniqueName("custom-bank-opening"),
+                new BigDecimal("100.00"));
+        JournalPostingRequest firstRequest = liquidityOutRequest(
+                uniqueName("custom-bank-out-a"), customLiquidityAccountId, new BigDecimal("80.00"));
+        JournalPostingRequest secondRequest = liquidityOutRequest(
+                uniqueName("custom-bank-out-b"), customLiquidityAccountId, new BigDecimal("80.00"));
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            Future<JournalEntry> first = pool.submit(() -> postTogether(firstRequest, ready, start));
+            Future<JournalEntry> second = pool.submit(() -> postTogether(secondRequest, ready, start));
+            assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+
+            int successes = 0;
+            int insufficient = 0;
+            for (Future<JournalEntry> result : Arrays.asList(first, second)) {
+                try {
+                    result.get(30, TimeUnit.SECONDS);
+                    successes++;
+                } catch (java.util.concurrent.ExecutionException ex) {
+                    assertThat(ex.getCause()).isInstanceOf(ApiException.class);
+                    assertThat(((ApiException) ex.getCause()).getStatus().value()).isEqualTo(409);
+                    insufficient++;
+                }
+            }
+            assertThat(successes).isEqualTo(1);
+            assertThat(insufficient).isEqualTo(1);
+            assertThat(lineRepository.calculateDebitNormalBalance(tenantId, customLiquidityAccountId))
+                    .isEqualByComparingTo("20.00");
         } finally {
             start.countDown();
             pool.shutdownNow();
@@ -108,6 +282,30 @@ class JournalPostingConcurrencyIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void databaseRejectsMutationAndDeletionOfPostedJournalAndLines() {
+        JournalEntry entry = postingService.post(tenantId, actorUserId, request(uniqueName("immutable")));
+        Long lineId = lineRepository.findByTenantIdAndJournalEntryIdOrderByLineNumberAsc(
+                tenantId, entry.getId()).get(0).getId();
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                jdbcTemplate.update("UPDATE journal_entries SET description = 'tampered' WHERE id = ?", entry.getId()))
+                .isInstanceOf(DataAccessException.class)
+                .hasMessageContaining("POSTED_JOURNAL_IS_IMMUTABLE");
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                jdbcTemplate.update("DELETE FROM journal_entries WHERE id = ?", entry.getId()))
+                .isInstanceOf(DataAccessException.class)
+                .hasMessageContaining("POSTED_JOURNAL_CANNOT_BE_DELETED");
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                jdbcTemplate.update("UPDATE journal_lines SET debit = 999.00 WHERE id = ?", lineId))
+                .isInstanceOf(DataAccessException.class)
+                .hasMessageContaining("POSTED_JOURNAL_LINES_ARE_IMMUTABLE");
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                jdbcTemplate.update("DELETE FROM journal_lines WHERE id = ?", lineId))
+                .isInstanceOf(DataAccessException.class)
+                .hasMessageContaining("POSTED_JOURNAL_LINES_CANNOT_BE_DELETED");
+    }
+
+    @Test
     void failedLinePersistenceRollsBackEntryHeader() {
         String key = uniqueName("rollback");
         doThrow(new IllegalStateException("simulated persistence failure"))
@@ -124,6 +322,28 @@ class JournalPostingConcurrencyIntegrationTest extends AbstractIntegrationTest {
             throw new IllegalStateException("Timed out waiting for concurrent posting");
         }
         return postingService.post(tenantId, actorUserId, request);
+    }
+
+    private void openLiquidityAccount(Long accountId, String key, BigDecimal amount) {
+        postingService.post(tenantId, actorUserId, new JournalPostingRequest(key, "LIQUIDITY_OPENING", null,
+                LocalDate.of(2026, 10, 31), "Opening liquidity balance", null, Arrays.asList(
+                new JournalLineRequest(accountId, "Opening balance", amount, BigDecimal.ZERO, null, null),
+                new JournalLineRequest(creditAccountId, "Opening offset", BigDecimal.ZERO, amount, null, null))));
+    }
+
+    private JournalPostingRequest liquidityOutRequest(String key, Long accountId, BigDecimal amount) {
+        return new JournalPostingRequest(key, "LIQUIDITY_OUTFLOW", null, LocalDate.of(2026, 10, 31),
+                "Liquidity outflow integration test", null, Arrays.asList(
+                new JournalLineRequest(debitAccountId, "Expense", amount, BigDecimal.ZERO, null, null),
+                new JournalLineRequest(accountId, "Cash or bank payment", BigDecimal.ZERO, amount, null, null)));
+    }
+
+    private JournalPostingRequest transferRequest(String key, Long receivingAccountId,
+                                                   Long payingAccountId, BigDecimal amount) {
+        return new JournalPostingRequest(key, "CASH_BANK_TRANSFER", null, LocalDate.of(2026, 10, 31),
+                "Cash/bank transfer integration test", null, Arrays.asList(
+                new JournalLineRequest(receivingAccountId, "Transfer received", amount, BigDecimal.ZERO, null, null),
+                new JournalLineRequest(payingAccountId, "Transfer paid", BigDecimal.ZERO, amount, null, null)));
     }
 
     private JournalPostingRequest request(String key) {

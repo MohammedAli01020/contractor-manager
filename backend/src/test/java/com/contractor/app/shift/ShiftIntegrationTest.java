@@ -1,10 +1,17 @@
 package com.contractor.app.shift;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.contractor.app.accounting.domain.ChartAccount;
+import com.contractor.app.accounting.domain.JournalLineRequest;
+import com.contractor.app.accounting.domain.JournalPostingRequest;
+import com.contractor.app.accounting.domain.JournalPostingService;
+import com.contractor.app.accounting.domain.DefaultChartOfAccountsService;
+import com.contractor.app.accounting.infra.ChartAccountRepository;
 import com.contractor.app.common.error.ApiError;
 import com.contractor.app.common.error.GlobalExceptionHandler;
 import com.contractor.app.shift.domain.Shift;
@@ -26,6 +33,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.web.context.request.ServletWebRequest;
 import org.junit.jupiter.api.Test;
 
@@ -34,8 +42,13 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
     @Autowired private ShiftRepository shiftRepository;
     @Autowired private JdbcTemplate jdbcTemplate;
     @Autowired private GlobalExceptionHandler globalExceptionHandler;
+    @Autowired private DefaultChartOfAccountsService defaultAccounts;
+    @Autowired private ChartAccountRepository chartAccounts;
+    @Autowired private JournalPostingService journalPostingService;
 
     private String token;
+    private long tenantId;
+    private long actorUserId;
     private long siteId;
     private long driverId;
     private long typeId;
@@ -43,11 +56,28 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        token = registerTenant("Shift Co", uniqueName("owner")).path("accessToken").asText();
+        JsonNode registered = registerTenant("Shift Co", uniqueName("owner"));
+        token = registered.path("accessToken").asText();
+        tenantId = registered.path("user").path("tenantId").asLong();
+        actorUserId = registered.path("user").path("id").asLong();
+        defaultAccounts.initializeForTenant(tenantId);
         siteId = createSite(token, "Main Site");
         driverId = createDriver(token, "Driver One", "150", "175", "200");
         typeId = createType(token, "Excavator");
         equipmentId = createEquipment(token, "EX-01", typeId, "500", "1200");
+    }
+
+
+    private void seedCashBalance(BigDecimal amount) {
+        ChartAccount cash = chartAccounts.findByTenantIdAndAccountCodeIgnoreCase(tenantId, "1000")
+                .orElseThrow(() -> new IllegalStateException("Default cash account was not created"));
+        ChartAccount capital = chartAccounts.findByTenantIdAndAccountCodeIgnoreCase(tenantId, "3000")
+                .orElseThrow(() -> new IllegalStateException("Default capital account was not created"));
+        journalPostingService.post(tenantId, actorUserId, new JournalPostingRequest(
+                "test-cash-opening:" + java.util.UUID.randomUUID(), "TEST_CASH_OPENING", null,
+                today(), "Test fixture opening cash", null, java.util.Arrays.asList(
+                new JournalLineRequest(cash.getId(), "Opening cash", amount, BigDecimal.ZERO, null, null),
+                new JournalLineRequest(capital.getId(), "Opening capital", BigDecimal.ZERO, amount, null, null))));
     }
 
     private LocalDate day(int daysAgo) {
@@ -238,7 +268,7 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
     // ---------------------------------------------------------------- finish
 
     @Test
-    void finishChangesOnlyTheIndicator() throws Exception {
+    void finishRecognizesDriverWageExactlyOnce() throws Exception {
         JsonNode running = startShift(token, shiftBody(siteId, driverId, equipmentId, day(1), "MORNING"));
 
         JsonNode done = finishShift(token, running);
@@ -248,6 +278,23 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
         assertThat(done.path("price").decimalValue()).isEqualByComparingTo("1200.00");
         assertThat(done.path("driverWage").decimalValue()).isEqualByComparingTo("150.00");
         assertThat(done.path("version").asLong()).isGreaterThan(running.path("version").asLong());
+        assertThat(done.path("driverWageJournalEntryId").isNull()).isFalse();
+        Long postedCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM journal_entries WHERE tenant_id = (SELECT tenant_id FROM shifts WHERE id = ?) AND source_type = 'SHIFT_WAGE' AND source_id = ?",
+                Long.class, running.path("id").asLong(), running.path("id").asLong());
+        assertThat(postedCount).isEqualTo(1L);
+        Long ledgerEarnings = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM driver_ledger_entries WHERE tenant_id = (SELECT tenant_id FROM shifts WHERE id = ?) AND shift_id = ? AND transaction_type = 'EARNING'",
+                Long.class, running.path("id").asLong(), running.path("id").asLong());
+        assertThat(ledgerEarnings).isEqualTo(1L);
+        BigDecimal debit = jdbcTemplate.queryForObject(
+                "SELECT SUM(debit) FROM journal_lines WHERE journal_entry_id = ?", BigDecimal.class,
+                done.path("driverWageJournalEntryId").asLong());
+        BigDecimal credit = jdbcTemplate.queryForObject(
+                "SELECT SUM(credit) FROM journal_lines WHERE journal_entry_id = ?", BigDecimal.class,
+                done.path("driverWageJournalEntryId").asLong());
+        assertThat(debit).isEqualByComparingTo("150.00");
+        assertThat(credit).isEqualByComparingTo("150.00");
 
         // لا إنهاء ثانٍ، ولا إنهاء بنسخة قديمة أو بدون نسخة
         postJson("/api/v1/shifts/" + running.path("id").asLong() + "/finish", versionBody(done.path("version").asLong()),
@@ -477,36 +524,113 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
     // ---------------------------------------------------------------- cancel & reinstate
 
     @Test
-    void completedShiftCanBeCancelledAndReinstated() throws Exception {
+    void postedWageShiftRejectsChangesToWageSourceFields() throws Exception {
+        JsonNode done = finishShift(token,
+                startShift(token, shiftBody(siteId, driverId, equipmentId, day(1), "MORNING")));
+        long id = done.path("id").asLong();
+        long otherDriver = createDriver(token, "Driver Two", "160", "180", "210");
+        long otherEquipment = createEquipment(token, "EX-02", typeId, "600", "1300");
+
+        Map<String, Object> changedDate = shiftBody(siteId, driverId, equipmentId, day(2), "MORNING");
+        changedDate.put("version", done.path("version").asLong());
+        putJson("/api/v1/shifts/" + id, changedDate, token).andExpect(status().isConflict());
+
+        Map<String, Object> changedType = shiftBody(siteId, driverId, equipmentId, day(1), "EVENING");
+        changedType.put("version", done.path("version").asLong());
+        putJson("/api/v1/shifts/" + id, changedType, token).andExpect(status().isConflict());
+
+        Map<String, Object> changedDriver = shiftBody(siteId, otherDriver, equipmentId, day(1), "MORNING");
+        changedDriver.put("version", done.path("version").asLong());
+        putJson("/api/v1/shifts/" + id, changedDriver, token).andExpect(status().isConflict());
+
+        Map<String, Object> changedEquipment = shiftBody(siteId, driverId, otherEquipment, day(1), "MORNING");
+        changedEquipment.put("version", done.path("version").asLong());
+        putJson("/api/v1/shifts/" + id, changedEquipment, token).andExpect(status().isConflict());
+
+        Map<String, Object> changedWage = shiftBody(siteId, driverId, equipmentId, day(1), "MORNING");
+        changedWage.put("driverWage", new BigDecimal("999.00"));
+        changedWage.put("version", done.path("version").asLong());
+        putJson("/api/v1/shifts/" + id, changedWage, token).andExpect(status().isConflict());
+
+        JsonNode unchanged = body(getJson("/api/v1/shifts/" + id, token));
+        assertThat(unchanged.path("status").asText()).isEqualTo("COMPLETED");
+        assertThat(unchanged.path("driverId").asLong()).isEqualTo(driverId);
+        assertThat(unchanged.path("equipmentId").asLong()).isEqualTo(equipmentId);
+        assertThat(unchanged.path("shiftDate").asText()).isEqualTo(day(1).toString());
+        assertThat(unchanged.path("driverWage").decimalValue()).isEqualByComparingTo("150.00");
+    }
+
+    @Test
+    void databaseRejectsDirectChangesToPostedShiftFinancialFields() throws Exception {
         JsonNode done = finishShift(token,
                 startShift(token, shiftBody(siteId, driverId, equipmentId, day(1), "MORNING")));
         long id = done.path("id").asLong();
 
-        Map<String, Object> noReason = versionBody(done.path("version").asLong());
-        postJson("/api/v1/shifts/" + id + "/cancel", noReason, token).andExpect(status().isBadRequest());
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "UPDATE shifts SET driver_wage = ? WHERE id = ?", new BigDecimal("999.00"), id))
+                .hasMessageContaining("POSTED_SHIFT_WAGE_IMMUTABLE");
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "UPDATE shifts SET status = 'CANCELLED' WHERE id = ?", id))
+                .hasMessageContaining("POSTED_SHIFT_WAGE_IMMUTABLE");
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "DELETE FROM shifts WHERE id = ?", id))
+                .hasMessageContaining("POSTED_SHIFT_WAGE_CANNOT_BE_DELETED");
+
+        Shift unchanged = shiftRepository.findById(id).orElseThrow(AssertionError::new);
+        assertThat(unchanged.getStatus().name()).isEqualTo("COMPLETED");
+        assertThat(unchanged.getDriverWage()).isEqualByComparingTo("150.00");
+    }
+
+    @Test
+    void databaseKeepsDriverLedgerAppendOnlyAndAllowsOnlyOneShiftEarning() throws Exception {
+        JsonNode done = finishShift(token,
+                startShift(token, shiftBody(siteId, driverId, equipmentId, day(1), "MORNING")));
+        long shiftId = done.path("id").asLong();
+        Long ledgerId = jdbcTemplate.queryForObject(
+                "SELECT id FROM driver_ledger_entries WHERE shift_id = ? AND transaction_type = 'EARNING'",
+                Long.class, shiftId);
+
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "UPDATE driver_ledger_entries SET description = 'tampered' WHERE id = ?", ledgerId))
+                .hasMessageContaining("DRIVER_LEDGER_IS_APPEND_ONLY");
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "DELETE FROM driver_ledger_entries WHERE id = ?", ledgerId))
+                .hasMessageContaining("DRIVER_LEDGER_IS_APPEND_ONLY");
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "INSERT INTO driver_ledger_entries (tenant_id, driver_id, transaction_type, transaction_date, amount, balance_effect, description, client_request_key, shift_id, journal_entry_id, created_by_user_id, created_at) "
+                + "SELECT tenant_id, driver_id, 'EARNING', transaction_date, amount, balance_effect, 'duplicate earning', 'duplicate-earning-test', shift_id, journal_entry_id, created_by_user_id, created_at "
+                + "FROM driver_ledger_entries WHERE id = ?", ledgerId))
+                .isNotNull();
+
+        Integer count = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM driver_ledger_entries WHERE shift_id = ? AND transaction_type = 'EARNING'",
+                Integer.class, shiftId);
+        assertThat(count).isEqualTo(1);
+    }
+
+    @Test
+    void completedShiftWithPostedWageCannotBeCancelled() throws Exception {
+        JsonNode done = finishShift(token,
+                startShift(token, shiftBody(siteId, driverId, equipmentId, day(1), "MORNING")));
+        long id = done.path("id").asLong();
 
         Map<String, Object> cancel = versionBody(done.path("version").asLong());
         cancel.put("reason", "work did not happen");
-        JsonNode cancelled = body(postJson("/api/v1/shifts/" + id + "/cancel", cancel, token)
-                .andExpect(status().isOk()));
-        assertThat(cancelled.path("status").asText()).isEqualTo("CANCELLED");
-        assertThat(cancelled.path("cancelReason").asText()).isEqualTo("work did not happen");
+        postJson("/api/v1/shifts/" + id + "/cancel", cancel, token)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").exists());
 
-        // لا تعديل على الملغاة ولا إلغاء ثانٍ
-        Map<String, Object> edit = shiftBody(siteId, driverId, equipmentId, day(1), "MORNING");
-        edit.put("version", cancelled.path("version").asLong());
-        putJson("/api/v1/shifts/" + id, edit, token).andExpect(status().isConflict());
-        cancel.put("version", cancelled.path("version").asLong());
-        postJson("/api/v1/shifts/" + id + "/cancel", cancel, token).andExpect(status().isConflict());
-
-        postJson("/api/v1/shifts/" + id + "/reinstate", versionBody(cancelled.path("version").asLong()), token)
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("COMPLETED"))
-                .andExpect(jsonPath("$.cancelReason").doesNotExist());
+        JsonNode unchanged = body(getJson("/api/v1/shifts/" + id, token));
+        assertThat(unchanged.path("status").asText()).isEqualTo("COMPLETED");
+        assertThat(unchanged.path("driverWageJournalEntryId").asLong()).isEqualTo(
+                done.path("driverWageJournalEntryId").asLong());
+        Long postedCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM journal_entries WHERE source_type = 'SHIFT_WAGE' AND source_id = ?",
+                Long.class, id);
+        assertThat(postedCount).isEqualTo(1L);
 
         JsonNode history = body(getJson("/api/v1/shifts/" + id + "/history", token));
-        assertThat(findBy(history, "action", "CANCELLED")).isNotNull();
-        assertThat(findBy(history, "action", "REINSTATED")).isNotNull();
+        assertThat(findBy(history, "action", "CANCELLED")).isNull();
         assertThat(findBy(history, "action", "FINISHED")).isNotNull();
     }
 
@@ -591,4 +715,120 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
 
         getJson("/api/v1/shifts?from=" + day(1) + "&to=" + day(3), token).andExpect(status().isBadRequest());
     }
+
+    @Test
+    void recoverableAdvanceIsAnAssetAndIsAutomaticallyRecoveredFromLaterWages() throws Exception {
+        seedCashBalance(new BigDecimal("1000.00"));
+        JsonNode first = finishShift(token,
+                startShift(token, shiftBody(siteId, driverId, equipmentId, day(3), "MORNING")));
+        Long cashId = jdbcTemplate.queryForObject(
+                "SELECT id FROM chart_of_accounts WHERE tenant_id=(SELECT tenant_id FROM shifts WHERE id=?) AND account_code='1000'",
+                Long.class, first.path("id").asLong());
+        Map<String,Object> advance = new HashMap<>();
+        advance.put("clientRequestKey", "recoverable-" + first.path("id").asLong());
+        advance.put("advanceDate", day(2).toString());
+        advance.put("amount", new BigDecimal("200.00"));
+        advance.put("paymentAccountId", cashId);
+        advance.put("description", "سلفة قابلة للاسترداد");
+        advance.put("advanceType", "RECOVERABLE");
+        JsonNode advanced = body(postJson("/api/v1/drivers/" + driverId + "/ledger/advances", advance, token)
+                .andExpect(status().isCreated()));
+        assertThat(advanced.path("transactionType").asText()).isEqualTo("RECOVERABLE_ADVANCE");
+        assertThat(advanced.path("balanceEffect").decimalValue()).isEqualByComparingTo("0.00");
+        JsonNode second = finishShift(token,
+                startShift(token, shiftBody(siteId, driverId, equipmentId, day(2), "MORNING")));
+        Long recoveries = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM driver_ledger_entries WHERE tenant_id=(SELECT tenant_id FROM shifts WHERE id=?) AND shift_id=? AND transaction_type='ADVANCE_RECOVERY'",
+                Long.class, second.path("id").asLong(), second.path("id").asLong());
+        assertThat(recoveries).isEqualTo(1L);
+        BigDecimal recovered = jdbcTemplate.queryForObject(
+                "SELECT amount FROM driver_ledger_entries WHERE shift_id=? AND transaction_type='ADVANCE_RECOVERY'",
+                BigDecimal.class, second.path("id").asLong());
+        assertThat(recovered).isEqualByComparingTo("150.00");
+        BigDecimal outstanding = jdbcTemplate.queryForObject(
+                "SELECT SUM(CASE WHEN transaction_type='RECOVERABLE_ADVANCE' THEN amount WHEN transaction_type='ADVANCE_RECOVERY' THEN -amount ELSE 0 END) FROM driver_ledger_entries WHERE driver_id=?",
+                BigDecimal.class, driverId);
+        assertThat(outstanding).isEqualByComparingTo("50.00");
+    }
+
+    @Test
+    void concurrentWorkerPaymentsCannotSpendTheSameEarnedBalanceTwice() throws Exception {
+        seedCashBalance(new BigDecimal("500.00"));
+        JsonNode earned = finishShift(token,
+                startShift(token, shiftBody(siteId, driverId, equipmentId, day(1), "MORNING")));
+        Long tenantId = jdbcTemplate.queryForObject(
+                "SELECT tenant_id FROM drivers WHERE id = ?", Long.class, driverId);
+        Long cashId = jdbcTemplate.queryForObject(
+                "SELECT id FROM chart_of_accounts WHERE tenant_id = ? AND account_code = '1000'",
+                Long.class, tenantId);
+
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<Integer> first = executor.submit(() -> concurrentWorkerPayment(
+                    cashId, "worker-pay-race-a", ready, start));
+            Future<Integer> second = executor.submit(() -> concurrentWorkerPayment(
+                    cashId, "worker-pay-race-b", ready, start));
+            assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+            assertThat(java.util.Arrays.asList(first.get(30, TimeUnit.SECONDS), second.get(30, TimeUnit.SECONDS)))
+                    .containsExactlyInAnyOrder(201, 400);
+        } finally {
+            start.countDown();
+            executor.shutdownNow();
+            executor.awaitTermination(10, TimeUnit.SECONDS);
+        }
+
+        Integer payments = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM driver_ledger_entries WHERE driver_id = ? AND transaction_type = 'PAYMENT'",
+                Integer.class, driverId);
+        BigDecimal balance = jdbcTemplate.queryForObject(
+                "SELECT COALESCE(SUM(balance_effect), 0) FROM driver_ledger_entries WHERE driver_id = ?",
+                BigDecimal.class, driverId);
+        assertThat(payments).isEqualTo(1);
+        assertThat(balance).isEqualByComparingTo("50.00");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM journal_entries WHERE tenant_id = ? AND source_type = 'DRIVER_PAYMENT'",
+                Integer.class, tenantId)).isEqualTo(1);
+    }
+
+    private int concurrentWorkerPayment(Long cashId, String key, CountDownLatch ready,
+                                        CountDownLatch start) throws Exception {
+        ready.countDown();
+        if (!start.await(10, TimeUnit.SECONDS)) {
+            throw new IllegalStateException("Timed out waiting for concurrent worker payment.");
+        }
+        Map<String, Object> payment = new HashMap<>();
+        payment.put("clientRequestKey", key);
+        payment.put("paymentDate", day(1).toString());
+        payment.put("amount", new BigDecimal("100.00"));
+        payment.put("paymentAccountId", cashId);
+        payment.put("description", "Concurrent worker payment");
+        MvcResult result = postJson("/api/v1/drivers/" + driverId + "/ledger/payments", payment, token)
+                .andReturn();
+        return result.getResponse().getStatus();
+    }
+
+    @Test
+    void advanceAgainstEarnedPayableReducesAvailableWorkerBalance() throws Exception {
+        seedCashBalance(new BigDecimal("500.00"));
+        JsonNode earned = finishShift(token,
+                startShift(token, shiftBody(siteId, driverId, equipmentId, day(2), "MORNING")));
+        Long cashId = jdbcTemplate.queryForObject(
+                "SELECT id FROM chart_of_accounts WHERE tenant_id=(SELECT tenant_id FROM shifts WHERE id=?) AND account_code='1000'",
+                Long.class, earned.path("id").asLong());
+        Map<String,Object> advance = new HashMap<>();
+        advance.put("clientRequestKey", "earned-advance-" + earned.path("id").asLong());
+        advance.put("advanceDate", day(1).toString());
+        advance.put("amount", new BigDecimal("50.00"));
+        advance.put("paymentAccountId", cashId);
+        advance.put("description", "سلفة من أجر مستحق");
+        advance.put("advanceType", "AGAINST_EARNED");
+        JsonNode result = body(postJson("/api/v1/drivers/" + driverId + "/ledger/advances", advance, token)
+                .andExpect(status().isCreated()));
+        assertThat(result.path("transactionType").asText()).isEqualTo("ADVANCE");
+        assertThat(result.path("balanceAfter").decimalValue()).isEqualByComparingTo("100.00");
+    }
+
 }
