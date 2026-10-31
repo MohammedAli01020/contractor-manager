@@ -3,6 +3,13 @@ package com.contractor.app.shift.domain;
 import com.contractor.app.audit.domain.AuditAction;
 import com.contractor.app.audit.domain.AuditEntityType;
 import com.contractor.app.audit.domain.AuditService;
+import com.contractor.app.accounting.domain.DefaultChartOfAccountsService;
+import com.contractor.app.accounting.domain.JournalLineRequest;
+import com.contractor.app.accounting.domain.JournalPostingRequest;
+import com.contractor.app.accounting.domain.JournalPostingService;
+import com.contractor.app.accounting.infra.ChartAccountRepository;
+import com.contractor.app.accounting.infra.JournalEntryRepository;
+import com.contractor.app.accounting.domain.ChartAccount;
 import com.contractor.app.common.api.PageParams;
 import com.contractor.app.common.api.PageResponse;
 import com.contractor.app.common.error.ApiException;
@@ -54,16 +61,26 @@ public class ShiftService {
     private final DriverRepository drivers;
     private final EquipmentRepository equipment;
     private final AuditService audit;
+    private final JournalPostingService journalPosting;
+    private final ChartAccountRepository chartAccounts;
+    private final JournalEntryRepository journalEntries;
+    private final DefaultChartOfAccountsService defaultAccounts;
     private final ZoneId businessZone;
 
     public ShiftService(ShiftRepository shifts, SiteRepository sites, DriverRepository drivers,
                         EquipmentRepository equipment, AuditService audit,
+                        JournalPostingService journalPosting, ChartAccountRepository chartAccounts,
+                        JournalEntryRepository journalEntries, DefaultChartOfAccountsService defaultAccounts,
                         @Value("${app.business-timezone:Africa/Cairo}") String businessTimezone) {
         this.shifts = shifts;
         this.sites = sites;
         this.drivers = drivers;
         this.equipment = equipment;
         this.audit = audit;
+        this.journalPosting = journalPosting;
+        this.chartAccounts = chartAccounts;
+        this.journalEntries = journalEntries;
+        this.defaultAccounts = defaultAccounts;
         this.businessZone = ZoneId.of(businessTimezone);
     }
 
@@ -214,12 +231,35 @@ public class ShiftService {
 
     /** إنهاء: يغيّر المؤشر فقط، ووقت الضغط ومن ضغط يُسجَّلان. */
     @Transactional
-    public ShiftResponse finish(Long tenantId, Long id, Long version) {
+    public ShiftResponse finish(Long tenantId, Long id, Long version, Long actorUserId) {
         Shift shift = findForUpdate(tenantId, id);
         if (shift.getStatus() != ShiftStatus.IN_PROGRESS) {
             throw ApiException.conflict("الوردية ليست شغالة.");
         }
         shift.requireVersion(version);
+        if (actorUserId == null || actorUserId <= 0) {
+            throw ApiException.unauthorized("تعذر تحديد المستخدم المنفّذ للترحيل المالي.");
+        }
+        // Ensure baseline wage accounts exist, then post the earning in the same outer transaction.
+        defaultAccounts.initializeForTenant(tenantId);
+        ChartAccount wageExpense = chartAccounts.findByTenantIdAndAccountCodeIgnoreCase(tenantId, "5000")
+                .orElseThrow(() -> ApiException.conflict("حساب مصروف أجور السائقين غير مهيأ."));
+        ChartAccount driverPayable = chartAccounts.findByTenantIdAndAccountCodeIgnoreCase(tenantId, "2100")
+                .orElseThrow(() -> ApiException.conflict("حساب مستحقات السائقين غير مهيأ."));
+        if (shift.getDriverWage() == null || shift.getDriverWage().signum() < 0) {
+            throw ApiException.conflict("أجر الوردية غير صالح للترحيل.");
+        }
+        if (shift.getDriverWage().signum() > 0) {
+            journalPosting.post(tenantId, actorUserId, new JournalPostingRequest(
+                    "shift-wage-" + shift.getId(), "SHIFT_WAGE", shift.getId(), shift.getShiftDate(),
+                    "استحقاق أجر السائق عن الوردية رقم " + shift.getId(), null,
+                    java.util.Arrays.asList(
+                            new JournalLineRequest(wageExpense.getId(), "مصروف أجر الوردية",
+                                    shift.getDriverWage(), BigDecimal.ZERO, shift.getDriverId(), null),
+                            new JournalLineRequest(driverPayable.getId(), "مستحق للسائق عن الوردية",
+                                    BigDecimal.ZERO, shift.getDriverWage(), shift.getDriverId(), null))));
+            shift.setDriverWageJournalEntryId(journalPostingEntryId(tenantId, "shift-wage-" + shift.getId()));
+        }
         shift.setStatus(ShiftStatus.COMPLETED);
         shift.setFinishedAt(LocalDateTime.now(ZoneOffset.UTC));
         shifts.saveAndFlush(shift);
@@ -296,6 +336,17 @@ public class ShiftService {
         audit.record(tenantId, AuditEntityType.SHIFT, shift.getId(), AuditAction.REINSTATED, "status",
                 ShiftStatus.CANCELLED.name(), restoredStatus.name());
         return get(tenantId, shift.getId());
+    }
+
+    private Long journalPostingEntryId(Long tenantId, String postingKey) {
+        return journalEntryId(tenantId, postingKey);
+    }
+
+    private Long journalEntryId(Long tenantId, String postingKey) {
+        // The posting service guarantees the key is unique; locate its persisted journal.
+        return journalEntries.findByTenantIdAndPostingKey(tenantId, postingKey)
+                .map(com.contractor.app.accounting.domain.JournalEntry::getId)
+                .orElseThrow(() -> ApiException.conflict("تعذر ربط قيد أجر الوردية."));
     }
 
     private ApiException activeResourceConflict(String resource, Shift conflictingShift, Long tenantId) {
