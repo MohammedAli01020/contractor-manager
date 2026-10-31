@@ -14,10 +14,12 @@ on:
       - feature/equipment-expenses-accounting
       - feature/driver-worker-ledger
       - fix/treasury-concurrency-hardening
+      - feature/accounting-default-chart-completion
     paths:
       - "backend/**"
       - ".github/workflows/backend-ci.yml"
       - "docs/ACCOUNTING-TREASURY-CONCURRENCY-2026-10-31.md"
+      - "docs/ACCOUNTING-DEFAULT-CHART-2026-10-31.md"
   pull_request:
     branches:
       - feature/platform-owner-activation
@@ -25,6 +27,7 @@ on:
       - feature/platform-owner-totp-2fa
       - feature/request-tracking
       - feature/driver-worker-ledger
+      - fix/treasury-concurrency-hardening
     paths:
       - "backend/**"
       - ".github/workflows/backend-ci.yml"
@@ -111,6 +114,33 @@ jobs:
               sys.exit("V24 migration test was skipped; Docker/MySQL must be available in CI.")
           if totals["failures"] != 0 or totals["errors"] != 0:
               sys.exit("V24 migration test reported failures or errors.")
+          PY
+
+      - name: Require default chart and journal-linkage tests to execute
+        run: |
+          python3 - <<'PY'
+          import glob
+          import sys
+          import xml.etree.ElementTree as ET
+
+          required = {
+              "DefaultChartOfAccountsServiceTest": 8,
+              "ShiftIntegrationTest": 1,
+              "ExpenseIntegrationTest": 1,
+          }
+          for suite, minimum in required.items():
+              pattern = f"target/surefire-reports/TEST-*{suite}.xml"
+              reports = glob.glob(pattern)
+              if not reports:
+                  sys.exit(f"Required accounting report missing: {pattern}")
+              root = ET.parse(reports[0]).getroot()
+              totals = {key: int(root.attrib.get(key, 0))
+                        for key in ("tests", "failures", "errors", "skipped")}
+              print(f"{suite}: {totals}")
+              if totals["tests"] < minimum:
+                  sys.exit(f"{suite} did not execute the required number of tests.")
+              if totals["skipped"] != 0 or totals["failures"] != 0 or totals["errors"] != 0:
+                  sys.exit(f"{suite} has skipped tests, failures, or errors.")
           PY
 
       - name: Write test summary

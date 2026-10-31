@@ -7,7 +7,7 @@ import com.contractor.app.accounting.domain.DefaultChartOfAccountsService;
 import com.contractor.app.accounting.domain.JournalLineRequest;
 import com.contractor.app.accounting.domain.JournalPostingRequest;
 import com.contractor.app.accounting.domain.JournalPostingService;
-import com.contractor.app.accounting.infra.ChartAccountRepository;
+import com.contractor.app.accounting.domain.SystemAccountCode;
 import com.contractor.app.accounting.infra.JournalEntryRepository;
 import com.contractor.app.driver.domain.DriverLedgerEntry;
 import com.contractor.app.driver.infra.DriverLedgerEntryRepository;
@@ -64,7 +64,6 @@ public class ShiftService {
     private final EquipmentRepository equipment;
     private final AuditService audit;
     private final JournalPostingService journalPosting;
-    private final ChartAccountRepository chartAccounts;
     private final JournalEntryRepository journalEntries;
     private final DriverLedgerEntryRepository driverLedger;
     private final DefaultChartOfAccountsService defaultAccounts;
@@ -72,8 +71,8 @@ public class ShiftService {
 
     public ShiftService(ShiftRepository shifts, SiteRepository sites, DriverRepository drivers,
                         EquipmentRepository equipment, AuditService audit,
-                        JournalPostingService journalPosting, ChartAccountRepository chartAccounts,
-                        JournalEntryRepository journalEntries, DriverLedgerEntryRepository driverLedger,
+                        JournalPostingService journalPosting, JournalEntryRepository journalEntries,
+                        DriverLedgerEntryRepository driverLedger,
                         DefaultChartOfAccountsService defaultAccounts,
                         @Value("${app.business-timezone:Africa/Cairo}") String businessTimezone) {
         this.shifts = shifts;
@@ -82,7 +81,6 @@ public class ShiftService {
         this.equipment = equipment;
         this.audit = audit;
         this.journalPosting = journalPosting;
-        this.chartAccounts = chartAccounts;
         this.journalEntries = journalEntries;
         this.driverLedger = driverLedger;
         this.defaultAccounts = defaultAccounts;
@@ -256,10 +254,10 @@ public class ShiftService {
         }
         // Ensure baseline wage accounts exist, then post the earning in the same outer transaction.
         defaultAccounts.initializeForTenant(tenantId);
-        ChartAccount wageExpense = chartAccounts.findByTenantIdAndAccountCodeIgnoreCase(tenantId, "5000")
-                .orElseThrow(() -> ApiException.conflict("حساب مصروف أجور السائقين غير مهيأ."));
-        ChartAccount driverPayable = chartAccounts.findByTenantIdAndAccountCodeIgnoreCase(tenantId, "2100")
-                .orElseThrow(() -> ApiException.conflict("حساب مستحقات السائقين غير مهيأ."));
+        ChartAccount wageExpense = defaultAccounts.requireSystemAccount(
+                tenantId, SystemAccountCode.DRIVER_WAGE_EXPENSE);
+        ChartAccount driverPayable = defaultAccounts.requireSystemAccount(
+                tenantId, SystemAccountCode.DRIVER_PAYABLE);
         if (shift.getDriverWage() == null || shift.getDriverWage().signum() < 0) {
             throw ApiException.conflict("أجر الوردية غير صالح للترحيل.");
         }
@@ -283,9 +281,8 @@ public class ShiftService {
             BigDecimal recoverable = driverLedger.sumRecoverableAdvanceBalance(tenantId, shift.getDriverId());
             if (recoverable.signum() > 0) {
                 BigDecimal recovery = recoverable.min(shift.getDriverWage());
-                ChartAccount advancesAsset = chartAccounts.findByTenantIdAndAccountCodeIgnoreCase(tenantId, "1300")
-                        .filter(ChartAccount::isActive)
-                        .orElseThrow(() -> ApiException.conflict("حساب سلف العاملين القابلة للاسترداد غير مهيأ."));
+                ChartAccount advancesAsset = defaultAccounts.requireSystemAccount(
+                        tenantId, SystemAccountCode.RECOVERABLE_WORKER_ADVANCES);
                 String recoveryKey = "shift-advance-recovery-" + shift.getId();
                 com.contractor.app.accounting.domain.JournalEntry recoveryJournal = journalPosting.post(
                         tenantId, actorUserId, new JournalPostingRequest(recoveryKey, "DRIVER_ADVANCE_RECOVERY",
