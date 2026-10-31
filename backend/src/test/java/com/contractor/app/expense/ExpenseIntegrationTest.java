@@ -294,7 +294,7 @@ class ExpenseIntegrationTest extends AbstractIntegrationTest {
             JsonNode conflictBody = objectMapper.readTree(conflict.getResponse().getContentAsByteArray());
             assertThat(conflictBody.path("code").asText()).isEqualTo("CONFLICT");
             assertThat(conflictBody.path("message").asText())
-                    .isEqualTo("مفتاح طلب المصروف مستخدم لبيانات مختلفة.");
+                    .isEqualTo("مفتاح العملية مستخدم بالفعل لبيانات مالية مختلفة.");
 
             var savedExpenses = expenseRepository.findByTenantIdOrderByExpenseDateDescIdDesc(tenantId);
             assertThat(savedExpenses).hasSize(1);
