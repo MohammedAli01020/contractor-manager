@@ -6,6 +6,7 @@ import static org.mockito.Mockito.when;
 
 import com.contractor.app.accounting.domain.AccountType;
 import com.contractor.app.accounting.domain.ChartAccount;
+import com.contractor.app.accounting.domain.DefaultChartOfAccountsService;
 import com.contractor.app.accounting.domain.JournalEntry;
 import com.contractor.app.accounting.domain.JournalLine;
 import com.contractor.app.accounting.domain.JournalPostingRequest;
@@ -31,6 +32,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 class AccountingControllerTest {
 
     private ChartAccountRepository accounts;
+    private DefaultChartOfAccountsService defaultAccounts;
     private JournalPostingService journals;
     private JournalEntryRepository entries;
     private JournalLineRepository lines;
@@ -39,10 +41,11 @@ class AccountingControllerTest {
     @BeforeEach
     void setUp() {
         accounts = org.mockito.Mockito.mock(ChartAccountRepository.class);
+        defaultAccounts = org.mockito.Mockito.mock(DefaultChartOfAccountsService.class);
         journals = org.mockito.Mockito.mock(JournalPostingService.class);
         entries = org.mockito.Mockito.mock(JournalEntryRepository.class);
         lines = org.mockito.Mockito.mock(JournalLineRepository.class);
-        controller = new AccountingController(accounts, journals, entries, lines);
+        controller = new AccountingController(accounts, defaultAccounts, journals, entries, lines);
         AuthenticatedUser principal = new AuthenticatedUser(7L, 42L, "tenant-admin", Role.ADMIN);
         SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
                 principal, "n/a", Collections.singleton(new SimpleGrantedAuthority("ROLE_ADMIN"))));
@@ -62,6 +65,20 @@ class AccountingControllerTest {
         assertEquals(1, response.size());
         assertEquals("1000", response.get(0).getAccountCode());
         verify(accounts).findByTenantIdOrderByAccountCodeAsc(42L);
+    }
+
+    @Test
+    void initializesDefaultAccountsForAuthenticatedTenantOnly() {
+        ChartAccount account = new ChartAccount(42L, "1000", "الخزينة", AccountType.ASSET, null, true);
+        when(accounts.findByTenantIdOrderByAccountCodeAsc(42L))
+                .thenReturn(Collections.singletonList(account));
+
+        java.util.List<AccountingController.AccountResponse> response = controller.initializeDefaultAccounts();
+
+        verify(defaultAccounts).initializeForTenant(42L);
+        verify(accounts).findByTenantIdOrderByAccountCodeAsc(42L);
+        assertEquals(1, response.size());
+        assertEquals("1000", response.get(0).getAccountCode());
     }
 
     @Test
