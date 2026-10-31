@@ -18,6 +18,9 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -73,10 +76,20 @@ public class AccountingController {
 
     @GetMapping("/journals")
     @Operation(summary = "عرض القيود المحاسبية للشركة الحالية")
-    public List<JournalSummaryResponse> listJournals() {
-        return entries.findByTenantIdOrderByAccountingDateDescPostedAtDesc(CurrentUser.tenantId()).stream()
+    public JournalPageResponse listJournals(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        if (page < 0 || size < 1 || size > 100) {
+            throw com.contractor.app.common.error.ApiException.badRequest(
+                    "رقم الصفحة يجب ألا يقل عن صفر، وحجم الصفحة يجب أن يكون بين 1 و100.");
+        }
+        Page<JournalEntry> result = entries.findByTenantIdOrderByAccountingDateDescPostedAtDescIdDesc(
+                CurrentUser.tenantId(), PageRequest.of(page, size));
+        List<JournalSummaryResponse> items = result.getContent().stream()
                 .map(JournalSummaryResponse::new)
                 .collect(Collectors.toList());
+        return new JournalPageResponse(items, result.getNumber(), result.getSize(),
+                result.getTotalElements(), result.getTotalPages(), result.hasNext(), result.hasPrevious());
     }
 
     @GetMapping("/journals/{journalId}")
@@ -125,6 +138,35 @@ public class AccountingController {
         public Long getParentAccountId() { return parentAccountId; }
         public boolean isSystemManaged() { return systemManaged; }
         public boolean isActive() { return active; }
+    }
+
+    public static final class JournalPageResponse {
+        private final List<JournalSummaryResponse> items;
+        private final int page;
+        private final int size;
+        private final long totalElements;
+        private final int totalPages;
+        private final boolean hasNext;
+        private final boolean hasPrevious;
+
+        JournalPageResponse(List<JournalSummaryResponse> items, int page, int size,
+                            long totalElements, int totalPages, boolean hasNext, boolean hasPrevious) {
+            this.items = items;
+            this.page = page;
+            this.size = size;
+            this.totalElements = totalElements;
+            this.totalPages = totalPages;
+            this.hasNext = hasNext;
+            this.hasPrevious = hasPrevious;
+        }
+
+        public List<JournalSummaryResponse> getItems() { return items; }
+        public int getPage() { return page; }
+        public int getSize() { return size; }
+        public long getTotalElements() { return totalElements; }
+        public int getTotalPages() { return totalPages; }
+        public boolean isHasNext() { return hasNext; }
+        public boolean isHasPrevious() { return hasPrevious; }
     }
 
     public static final class JournalSummaryResponse {
