@@ -84,3 +84,47 @@ The merge-plan and Flutter-test documentation commits were added directly to `fe
 - `feature/chart-of-accounts-api`: 6 ahead, 4 behind `feature/financial-foundation`.
 
 These counts include the latest branch tips at the time of this refresh. The two commits added to the financial foundation are documentation-only; nevertheless, branch synchronization and a fresh combined CI run remain required before merge.
+
+
+
+## Current integration checkpoint — 2026-10-31 (latest review)
+
+This section supersedes the earlier planned sequence where branch state or PR status differs.
+
+### PR #17 — merged into the feature branch (not main)
+- PR #17 was explicitly approved by the repository owner and merged into `feature/driver-worker-ledger` using a merge commit.
+- Merge commit: `a1e49dd1af323dd9534d83b441aba763e4ac2f5a`.
+- It did not modify `main`.
+
+### PR #20 — integration bridge, still Draft and unmerged
+- URL: https://github.com/MohammedAli01020/contractor-manager/pull/20
+- Base: `feature/financial-foundation`; head: `feature/driver-worker-ledger`.
+- Head SHA: `c203a29c3bea1853711960610afd6c726ae1f943`.
+- Latest branch comparison: 116 commits ahead / 7 behind; GitHub reports mergeable.
+- CI:
+  - PR run `41235316574`: success.
+  - Head push run `41235312124`: success.
+  - Current base push run `41235307730`: success.
+  - Integrated backend suite: 165 tests, 0 failures, 0 errors, 0 skipped.
+  - MySQL `JournalPostingConcurrencyIntegrationTest`: 8 passed, 0 skipped.
+  - V24 populated-data migration guard: 1 passed, 0 skipped.
+  - Tenant isolation (6), expense (10), and shift (27) integration tests passed.
+- CI provenance qualification: PR run `41235316574` used base SHA `983f32c5bd0d85cf83e26915d565182efb22745e`; the current base branch later advanced to `d59b71fd96412ddb1a0c035f0b7b702d833e5c56`. The only file changed between those base SHAs was `.github/workflows/backend-ci.yml`; the workflow is byte-for-byte identical on the current base and head branches, and the current base push run passed. The backend source under test did not differ, but a new PR merge-result run is required if either backend source or workflow content changes.
+- Review follow-up: issue #21 tracks concurrent idempotency-key reuse across different source records and missing comparison of the selected payment account in driver-ledger retries. DB uniqueness prevents duplicate rows, but some races can return an unexpected 5xx. Keep #20 Draft until fixed or explicitly accepted; no merge approval has been given.
+- PR #20 description and review comment were updated with this evidence. No production migration was run.
+
+### Current stacked PR state
+- **PR #14** API: head `95c474a64aad9c315a335ae5f9076c7aebd83f74`, 14 ahead / 7 behind `feature/financial-foundation`. CI run `41232619556` passed previously; synchronize/revalidate after the foundation integration.
+- **PR #15** Flutter accounting: head `e0add33ffa0540304223ea584fed04147468824e`, 23 ahead / 5 behind PR #14 base. Flutter 3.3.3 analyze/tests passed in run `41233389375` (8 tests). Pagination helper tests are unit-level; widget retry/refresh and Android-device smoke tests remain.
+- **PR #18** default chart/system account mapping: head `723f5c4500359d95c757f69f83b82dc61d3a26f6`, 14 ahead / 5 behind its current base `fix/treasury-concurrency-hardening`. Prior CI run `41232227739` passed (169 tests). Its base/stack must be reassessed after #20 integration; do not merge against the old base blindly.
+- **PR #19** trial balance: head `0a7a104e31165b430a30f5b526da2d07b41e57f2`, 9 ahead / 7 behind PR #18 base. Prior CI run `41232861265` passed. Revalidate after synchronizing with the final #18 base.
+- **PR #12** duplicate chart API: head `d502669733fa816be8686387b88a36520f47f5cc`, 6 ahead / 9 behind `feature/financial-foundation`. It still duplicates the canonical chart endpoint in #14; preserve/adapt its tenant-isolation test rather than merging both APIs.
+- **PR #13** Flutter AuthBloc tests: head `67c74eaea9cdc37035f18c0623cb95cbf67b0e43`; previously passed run `40848153455`. Re-run against the updated base before merge.
+
+### Current recommended order
+1. Resolve or explicitly accept issue #21's idempotency race behavior; do not confuse green CI with complete concurrency coverage.
+2. Decide whether #20 can leave Draft only after source review and a fresh PR merge-result validation for the exact current base/head.
+3. Once #20 is integrated (only with explicit owner approval), retarget/reconcile #18 → #19 against the resulting financial foundation and re-run backend CI.
+4. Reconcile #14 → #15 against the resulting foundation; preserve #12's tenant-isolation test in the canonical #14 API and rerun Flutter CI.
+5. Revalidate #13, then complete Android-device smoke tests and the production backup/migration/rollback plan.
+6. No PR is to be merged and `main` is not to be changed without explicit approval.
