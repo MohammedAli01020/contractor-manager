@@ -253,6 +253,10 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
                 "SELECT COUNT(*) FROM journal_entries WHERE tenant_id = (SELECT tenant_id FROM shifts WHERE id = ?) AND source_type = 'SHIFT_WAGE' AND source_id = ?",
                 Long.class, running.path("id").asLong(), running.path("id").asLong());
         assertThat(postedCount).isEqualTo(1L);
+        Long ledgerEarnings = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM driver_ledger_entries WHERE tenant_id = (SELECT tenant_id FROM shifts WHERE id = ?) AND shift_id = ? AND transaction_type = 'EARNING'",
+                Long.class, running.path("id").asLong(), running.path("id").asLong());
+        assertThat(ledgerEarnings).isEqualTo(1L);
         BigDecimal debit = jdbcTemplate.queryForObject(
                 "SELECT SUM(debit) FROM journal_lines WHERE journal_entry_id = ?", BigDecimal.class,
                 done.path("driverWageJournalEntryId").asLong());
