@@ -11,6 +11,9 @@ import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -90,6 +93,48 @@ public class JournalPostingService {
         }
     }
 
+    private Map<Long, ChartAccount> lockCashBankAccounts(Long tenantId, List<NormalizedLine> journalLines) {
+        List<Long> accountIds = new ArrayList<>();
+        for (NormalizedLine line : journalLines) {
+            if (!accountIds.contains(line.accountId)) accountIds.add(line.accountId);
+        }
+        Collections.sort(accountIds);
+        Map<Long, ChartAccount> locked = new LinkedHashMap<>();
+        for (Long accountId : accountIds) {
+            ChartAccount account = accounts.findByIdAndTenantId(accountId, tenantId)
+                    .orElseThrow(() -> ApiException.notFound("الحساب المحاسبي غير موجود."));
+            if (isCashOrBank(account)) {
+                ChartAccount lockedAccount = accounts.findByIdAndTenantIdForUpdate(accountId, tenantId)
+                        .orElseThrow(() -> ApiException.notFound("الحساب المحاسبي غير موجود."));
+                locked.put(accountId, lockedAccount);
+            }
+        }
+        return locked;
+    }
+
+    private void validateCashBankFloors(Long tenantId, List<NormalizedLine> journalLines,
+                                        Map<Long, ChartAccount> lockedAccounts) {
+        for (ChartAccount account : lockedAccounts.values()) {
+            BigDecimal netChange = ZERO;
+            for (NormalizedLine line : journalLines) {
+                if (account.getId().equals(line.accountId)) {
+                    netChange = netChange.add(line.debit).subtract(line.credit);
+                }
+            }
+            BigDecimal currentBalance = lines.calculateDebitNormalBalance(tenantId, account.getId());
+            if (currentBalance.add(netChange).compareTo(ZERO) < 0) {
+                String name = "1000".equals(account.getAccountCode()) ? "الخزينة" : "البنك";
+                throw ApiException.conflict("الرصيد المتاح في حساب " + name
+                        + " غير كافٍ لإتمام العملية. لا يمكن أن يصبح الرصيد سالبًا.");
+            }
+        }
+    }
+
+    private boolean isCashOrBank(ChartAccount account) {
+        return account.getAccountType() == AccountType.ASSET
+                && ("1000".equals(account.getAccountCode()) || "1010".equals(account.getAccountCode()));
+    }
+
     private JournalEntry postNormalized(Long tenantId, Long actorUserId, NormalizedJournal normalized) {
         Optional<JournalEntry> existing = entries.findByTenantIdAndPostingKey(tenantId, normalized.postingKey);
         if (existing.isPresent()) {
@@ -100,8 +145,12 @@ public class JournalPostingService {
             throw ApiException.conflict("مفتاح الترحيل مستخدم بالفعل لحركة مالية مختلفة.");
         }
 
+        Map<Long, ChartAccount> lockedCashBankAccounts = lockCashBankAccounts(tenantId, normalized.lines);
+
         for (NormalizedLine line : normalized.lines) {
-            ChartAccount account = accounts.findByIdAndTenantId(line.accountId, tenantId)
+            ChartAccount account = lockedCashBankAccounts.containsKey(line.accountId)
+                    ? lockedCashBankAccounts.get(line.accountId)
+                    : accounts.findByIdAndTenantId(line.accountId, tenantId)
                     .orElseThrow(() -> ApiException.notFound("الحساب المحاسبي غير موجود."));
             if (!account.isActive()) {
                 throw ApiException.badRequest("لا يمكن الترحيل على حساب محاسبي معطّل.");
@@ -114,6 +163,8 @@ public class JournalPostingService {
                 throw ApiException.notFound("المعدة المرتبطة بالقيد غير موجودة.");
             }
         }
+
+        validateCashBankFloors(tenantId, normalized.lines, lockedCashBankAccounts);
 
         if (normalized.reversalOfEntryId != null) {
             JournalEntry original = entries.findByIdAndTenantId(normalized.reversalOfEntryId, tenantId)
