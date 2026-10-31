@@ -2,7 +2,7 @@
 
 **Branch:** `feature/accounting-default-chart-completion`  
 **Base:** `fix/treasury-concurrency-hardening`  
-**Status:** Implemented in this branch; CI verification pending. No merge or production migration performed.
+**Status:** Implemented and CI-verified on code commit `a331a6a61c56f753cfd7e1cf770ab21ba12fd5fa`. Push run [41227488393](https://github.com/MohammedAli01020/contractor-manager/actions/runs/41227488393) and PR run [41227514282](https://github.com/MohammedAli01020/contractor-manager/actions/runs/41227514282) both succeeded. Surefire: 29 reports, 168 tests, 0 failures, 0 errors, 0 skipped. No merge or production migration performed.
 
 ## Scope
 

@@ -170,7 +170,7 @@ The roadmap below is the only source of truth for phase order and overall status
 |---|---|---|
 | 0 — Stabilize and verify the existing core | In progress — re-verify current branch and refresh test evidence before acceptance | [PHASE-00-CORE.md](phases/PHASE-00-CORE.md) |
 | 1 — Master data and shift usability | In progress — compare existing implementation with the phase exit criteria | [PHASE-01-MASTER-DATA.md](phases/PHASE-01-MASTER-DATA.md) |
-| 2 — Financial foundation and monthly close | In progress — architecture documented; code/tests pending | [PHASE-02-FINANCIALS.md](phases/PHASE-02-FINANCIALS.md) and [financial design](phases/FINANCIAL-FOUNDATION-DESIGN.md) |
+| 2 — Financial foundation and monthly close | In progress — accounting core, tenant default chart and operational journal links implemented; CI verified; trial balance/monthly close and remaining scope pending | [PHASE-02-FINANCIALS.md](phases/PHASE-02-FINANCIALS.md) and [financial design](phases/FINANCIAL-FOUNDATION-DESIGN.md) |
 | 3 — Purchases, suppliers and inventory | Not started | Tracked in this roadmap until a detailed plan is needed |
 | 4 — Reports and exports | Not started | Tracked in this roadmap until a detailed plan is needed |
 | 5 — Authentication redesign and optional driver accounts | Not started as a redesign phase | [PHASE-05-AUTHENTICATION.md](phases/PHASE-05-AUTHENTICATION.md) |
@@ -202,13 +202,13 @@ The roadmap below is the only source of truth for phase order and overall status
 **Exit criteria:** contractor can manage master data and run the agreed shift workflow reliably.
 
 ### Phase 2 — Financial foundation, driver ledger, equipment expenses and monthly closing
-**Status:** In progress — V17 accounting schema and initial journal posting service added on `feature/financial-foundation`; test and MySQL migration verification pending.  
+**Status:** In progress — V17–V24 accounting foundation, 15-account tenant chart, tenant-safe system-account resolution, driver/expense/wage journal links and treasury concurrency controls are implemented on stacked feature branches and CI-verified. Trial balance/reporting, safe account-management workflows and monthly close remain outstanding.  
 **Detailed plan:** [PHASE-02-FINANCIALS.md](phases/PHASE-02-FINANCIALS.md).  
-- Define and test the exact accounting rules first, including sign conventions for positive/negative balances and the period in which each transaction is recognized. Initial chart/journal schema and posting-service validation code now exist; run backend tests and Flyway against MySQL before proceeding.
-- Implement driver ledger movements: opening balance, shift wages, advances, approved deductions, bonuses/allowances, actual payments, adjustments and reversals.
+- Preserve the agreed accounting rules and keep expanding acceptance cases. The initial chart/journal schema, default chart initialization, stable system-account mapping and shared journal posting are implemented and CI-verified; do not treat the entire financial phase as complete.
+- Continue driver-ledger coverage: opening balances, approved deductions, bonuses/allowances, adjustments, settlements and reversals; shift wages, advances and payments already have initial journal linkage.
 - Implement configurable equipment expense categories and expense entries that can be linked to an equipment or a specific shift; support unpaid, partially paid and fully paid status.
 - Model equipment ownership (company-owned or third-party/partner-owned) and, when applicable, owner/partner settlements separately from operating result and cash movement.
-- Implement monthly period close: reconciliation preview, exceptions, approval metadata, immutable closing snapshot, opening balances for the next period, and controlled reopen/correction flow.
+- Implement trial balance/account statements and monthly period close: reconciliation preview, exceptions, approval metadata, immutable closing snapshot, opening balances for the next period, and controlled reopen/correction flow.
 - Make posting, payment and close operations idempotent; prevent duplicate wage/expense/payment posting and enforce tenant isolation and audit history.
 - Preserve existing shift price/wage/operating-cost snapshots and avoid double-counting estimated operating costs, actual expenses, driver wages or inventory consumption.
 - Separate operational profit from cash flow and supplier/owner liabilities.
