@@ -88,3 +88,16 @@ Known follow-up checks before declaring concurrency coverage complete:
 - Inventory concurrency is out of scope until inventory issue/receipt workflows are implemented.
 
 A CI-discovered trigger defect was corrected: the posted-shift trigger now permits the one-time `IN_PROGRESS -> COMPLETED` transition and first `finished_at` value, while keeping the financial/source snapshot immutable afterward.
+
+
+## Concurrency and database integrity review (2026-10-31)
+
+- Existing integration coverage includes simultaneous identical journal postings, competing reversals of the same journal, concurrent payments against one expense (only one may succeed when their sum exceeds the expense), active-shift start/resource-state races, and row locks for driver/shift/equipment/expense mutations.
+- Driver-ledger payment and advance commands lock the driver row before reading the running balance and posting the journal/ledger event. This serializes balance-changing commands for the same worker.
+- Journal posting uses a tenant-scoped unique posting key; competing identical requests converge on the same journal, while conflicting payloads are rejected. Reversal uniqueness is protected by a tenant-scoped unique key.
+- V23 adds MySQL triggers rejecting UPDATE/DELETE of posted journal headers and lines. Corrections must use reversal/adjustment journals.
+- V18 already enforces unique tenant-scoped idempotency keys for expenses and expense payments. V20/V22 enforce worker-ledger request-key uniqueness and one EARNING row per shift.
+- Important remaining boundary: the current model does not maintain a separately locked, authoritative cash/bank balance row. Cash/bank availability is therefore not yet enforced as a no-negative-balance rule across unrelated payment sources. Do not claim concurrent disbursements cannot exceed available cash/bank until a dedicated cash-account balance/ledger policy and concurrency tests are implemented. Bank overdraft policy must be explicit rather than assumed.
+- V23 protects existing journal rows from mutation/deletion, but does not by itself prevent an additional journal line from being inserted later by privileged direct SQL. Production DB credentials should be least-privilege; a future posting-finalization design can close this remaining insert window without breaking the current atomic header+lines transaction.
+- Optimistic @Version and row locks solve different problems: use optimistic version checks for stale edits, pessimistic row locks for balance/resource decisions, and database unique constraints as the final race barrier.
+- CI is the verification gate for MySQL trigger behavior; do not treat these safeguards as production-verified until the MySQL integration workflow passes.
