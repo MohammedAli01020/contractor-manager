@@ -490,36 +490,28 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
     // ---------------------------------------------------------------- cancel & reinstate
 
     @Test
-    void completedShiftCanBeCancelledAndReinstated() throws Exception {
+    void completedShiftWithPostedWageCannotBeCancelled() throws Exception {
         JsonNode done = finishShift(token,
                 startShift(token, shiftBody(siteId, driverId, equipmentId, day(1), "MORNING")));
         long id = done.path("id").asLong();
 
-        Map<String, Object> noReason = versionBody(done.path("version").asLong());
-        postJson("/api/v1/shifts/" + id + "/cancel", noReason, token).andExpect(status().isBadRequest());
-
         Map<String, Object> cancel = versionBody(done.path("version").asLong());
         cancel.put("reason", "work did not happen");
-        JsonNode cancelled = body(postJson("/api/v1/shifts/" + id + "/cancel", cancel, token)
-                .andExpect(status().isOk()));
-        assertThat(cancelled.path("status").asText()).isEqualTo("CANCELLED");
-        assertThat(cancelled.path("cancelReason").asText()).isEqualTo("work did not happen");
+        postJson("/api/v1/shifts/" + id + "/cancel", cancel, token)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").exists());
 
-        // لا تعديل على الملغاة ولا إلغاء ثانٍ
-        Map<String, Object> edit = shiftBody(siteId, driverId, equipmentId, day(1), "MORNING");
-        edit.put("version", cancelled.path("version").asLong());
-        putJson("/api/v1/shifts/" + id, edit, token).andExpect(status().isConflict());
-        cancel.put("version", cancelled.path("version").asLong());
-        postJson("/api/v1/shifts/" + id + "/cancel", cancel, token).andExpect(status().isConflict());
-
-        postJson("/api/v1/shifts/" + id + "/reinstate", versionBody(cancelled.path("version").asLong()), token)
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("COMPLETED"))
-                .andExpect(jsonPath("$.cancelReason").doesNotExist());
+        JsonNode unchanged = body(getJson("/api/v1/shifts/" + id, token));
+        assertThat(unchanged.path("status").asText()).isEqualTo("COMPLETED");
+        assertThat(unchanged.path("driverWageJournalEntryId").asLong()).isEqualTo(
+                done.path("driverWageJournalEntryId").asLong());
+        Long postedCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM journal_entries WHERE source_type = 'SHIFT_WAGE' AND source_id = ?",
+                Long.class, id);
+        assertThat(postedCount).isEqualTo(1L);
 
         JsonNode history = body(getJson("/api/v1/shifts/" + id + "/history", token));
-        assertThat(findBy(history, "action", "CANCELLED")).isNotNull();
-        assertThat(findBy(history, "action", "REINSTATED")).isNotNull();
+        assertThat(findBy(history, "action", "CANCELLED")).isNull();
         assertThat(findBy(history, "action", "FINISHED")).isNotNull();
     }
 
