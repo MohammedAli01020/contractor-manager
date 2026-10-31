@@ -178,6 +178,15 @@ public class ShiftService {
             throw ApiException.conflict("لا يمكن تعديل وردية ملغاة. أعد تفعيلها أولًا.");
         }
         shift.requireVersion(request.getVersion());
+        if (shift.getDriverWageJournalEntryId() != null
+                && (!request.getShiftDate().equals(shift.getShiftDate())
+                    || !request.getShiftType().equals(shift.getShiftType())
+                    || !request.getDriverId().equals(shift.getDriverId())
+                    || !request.getEquipmentId().equals(shift.getEquipmentId())
+                    || (request.getDriverWage() != null
+                        && request.getDriverWage().compareTo(shift.getDriverWage()) != 0))) {
+            throw ApiException.conflict("لا يمكن تعديل بيانات تؤثر على أجر وردية تم ترحيلها. استخدم قيد تصحيح بدلًا من ذلك.");
+        }
         if (request.getShiftDate() == null) {
             throw ApiException.badRequest("تاريخ الوردية مطلوب عند التعديل.");
         }
@@ -229,7 +238,7 @@ public class ShiftService {
         return get(tenantId, shift.getId());
     }
 
-    /** إنهاء: يغيّر المؤشر فقط، ووقت الضغط ومن ضغط يُسجَّلان. */
+    /** إنهاء الوردية وترحيل أجرها مرة واحدة داخل نفس المعاملة. */
     @Transactional
     public ShiftResponse finish(Long tenantId, Long id, Long version, Long actorUserId) {
         Shift shift = findForUpdate(tenantId, id);
@@ -275,6 +284,9 @@ public class ShiftService {
             throw ApiException.conflict("الوردية ملغاة بالفعل.");
         }
         shift.requireVersion(request.getVersion());
+        if (shift.getDriverWageJournalEntryId() != null) {
+            throw ApiException.conflict("لا يمكن إلغاء وردية تم ترحيل أجرها. يجب إنشاء قيد عكسي أو تسوية أولًا.");
+        }
         ShiftStatus previous = shift.getStatus();
         shift.setStatus(ShiftStatus.CANCELLED);
         shift.setCancelReason(request.getReason().trim());
