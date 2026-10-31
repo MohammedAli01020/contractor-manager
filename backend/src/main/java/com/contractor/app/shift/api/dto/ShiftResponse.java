@@ -23,6 +23,7 @@ public class ShiftResponse {
     private final BigDecimal price;
     private final BigDecimal driverWage;
     private final BigDecimal equipmentOperatingCost;
+    private final Long driverWageJournalEntryId;
     private final BigDecimal priceAfterWage;
     private final String notes;
     private final String cancelReason;
@@ -47,6 +48,7 @@ public class ShiftResponse {
         this.price = s.getPrice();
         this.driverWage = s.getDriverWage();
         this.equipmentOperatingCost = s.getEquipmentOperatingCost();
+        this.driverWageJournalEntryId = s.getDriverWageJournalEntryId();
         // الإيراد ناقص أجر السائق (قبل المصروفات الفعلية). تكلفة تشغيل المعدة مؤشر فقط ولا تدخل هنا.
         this.priceAfterWage = s.getPrice().subtract(s.getDriverWage());
         this.notes = s.getNotes();
@@ -115,6 +117,8 @@ public class ShiftResponse {
     public BigDecimal getDriverWage() {
         return driverWage;
     }
+
+    public Long getDriverWageJournalEntryId() { return driverWageJournalEntryId; }
 
     public BigDecimal getEquipmentOperatingCost() {
         return equipmentOperatingCost;
