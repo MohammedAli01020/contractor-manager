@@ -27,6 +27,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.web.context.request.ServletWebRequest;
 import org.junit.jupiter.api.Test;
 
@@ -719,6 +720,65 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
                 "SELECT SUM(CASE WHEN transaction_type='RECOVERABLE_ADVANCE' THEN amount WHEN transaction_type='ADVANCE_RECOVERY' THEN -amount ELSE 0 END) FROM driver_ledger_entries WHERE driver_id=?",
                 BigDecimal.class, driverId);
         assertThat(outstanding).isEqualByComparingTo("50.00");
+    }
+
+    @Test
+    void concurrentWorkerPaymentsCannotSpendTheSameEarnedBalanceTwice() throws Exception {
+        JsonNode earned = finishShift(token,
+                startShift(token, shiftBody(siteId, driverId, equipmentId, day(1), "MORNING")));
+        Long tenantId = jdbcTemplate.queryForObject(
+                "SELECT tenant_id FROM drivers WHERE id = ?", Long.class, driverId);
+        Long cashId = jdbcTemplate.queryForObject(
+                "SELECT id FROM chart_of_accounts WHERE tenant_id = ? AND account_code = '1000'",
+                Long.class, tenantId);
+        long earnedAmount = earned.path("driverWage").asLong();
+
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<Integer> first = executor.submit(() -> concurrentWorkerPayment(
+                    cashId, "worker-pay-race-a", ready, start));
+            Future<Integer> second = executor.submit(() -> concurrentWorkerPayment(
+                    cashId, "worker-pay-race-b", ready, start));
+            assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+            assertThat(java.util.Arrays.asList(first.get(30, TimeUnit.SECONDS), second.get(30, TimeUnit.SECONDS)))
+                    .containsExactlyInAnyOrder(201, 400);
+        } finally {
+            start.countDown();
+            executor.shutdownNow();
+            executor.awaitTermination(10, TimeUnit.SECONDS);
+        }
+
+        Integer payments = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM driver_ledger_entries WHERE driver_id = ? AND transaction_type = 'PAYMENT'",
+                Integer.class, driverId);
+        BigDecimal balance = jdbcTemplate.queryForObject(
+                "SELECT COALESCE(SUM(balance_effect), 0) FROM driver_ledger_entries WHERE driver_id = ?",
+                BigDecimal.class, driverId);
+        assertThat(payments).isEqualTo(1);
+        assertThat(balance).isEqualByComparingTo("50.00");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM journal_entries WHERE tenant_id = ? AND source_type = 'DRIVER_PAYMENT'",
+                Integer.class, tenantId)).isEqualTo(1);
+    }
+
+    private int concurrentWorkerPayment(Long cashId, String key, CountDownLatch ready,
+                                        CountDownLatch start) throws Exception {
+        ready.countDown();
+        if (!start.await(10, TimeUnit.SECONDS)) {
+            throw new IllegalStateException("Timed out waiting for concurrent worker payment.");
+        }
+        Map<String, Object> payment = new HashMap<>();
+        payment.put("clientRequestKey", key);
+        payment.put("paymentDate", day(1).toString());
+        payment.put("amount", new BigDecimal("100.00"));
+        payment.put("paymentAccountId", cashId);
+        payment.put("description", "Concurrent worker payment");
+        MvcResult result = postJson("/api/v1/drivers/" + driverId + "/ledger/payments", payment, token)
+                .andReturn();
+        return result.getResponse().getStatus();
     }
 
     @Test
