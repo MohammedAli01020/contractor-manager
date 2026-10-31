@@ -263,6 +263,9 @@ public class ShiftService {
         if (shift.getDriverWage() == null || shift.getDriverWage().signum() < 0) {
             throw ApiException.conflict("أجر الوردية غير صالح للترحيل.");
         }
+        // Serialize wage recognition against payments for the same worker.
+        drivers.findByIdAndTenantIdForUpdate(shift.getDriverId(), tenantId)
+                .orElseThrow(() -> ApiException.notFound("السائق المرتبط بالوردية غير موجود."));
         if (shift.getDriverWage().signum() > 0) {
             com.contractor.app.accounting.domain.JournalEntry wageJournal = journalPosting.post(tenantId, actorUserId, new JournalPostingRequest(
                     "shift-wage-" + shift.getId(), "SHIFT_WAGE", shift.getId(), shift.getShiftDate(),
