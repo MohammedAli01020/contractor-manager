@@ -139,8 +139,8 @@ jobs:
               totals = {key: int(root.attrib.get(key, 0))
                         for key in ("tests", "failures", "errors", "skipped")}
               print(f"{name}: {totals}")
-              if totals["tests"] != expected:
-                  sys.exit(f"{name} must execute exactly {expected} tests.")
+              if totals["tests"] < expected:
+                  sys.exit(f"{name} must execute at least {expected} tests.")
               if totals["skipped"] != 0:
                   sys.exit(f"{name} was skipped; Docker/MySQL must be available in CI.")
               if totals["failures"] != 0 or totals["errors"] != 0:
