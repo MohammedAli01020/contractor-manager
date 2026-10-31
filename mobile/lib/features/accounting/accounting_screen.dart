@@ -18,6 +18,10 @@ class _AccountingScreenState extends State<AccountingScreen>
   late final TabController _tabs;
   bool _loadingAccounts = true;
   bool _loadingJournals = true;
+  bool _loadingMoreJournals = false;
+  bool _journalHasMore = false;
+  int _journalPage = 0;
+  String? _loadMoreJournalsError;
   bool _initializingAccounts = false;
   String? _accountsError;
   String? _journalsError;
@@ -110,29 +114,50 @@ class _AccountingScreenState extends State<AccountingScreen>
     }
   }
 
-  Future<void> _loadJournals() async {
+  Future<void> _loadJournals({bool loadMore = false}) async {
+    if (loadMore && (!_journalHasMore || _loadingMoreJournals || _loadingJournals)) {
+      return;
+    }
+    final requestedPage = loadMore ? _journalPage + 1 : 0;
     setState(() {
-      _loadingJournals = true;
-      _journalsError = null;
+      if (loadMore) {
+        _loadingMoreJournals = true;
+        _loadMoreJournalsError = null;
+      } else {
+        _loadingJournals = true;
+        _journalsError = null;
+        _loadMoreJournalsError = null;
+      }
     });
     try {
-      final response = await getIt<Dio>().get<List<dynamic>>('/accounting/journals');
+      final response = await getIt<Dio>().get<Map<String, dynamic>>(
+        '/accounting/journals',
+        queryParameters: {'page': requestedPage, 'size': 20},
+      );
       final data = response.data;
-      if (data == null) throw const FormatException();
-      final journals = data
+      if (data == null || data['items'] is! List) throw const FormatException();
+      final journals = (data['items'] as List<dynamic>)
           .whereType<Map<String, dynamic>>()
           .map(_Journal.fromJson)
           .toList();
       if (!mounted) return;
       setState(() {
-        _journals = journals;
+        _journals = loadMore ? [..._journals, ...journals] : journals;
+        _journalPage = (data['page'] as num?)?.toInt() ?? requestedPage;
+        _journalHasMore = data['hasNext'] as bool? ?? false;
         _loadingJournals = false;
+        _loadingMoreJournals = false;
       });
     } catch (error) {
       if (!mounted) return;
       setState(() {
-        _journalsError = _errorMessage(error);
-        _loadingJournals = false;
+        if (loadMore) {
+          _loadMoreJournalsError = _errorMessage(error);
+          _loadingMoreJournals = false;
+        } else {
+          _journalsError = _errorMessage(error);
+          _loadingJournals = false;
+        }
       });
     }
   }
@@ -194,6 +219,10 @@ class _AccountingScreenState extends State<AccountingScreen>
             loading: _loadingJournals,
             error: _journalsError,
             onRefresh: _loadJournals,
+            onLoadMore: () => _loadJournals(loadMore: true),
+            hasMore: _journalHasMore,
+            loadingMore: _loadingMoreJournals,
+            loadMoreError: _loadMoreJournalsError,
           ),
         ],
       ),
@@ -300,12 +329,20 @@ class _JournalsTab extends StatelessWidget {
     required this.loading,
     required this.error,
     required this.onRefresh,
+    required this.onLoadMore,
+    required this.hasMore,
+    required this.loadingMore,
+    required this.loadMoreError,
   });
 
   final List<_Journal> journals;
   final bool loading;
   final String? error;
   final Future<void> Function() onRefresh;
+  final Future<void> Function() onLoadMore;
+  final bool hasMore;
+  final bool loadingMore;
+  final String? loadMoreError;
 
   @override
   Widget build(BuildContext context) {
@@ -326,31 +363,56 @@ class _JournalsTab extends StatelessWidget {
         ),
       );
     }
-    return RefreshIndicator(
-      onRefresh: onRefresh,
-      child: ListView.builder(
-        padding: const EdgeInsets.all(12),
-        itemCount: journals.length,
-        itemBuilder: (context, index) {
-          final journal = journals[index];
-          return Card(
-            child: ListTile(
-              leading: const CircleAvatar(child: Icon(Icons.receipt_long_outlined)),
-              title: Text(journal.description.isEmpty
-                  ? 'قيد رقم ${journal.id}'
-                  : journal.description),
-              subtitle: Text(
-                '${journal.date} · ${journal.status} · ${journal.sourceType}',
-              ),
-              trailing: const Icon(Icons.chevron_left),
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => _JournalDetailsScreen(journalId: journal.id),
+    return NotificationListener<ScrollNotification>(
+      onNotification: (notification) {
+        if (notification.metrics.pixels >=
+            notification.metrics.maxScrollExtent - 200) {
+          onLoadMore();
+        }
+        return false;
+      },
+      child: RefreshIndicator(
+        onRefresh: onRefresh,
+        child: ListView.builder(
+          padding: const EdgeInsets.all(12),
+          itemCount: journals.length + (hasMore ? 1 : 0),
+          itemBuilder: (context, index) {
+            if (index >= journals.length) {
+              if (loadMoreError != null) {
+                return TextButton(
+                  onPressed: onLoadMore,
+                  child: Text('تعذر تحميل المزيد. اضغط لإعادة المحاولة: $loadMoreError'),
+                );
+              }
+              return Padding(
+                padding: const EdgeInsets.all(16),
+                child: Center(
+                  child: loadingMore
+                      ? const CircularProgressIndicator()
+                      : const Text('اسحب لأسفل لعرض المزيد'),
+                ),
+              );
+            }
+            final journal = journals[index];
+            return Card(
+              child: ListTile(
+                leading: const CircleAvatar(child: Icon(Icons.receipt_long_outlined)),
+                title: Text(journal.description.isEmpty
+                    ? 'قيد رقم ${journal.id}'
+                    : journal.description),
+                subtitle: Text(
+                  '${journal.date} · ${journal.status} · ${journal.sourceType}',
+                ),
+                trailing: const Icon(Icons.chevron_left),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => _JournalDetailsScreen(journalId: journal.id),
+                  ),
                 ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }
