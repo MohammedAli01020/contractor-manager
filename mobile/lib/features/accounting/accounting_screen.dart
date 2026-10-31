@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/di/injector.dart';
 import 'journal_entry_form.dart';
+import 'journal_pagination.dart';
 
 class AccountingScreen extends StatefulWidget {
   const AccountingScreen({Key? key, required this.canPostJournals}) : super(key: key);
@@ -135,16 +136,16 @@ class _AccountingScreenState extends State<AccountingScreen>
         queryParameters: {'page': requestedPage, 'size': 20},
       );
       final data = response.data;
-      if (data == null || data['items'] is! List) throw const FormatException();
-      final journals = (data['items'] as List<dynamic>)
-          .whereType<Map<String, dynamic>>()
-          .map(_Journal.fromJson)
-          .toList();
+      if (data == null) throw const FormatException();
+      final journalPage = JournalPage.fromJson(data);
+      final journals = journalPage.items.map(_Journal.fromJson).toList();
       if (!mounted) return;
       setState(() {
-        _journals = loadMore ? [..._journals, ...journals] : journals;
-        _journalPage = (data['page'] as num?)?.toInt() ?? requestedPage;
-        _journalHasMore = data['hasNext'] as bool? ?? false;
+        _journals = loadMore
+            ? appendUniqueById<_Journal>(_journals, journals, (journal) => journal.id)
+            : journals;
+        _journalPage = journalPage.page;
+        _journalHasMore = journalPage.hasNext;
         _loadingJournals = false;
         _loadingMoreJournals = false;
       });
