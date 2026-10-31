@@ -1,6 +1,7 @@
 package com.contractor.app.shift;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -528,6 +529,54 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
         assertThat(unchanged.path("equipmentId").asLong()).isEqualTo(equipmentId);
         assertThat(unchanged.path("shiftDate").asText()).isEqualTo(day(1).toString());
         assertThat(unchanged.path("driverWage").decimalValue()).isEqualByComparingTo("150.00");
+    }
+
+    @Test
+    void databaseRejectsDirectChangesToPostedShiftFinancialFields() throws Exception {
+        JsonNode done = finishShift(token,
+                startShift(token, shiftBody(siteId, driverId, equipmentId, day(1), "MORNING")));
+        long id = done.path("id").asLong();
+
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "UPDATE shifts SET driver_wage = ? WHERE id = ?", new BigDecimal("999.00"), id))
+                .hasMessageContaining("POSTED_SHIFT_WAGE_IMMUTABLE");
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "UPDATE shifts SET status = 'CANCELLED' WHERE id = ?", id))
+                .hasMessageContaining("POSTED_SHIFT_WAGE_IMMUTABLE");
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "DELETE FROM shifts WHERE id = ?", id))
+                .hasMessageContaining("POSTED_SHIFT_WAGE_CANNOT_BE_DELETED");
+
+        Shift unchanged = shiftRepository.findById(id).orElseThrow(AssertionError::new);
+        assertThat(unchanged.getStatus().name()).isEqualTo("COMPLETED");
+        assertThat(unchanged.getDriverWage()).isEqualByComparingTo("150.00");
+    }
+
+    @Test
+    void databaseKeepsDriverLedgerAppendOnlyAndAllowsOnlyOneShiftEarning() throws Exception {
+        JsonNode done = finishShift(token,
+                startShift(token, shiftBody(siteId, driverId, equipmentId, day(1), "MORNING")));
+        long shiftId = done.path("id").asLong();
+        Long ledgerId = jdbcTemplate.queryForObject(
+                "SELECT id FROM driver_ledger_entries WHERE shift_id = ? AND transaction_type = 'EARNING'",
+                Long.class, shiftId);
+
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "UPDATE driver_ledger_entries SET description = 'tampered' WHERE id = ?", ledgerId))
+                .hasMessageContaining("DRIVER_LEDGER_IS_APPEND_ONLY");
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "DELETE FROM driver_ledger_entries WHERE id = ?", ledgerId))
+                .hasMessageContaining("DRIVER_LEDGER_IS_APPEND_ONLY");
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "INSERT INTO driver_ledger_entries (tenant_id, driver_id, transaction_type, transaction_date, amount, balance_effect, description, client_request_key, shift_id, journal_entry_id, created_by_user_id, created_at) "
+                + "SELECT tenant_id, driver_id, 'EARNING', transaction_date, amount, balance_effect, 'duplicate earning', 'duplicate-earning-test', shift_id, journal_entry_id, created_by_user_id, created_at "
+                + "FROM driver_ledger_entries WHERE id = ?", ledgerId))
+                .isNotNull();
+
+        Integer count = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM driver_ledger_entries WHERE shift_id = ? AND transaction_type = 'EARNING'",
+                Integer.class, shiftId);
+        assertThat(count).isEqualTo(1);
     }
 
     @Test
