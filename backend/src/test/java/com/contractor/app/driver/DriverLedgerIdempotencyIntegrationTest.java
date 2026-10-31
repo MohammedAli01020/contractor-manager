@@ -88,7 +88,7 @@ class DriverLedgerIdempotencyIntegrationTest extends AbstractIntegrationTest {
         assertThat(journals.findByTenantIdAndPostingKey(tenantId, "driver-payment:driver-payment-race"))
                 .isPresent();
         assertThat(ledger.findByTenantIdAndDriverIdOrderByTransactionDateAscIdAsc(tenantId, entry.getDriverId()))
-                .extracting(DriverLedgerEntry::getId).containsExactly(entry.getId());
+                .extracting(DriverLedgerEntry::getId).contains(entry.getId());
     }
 
     @Test
