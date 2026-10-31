@@ -42,7 +42,6 @@ class DriverLedgerIdempotencyIntegrationTest extends AbstractIntegrationTest {
     private Long bankId;
     private Long expenseId;
     private Long payableId;
-    private Long recoverableAdvanceId;
     private Long equityId;
 
     @BeforeEach
@@ -56,7 +55,6 @@ class DriverLedgerIdempotencyIntegrationTest extends AbstractIntegrationTest {
         bankId = account("1010").getId();
         expenseId = account("5100").getId();
         payableId = account("2100").getId();
-        recoverableAdvanceId = account("1300").getId();
         equityId = account("3000").getId();
         openLiquidity(cashId, "cash-opening", new BigDecimal("2000.00"));
         openLiquidity(bankId, "bank-opening", new BigDecimal("2000.00"));
@@ -163,14 +161,14 @@ class DriverLedgerIdempotencyIntegrationTest extends AbstractIntegrationTest {
     private void earn(Long driverId, String key) {
         var journal = postingService.post(tenantId, actorId, new JournalPostingRequest(
                 uniqueName(key), "DRIVER_EARNING", null, LocalDate.of(2026, 10, 31),
-                "Accrued driver wages", null, Arrays.asList(
+                "Test driver payable opening", null, Arrays.asList(
                 new JournalLineRequest(expenseId, "Driver wages", new BigDecimal("500.00"),
                         BigDecimal.ZERO, null, null),
                 new JournalLineRequest(payableId, "Driver payable", BigDecimal.ZERO,
                         new BigDecimal("500.00"), driverId, null))));
-        ledger.saveAndFlush(new DriverLedgerEntry(tenantId, driverId, "EARNING",
+        ledger.saveAndFlush(new DriverLedgerEntry(tenantId, driverId, "ADJUSTMENT",
                 LocalDate.of(2026, 10, 31), new BigDecimal("500.00"), new BigDecimal("500.00"),
-                "Accrued wages", uniqueName(key), null, journal.getId(), actorId));
+                "Test balance adjustment", uniqueName(key), null, journal.getId(), actorId));
     }
 
     private void openLiquidity(Long accountId, String key, BigDecimal amount) {
