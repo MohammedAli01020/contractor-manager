@@ -71,7 +71,7 @@ public class DriverLedgerService {
         if(request.getPaymentDate()==null) throw ApiException.badRequest("تاريخ الصرف مطلوب.");
 
         idempotency.reserve(tenantId, "DRIVER_LEDGER", key,
-                RequestFingerprint.of(driverId, request.getPaymentDate(), amount, description,
+                RequestFingerprint.of("DRIVER_PAYMENT", driverId, request.getPaymentDate(), amount, description,
                         request.getPaymentAccountId()));
         drivers.findByIdAndTenantIdForUpdate(driverId,tenantId)
                 .orElseThrow(()->ApiException.notFound("العامل غير موجود."));
@@ -93,7 +93,7 @@ public class DriverLedgerService {
         if(cash.getAccountType()!=AccountType.ASSET || !cash.isCashBankAccount())
             throw ApiException.badRequest("الصرف يكون من حساب خزينة أو بنك مُعرّف لهذا الغرض فقط.");
         JournalEntry journal=journals.post(tenantId,user.getUserId(),new JournalPostingRequest(
-                "driver-payment:"+key,"DRIVER_LEDGER",null,request.getPaymentDate(),description,null,Arrays.asList(
+                "driver-payment:"+key,"DRIVER_PAYMENT",null,request.getPaymentDate(),description,null,Arrays.asList(
                 new JournalLineRequest(payable.getId(),"صرف مستحقات العامل",amount,BigDecimal.ZERO,driverId,null),
                 new JournalLineRequest(cash.getId(),"صرف من الخزينة/البنك",BigDecimal.ZERO,amount,null,null))));
         DriverLedgerEntry entry=ledger.saveAndFlush(new DriverLedgerEntry(tenantId,driverId,"PAYMENT",
@@ -116,7 +116,7 @@ public class DriverLedgerService {
             throw ApiException.badRequest("نوع السلفة غير صالح.");
 
         idempotency.reserve(tenantId, "DRIVER_LEDGER", key,
-                RequestFingerprint.of(driverId, request.getAdvanceDate(), amount, description, type,
+                RequestFingerprint.of("DRIVER_ADVANCE", driverId, request.getAdvanceDate(), amount, description, type,
                         request.getPaymentAccountId()));
         drivers.findByIdAndTenantIdForUpdate(driverId,tenantId)
                 .orElseThrow(()->ApiException.notFound("العامل غير موجود."));
