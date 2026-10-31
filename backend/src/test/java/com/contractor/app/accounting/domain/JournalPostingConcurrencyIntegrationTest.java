@@ -22,10 +22,13 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.dao.DataAccessException;
 import org.springframework.boot.test.mock.mockito.SpyBean;
 
 class JournalPostingConcurrencyIntegrationTest extends AbstractIntegrationTest {
     @Autowired private JournalPostingService postingService;
+    @Autowired private JdbcTemplate jdbcTemplate;
     @Autowired private ChartAccountRepository accounts;
     @Autowired private JournalEntryRepository entries;
     @Autowired private JournalLineRepository lineRepository;
@@ -105,6 +108,30 @@ class JournalPostingConcurrencyIntegrationTest extends AbstractIntegrationTest {
             start.countDown();
             pool.shutdownNow();
         }
+    }
+
+    @Test
+    void databaseRejectsMutationAndDeletionOfPostedJournalAndLines() {
+        JournalEntry entry = postingService.post(tenantId, actorUserId, request(uniqueName("immutable")));
+        Long lineId = lineRepository.findByTenantIdAndJournalEntryIdOrderByLineNumberAsc(
+                tenantId, entry.getId()).get(0).getId();
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                jdbcTemplate.update("UPDATE journal_entries SET description = 'tampered' WHERE id = ?", entry.getId()))
+                .isInstanceOf(DataAccessException.class)
+                .hasMessageContaining("POSTED_JOURNAL_IS_IMMUTABLE");
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                jdbcTemplate.update("DELETE FROM journal_entries WHERE id = ?", entry.getId()))
+                .isInstanceOf(DataAccessException.class)
+                .hasMessageContaining("POSTED_JOURNAL_CANNOT_BE_DELETED");
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                jdbcTemplate.update("UPDATE journal_lines SET debit = 999.00 WHERE id = ?", lineId))
+                .isInstanceOf(DataAccessException.class)
+                .hasMessageContaining("POSTED_JOURNAL_LINES_ARE_IMMUTABLE");
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                jdbcTemplate.update("DELETE FROM journal_lines WHERE id = ?", lineId))
+                .isInstanceOf(DataAccessException.class)
+                .hasMessageContaining("POSTED_JOURNAL_LINES_CANNOT_BE_DELETED");
     }
 
     @Test
