@@ -29,7 +29,6 @@ on:
       - "backend/**"
       - ".github/workflows/backend-ci.yml"
       - "docs/ACCOUNTING-TREASURY-CONCURRENCY-2026-10-31.md"
-      - ".github/workflows/backend-ci.yml"
   workflow_dispatch:
 
 permissions:
