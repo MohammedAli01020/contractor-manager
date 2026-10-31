@@ -72,7 +72,9 @@ public class DefaultChartOfAccountsService {
      */
     @Transactional(readOnly = true)
     public ChartAccount requireSystemAccount(Long tenantId, SystemAccountCode systemCode) {
-        requireTenantId(tenantId);
+        if (tenantId == null || tenantId <= 0) {
+            throw ApiException.badRequest("معرّف الشركة مطلوب لقراءة دليل الحسابات.");
+        }
         if (systemCode == null) {
             throw ApiException.badRequest("نوع الحساب الافتراضي مطلوب.");
         }
@@ -91,7 +93,7 @@ public class DefaultChartOfAccountsService {
 
     private void requireTenantId(Long tenantId) {
         if (tenantId == null || tenantId <= 0) {
-            throw ApiException.badRequest("معرّف الشركة مطلوب لتهيئة أو قراءة دليل الحسابات.");
+            throw new IllegalArgumentException("A persisted tenant ID is required to initialize accounts.");
         }
     }
 }
