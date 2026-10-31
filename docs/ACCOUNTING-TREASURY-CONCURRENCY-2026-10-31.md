@@ -35,11 +35,10 @@
 
 ## Verification status
 
-- Verified head after documentation update: `f53bce89bb18294323bc38b25893fda35cd38807`.
-- Successful Backend CI push run on the final documented head: [41225452808](https://github.com/MohammedAli01020/contractor-manager/actions/runs/41225452808).
-- Successful Backend CI pull-request run on the final documented head: [41225457241](https://github.com/MohammedAli01020/contractor-manager/actions/runs/41225457241).
-- The final-head Surefire artifact was independently aggregated: 29 test-suite XML reports, **164 tests, 0 failures, 0 errors, 0 skipped**.
-- Downloaded Surefire reports from run 41225181346 and independently aggregated all 29 test-suite XML reports: **164 tests, 0 failures, 0 errors, 0 skipped**.
+- Verified head after final documentation correction: `88fd380ade49eb2506be9b7d886eb840af9dbd58`.
+- Successful Backend CI push run on the preceding source-and-documentation head: [41225452808](https://github.com/MohammedAli01020/contractor-manager/actions/runs/41225452808).
+- Successful Backend CI pull-request run on the preceding source-and-documentation head: [41225457241](https://github.com/MohammedAli01020/contractor-manager/actions/runs/41225457241).
+- The Surefire artifact from the verified `88fd380` head was independently aggregated: 29 test-suite XML reports, **164 tests, 0 failures, 0 errors, 0 skipped**. Push and PR workflows [41225793226](https://github.com/MohammedAli01020/contractor-manager/actions/runs/41225793226) and [41225797046](https://github.com/MohammedAli01020/contractor-manager/actions/runs/41225797046) both succeeded on this exact SHA.
 - `JournalPostingConcurrencyIntegrationTest`: **8 tests, 0 failures, 0 errors, 0 skipped**.
 - `CashBankClassificationMigrationIntegrationTest`: **1 test, 0 failures, 0 errors, 0 skipped**. The test migrated a disposable MySQL database through V23, inserted representative existing tenant/account data, applied V24, and verified the intended classifications and unchanged existing account data.
 - Both CI runs passed the dedicated guards requiring the MySQL accounting integration tests and V24 existing-data migration test to execute; neither required test was skipped.
@@ -49,6 +48,6 @@
 
 ## Review outcome
 
-- Final source/diff review completed; the PR changes remain limited to explicit cash/bank classification, treasury locking/payment validation, MySQL migration/concurrency tests, realistic opening-balance fixtures, CI guards, and this documentation.
-- Final-head push and pull-request CI both succeeded. The MySQL integration and V24 migration guards completed successfully.
+- Source/diff review completed; the PR changes remain limited to explicit cash/bank classification, treasury locking/payment validation, MySQL migration/concurrency tests, realistic opening-balance fixtures, CI guards, and this documentation.
+- Push and pull-request CI both succeeded on `88fd380`; the MySQL integration and V24 migration guards completed successfully.
 - PR #17 remains Draft, open, and unmerged, targeting `feature/driver-worker-ledger`. Explicit approval is required before merging; `main` remains untouched.
