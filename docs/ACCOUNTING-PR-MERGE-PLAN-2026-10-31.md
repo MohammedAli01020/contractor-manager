@@ -100,7 +100,7 @@ This section supersedes the earlier planned sequence where branch state or PR st
 - URL: https://github.com/MohammedAli01020/contractor-manager/pull/20
 - Base: `feature/financial-foundation`; head: `feature/driver-worker-ledger`.
 - Head SHA: `c203a29c3bea1853711960610afd6c726ae1f943`.
-- Latest branch comparison: 116 commits ahead / 7 behind; GitHub reports mergeable.
+- Latest branch comparison: 116 commits ahead / 8 behind; GitHub reports mergeable.
 - CI:
   - PR run `41235316574`: success.
   - Head push run `41235312124`: success.
