@@ -13,6 +13,7 @@ on:
       - feature/default-chart-of-accounts
       - feature/equipment-expenses-accounting
       - feature/driver-worker-ledger
+      - fix/treasury-concurrency-hardening
     paths:
       - "backend/**"
       - ".github/workflows/backend-ci.yml"
@@ -22,6 +23,7 @@ on:
       - feature/platform-owner-web
       - feature/platform-owner-totp-2fa
       - feature/request-tracking
+      - feature/driver-worker-ledger
     paths:
       - "backend/**"
       - ".github/workflows/backend-ci.yml"
