@@ -35,9 +35,10 @@
 
 ## Verification status
 
-- Verified head: `bb2d358fb1bd89202551ed4465190895f253508f`.
-- Successful Backend CI push run: [41225181346](https://github.com/MohammedAli01020/contractor-manager/actions/runs/41225181346).
-- Successful Backend CI pull-request run: [41225186663](https://github.com/MohammedAli01020/contractor-manager/actions/runs/41225186663).
+- Verified head after documentation update: `f53bce89bb18294323bc38b25893fda35cd38807`.
+- Successful Backend CI push run on the final documented head: [41225452808](https://github.com/MohammedAli01020/contractor-manager/actions/runs/41225452808).
+- Successful Backend CI pull-request run on the final documented head: [41225457241](https://github.com/MohammedAli01020/contractor-manager/actions/runs/41225457241).
+- The final-head Surefire artifact was independently aggregated: 29 test-suite XML reports, **164 tests, 0 failures, 0 errors, 0 skipped**.
 - Downloaded Surefire reports from run 41225181346 and independently aggregated all 29 test-suite XML reports: **164 tests, 0 failures, 0 errors, 0 skipped**.
 - `JournalPostingConcurrencyIntegrationTest`: **8 tests, 0 failures, 0 errors, 0 skipped**.
 - `CashBankClassificationMigrationIntegrationTest`: **1 test, 0 failures, 0 errors, 0 skipped**. The test migrated a disposable MySQL database through V23, inserted representative existing tenant/account data, applied V24, and verified the intended classifications and unchanged existing account data.
@@ -46,14 +47,8 @@
 - No migration was run against a real/deployed database.
 - PR #17 remains Draft and unmerged. No changes were made to `main`.
 
-## Next steps
+## Review outcome
 
-1. Complete the final source/diff review and confirm the PR metadata remains unchanged.
-2. Keep PR #17 in Draft until the review is complete.
-3. Ask for explicit approval before merging into `feature/driver-worker-ledger`; do not merge to `main`.
-
-1. Confirm CI result and inspect any failing test logs.
-2. Fix issues on this branch only, then rerun CI.
-3. Review the final PR diff and migration ordering.
-4. Keep PR #17 in Draft until all checks and review are complete.
-5. Ask for explicit approval before merging into `feature/driver-worker-ledger`; do not merge to `main`.
+- Final source/diff review completed; the PR changes remain limited to explicit cash/bank classification, treasury locking/payment validation, MySQL migration/concurrency tests, realistic opening-balance fixtures, CI guards, and this documentation.
+- Final-head push and pull-request CI both succeeded. The MySQL integration and V24 migration guards completed successfully.
+- PR #17 remains Draft, open, and unmerged, targeting `feature/driver-worker-ledger`. Explicit approval is required before merging; `main` remains untouched.
