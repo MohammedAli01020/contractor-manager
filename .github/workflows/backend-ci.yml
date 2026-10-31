@@ -11,6 +11,7 @@ on:
       - fix/accounting-concurrency-hardening
       - feature/financial-foundation
       - feature/default-chart-of-accounts
+      - feature/equipment-expenses-accounting
     paths:
       - "backend/**"
       - ".github/workflows/backend-ci.yml"
