@@ -37,7 +37,7 @@ class DefaultChartOfAccountsServiceTest {
         ArgumentCaptor<List<ChartAccount>> captor = ArgumentCaptor.forClass((Class) List.class);
         verify(accounts).saveAll(captor.capture());
         List<ChartAccount> created = captor.getValue();
-        assertThat(created).hasSize(13);
+        assertThat(created).hasSize(14);
         assertThat(created).extracting(ChartAccount::getAccountCode)
                 .contains("1000", "1010", "2100", "4000", "5000", "5200");
         assertThat(created).allSatisfy(account -> {
@@ -59,7 +59,7 @@ class DefaultChartOfAccountsServiceTest {
         ArgumentCaptor<List<ChartAccount>> captor = ArgumentCaptor.forClass((Class) List.class);
         verify(accounts).saveAll(captor.capture());
         List<ChartAccount> created = captor.getValue();
-        assertThat(created).hasSize(12);
+        assertThat(created).hasSize(13);
         assertThat(created).extracting(ChartAccount::getAccountCode).doesNotContain("1000", "9999");
         assertThat(existingCash.getName()).isEqualTo("Custom cash name");
     }
@@ -71,6 +71,7 @@ class DefaultChartOfAccountsServiceTest {
                 new ChartAccount(7L, "1010", "Bank", AccountType.ASSET, null, true),
                 new ChartAccount(7L, "1100", "Receivables", AccountType.ASSET, null, true),
                 new ChartAccount(7L, "1200", "Fixed assets", AccountType.ASSET, null, true),
+                new ChartAccount(7L, "1300", "Recoverable worker advances", AccountType.ASSET, null, true),
                 new ChartAccount(7L, "2000", "Suppliers", AccountType.LIABILITY, null, true),
                 new ChartAccount(7L, "2100", "Driver payable", AccountType.LIABILITY, null, true),
                 new ChartAccount(7L, "2200", "Partner payable", AccountType.LIABILITY, null, true),
