@@ -140,3 +140,17 @@ Reviewed the accounting-related service implementations on `feature/driver-worke
 - The source business methods are transactional and the posting service uses a REQUIRED `TransactionTemplate`; verify transaction propagation and rollback behavior in MySQL integration tests while adding account locks. Keep account locking, balance read, source row changes and journal persistence in one transaction.
 - Audit scope: the accounting-related business service files in the current branch tree (expense, driver ledger, shift) and the central accounting domain/repositories. Re-run this audit whenever a new journal-producing module is introduced.
 
+
+
+## Cash/bank balance floor implementation (2026-10-31)
+
+Implemented on `feature/driver-worker-ledger`:
+
+- `ChartAccountRepository.findCashOrBankByIdAndTenantIdForUpdate` obtains a tenant-scoped pessimistic write lock for asset accounts coded 1000 or 1010.
+- `JournalPostingService` collects distinct journal account IDs and processes them in ascending order. It locks only cash/bank accounts, avoiding unnecessary serialization on shared payable or expense accounts.
+- The balance is derived from journal lines as debit minus credit; the journal's complete normalized net effect is applied before deciding whether the resulting balance is negative.
+- The aggregate balance query uses a MySQL locking read (`FOR UPDATE`) so it reads the latest committed balance after waiting for the account lock, rather than reusing an earlier repeatable-read snapshot from the caller's transaction.
+- A negative resulting cash/bank balance is rejected as a business conflict (HTTP 409). This applies to outflows and reversals because validation runs for every new journal, including reversal journals.
+- A MySQL integration test was added for two independent concurrent cash outflows of 80.00 against an opening balance of 100.00; expected outcome is exactly one successful posting and a final balance of 20.00.
+- The implementation and test are committed, but are **not yet verified by Maven/CI**. Run the focused integration test and full backend suite before treating this protection as production-ready.
+- Current scope is the baseline accounts 1000 and 1010 only. It does not yet introduce multiple cashboxes/bank accounts or overdraft configuration.
