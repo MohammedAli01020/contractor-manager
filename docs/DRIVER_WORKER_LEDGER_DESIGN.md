@@ -1,6 +1,6 @@
 # Driver and Worker Ledger – Design Notes
 
-Status: implementation planning on `feature/driver-worker-ledger`.
+Status: incremental implementation on `feature/driver-worker-ledger`; backend CI passed for the first ledger/payment milestone, and advance milestone tests are pending.
 Base: `feature/equipment-expenses-accounting`.
 This document does not change `main` and does not merge any pull request.
 
@@ -20,7 +20,11 @@ This document does not change `main` and does not merge any pull request.
   - Dr 5000 – Driver wage expense
   - Cr 2100 – Driver payables
   - Journal line carries `driver_id`; source identifies the shift.
-- Add a dedicated worker ledger subledger for earnings, advances, payments, deductions and adjustments. Generic expense records must not be used for driver advances or wage settlement.
+- A dedicated worker ledger table now records earnings, payments and advances, linked to immutable journals.
+- `GET /api/v1/drivers/{driverId}/ledger` returns the worker statement with running payable balance.
+- `POST /api/v1/drivers/{driverId}/ledger/payments` settles earned payable from cash/bank.
+- `POST /api/v1/drivers/{driverId}/ledger/advances` supports two explicit advance types: `AGAINST_EARNED` (reduces payable) and `RECOVERABLE` (records a worker-advance asset in account 1300).
+- Recoverable advances are automatically offset against subsequent earned wages, up to the amount earned, with a separate balanced journal and ledger entry. Generic expense records are not used for driver advances or wage settlement.
 - Every source event has a tenant-scoped idempotency key and is committed atomically with its journal.
 - Posted financial events are immutable. Corrections use explicit reversal/adjustment entries.
 - Tenant scope is always taken from the authenticated user; actor IDs are never accepted from request bodies.
@@ -41,7 +45,7 @@ Do not assume every advance is the same accounting event:
 1. Advance against already-earned payable: Dr 2100 worker payable / Cr cash or bank.
 2. Recoverable advance before earning (employee receivable): Dr a dedicated worker-advances asset account / Cr cash or bank; when wages are earned and offset, Dr 2100 / Cr worker-advances asset.
 
-The chart currently has no dedicated worker-advances asset account. Add a default account (proposed code 1300) only after confirming account naming and treatment. A worker payment against payable uses Dr 2100 / Cr 1000 cash or 1010 bank.
+The chart now includes worker-advances asset account 1300. Recoverable advances are Dr 1300 / Cr 1000 cash or 1010 bank; wage recovery is Dr 2100 / Cr 1300. A worker payment against payable uses Dr 2100 / Cr 1000 cash or 1010 bank.
 
 ## Test requirements
 
