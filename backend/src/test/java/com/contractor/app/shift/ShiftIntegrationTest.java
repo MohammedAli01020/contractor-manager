@@ -731,7 +731,6 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
         Long cashId = jdbcTemplate.queryForObject(
                 "SELECT id FROM chart_of_accounts WHERE tenant_id = ? AND account_code = '1000'",
                 Long.class, tenantId);
-        long earnedAmount = earned.path("driverWage").asLong();
 
         CountDownLatch ready = new CountDownLatch(2);
         CountDownLatch start = new CountDownLatch(1);
