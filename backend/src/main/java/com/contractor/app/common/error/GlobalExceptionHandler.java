@@ -98,9 +98,15 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(PessimisticLockingFailureException.class)
     public ResponseEntity<Object> handlePessimisticLock(PessimisticLockingFailureException ex,
                                                         WebRequest request) {
-        log.warn("Pessimistic lock could not be acquired: {}", ex.getClass().getSimpleName());
-        return build(HttpStatus.CONFLICT, "LOCK_TIMEOUT",
-                "هناك عملية أخرى تعدّل هذه البيانات الآن. انتظر قليلًا ثم حاول مجددًا.", request, null);
+        log.warn("Pessimistic lock could not be acquired; client may safely retry with the same idempotency key: {}",
+                ex.getClass().getSimpleName());
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("Retry-After", "1");
+        return new ResponseEntity<Object>(
+                new ApiError(HttpStatus.SERVICE_UNAVAILABLE.value(), "LOCK_TIMEOUT",
+                        "العملية المالية ما زالت قيد التنفيذ بواسطة طلب آخر. أعد المحاولة بعد قليل باستخدام نفس مفتاح العملية.",
+                        requestPath(request), requestId(request), null),
+                headers, HttpStatus.SERVICE_UNAVAILABLE);
     }
 
     @ExceptionHandler(Exception.class)
@@ -116,6 +122,22 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         log.error("Unexpected error", ex);
         return build(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR",
                 "حدث خطأ غير متوقع في الخادم. حاول لاحقًا.", request, null);
+    }
+
+    private static String requestPath(WebRequest request) {
+        if (request instanceof ServletWebRequest) {
+            return ((ServletWebRequest) request).getRequest().getRequestURI();
+        }
+        return null;
+    }
+
+    private static String requestId(WebRequest request) {
+        if (request instanceof ServletWebRequest) {
+            Object value = ((ServletWebRequest) request).getRequest()
+                    .getAttribute(RequestTrackingFilter.REQUEST_ID_ATTRIBUTE);
+            return value instanceof String ? (String) value : null;
+        }
+        return null;
     }
 
     private static String findActiveShiftTriggerError(Throwable ex) {
