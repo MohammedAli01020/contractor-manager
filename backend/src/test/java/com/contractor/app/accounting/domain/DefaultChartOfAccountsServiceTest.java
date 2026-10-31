@@ -9,6 +9,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.contractor.app.accounting.infra.ChartAccountRepository;
+import com.contractor.app.tenant.domain.Tenant;
+import com.contractor.app.tenant.infra.TenantRepository;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -21,17 +23,20 @@ import org.mockito.ArgumentCaptor;
 class DefaultChartOfAccountsServiceTest {
 
     private ChartAccountRepository accounts;
+    private TenantRepository tenants;
     private DefaultChartOfAccountsService service;
 
     @BeforeEach
     void setUp() {
         accounts = mock(ChartAccountRepository.class);
-        service = new DefaultChartOfAccountsService(accounts);
+        tenants = mock(TenantRepository.class);
+        service = new DefaultChartOfAccountsService(accounts, tenants);
     }
 
     @Test
     void createsTheCompleteDefaultChartForANewTenant() {
         when(accounts.findByTenantIdOrderByAccountCodeAsc(7L)).thenReturn(Collections.emptyList());
+        when(tenants.findByIdForUpdate(7L)).thenReturn(Optional.of(mock(Tenant.class)));
 
         service.initializeForTenant(7L);
 
@@ -57,6 +62,7 @@ class DefaultChartOfAccountsServiceTest {
         ChartAccount customAccount = new ChartAccount(7L, "9999", "Tenant custom account", AccountType.EXPENSE, null, false);
         when(accounts.findByTenantIdOrderByAccountCodeAsc(7L))
                 .thenReturn(Arrays.asList(existingCash, customAccount));
+        when(tenants.findByIdForUpdate(7L)).thenReturn(Optional.of(mock(Tenant.class)));
 
         service.initializeForTenant(7L);
 
@@ -92,6 +98,27 @@ class DefaultChartOfAccountsServiceTest {
         service.initializeForTenant(7L);
 
         verify(accounts, never()).saveAll(anyList());
+    }
+
+    @Test
+    void rechecksMissingAccountsAfterAcquiringTenantLock() {
+        when(accounts.findByTenantIdOrderByAccountCodeAsc(7L))
+                .thenReturn(Collections.emptyList(), defaultAccountsForTenant());
+        when(tenants.findByIdForUpdate(7L)).thenReturn(Optional.of(mock(Tenant.class)));
+
+        service.initializeForTenant(7L);
+
+        verify(accounts, org.mockito.Mockito.times(2)).findByTenantIdOrderByAccountCodeAsc(7L);
+        verify(accounts, never()).saveAll(anyList());
+    }
+
+    private List<ChartAccount> defaultAccountsForTenant() {
+        List<ChartAccount> result = new java.util.ArrayList<>();
+        for (SystemAccountCode code : SystemAccountCode.values()) {
+            result.add(new ChartAccount(7L, code.getCode(), code.getDefaultName(),
+                    code.getAccountType(), null, true, code.isCashBankAccount()));
+        }
+        return result;
     }
 
     @Test
