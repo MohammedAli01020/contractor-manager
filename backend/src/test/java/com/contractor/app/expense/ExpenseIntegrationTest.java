@@ -154,9 +154,9 @@ class ExpenseIntegrationTest extends AbstractIntegrationTest {
                 .isInstanceOf(DataAccessException.class)
                 .hasMessageContaining("POSTED_EXPENSE_PAYMENT_CANNOT_BE_DELETED");
 
-        assertThat(expenseRepository.findByIdAndTenantId(expenseId, tenantId))
-                .get().extracting(e -> e.getAmount())
-                .isEqualTo(new BigDecimal("1000.00"));
+        assertThat(expenseRepository.findByIdAndTenantId(expenseId, tenantId)
+                .orElseThrow(() -> new AssertionError("Missing posted expense")).getAmount())
+                .isEqualByComparingTo("1000.00");
         assertThat(paymentRepository.findByTenantIdAndPaymentKey(
                 tenantId, "expense-immutable-source-payment")).isPresent();
     }
