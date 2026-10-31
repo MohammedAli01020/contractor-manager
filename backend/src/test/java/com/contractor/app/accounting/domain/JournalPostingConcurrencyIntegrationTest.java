@@ -38,6 +38,7 @@ class JournalPostingConcurrencyIntegrationTest extends AbstractIntegrationTest {
     private Long actorUserId;
     private Long debitAccountId;
     private Long creditAccountId;
+    private Long cashAccountId;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -48,6 +49,8 @@ class JournalPostingConcurrencyIntegrationTest extends AbstractIntegrationTest {
                 tenantId, uniqueName("D"), "Debit account", AccountType.ASSET, null, false)).getId();
         creditAccountId = accounts.saveAndFlush(new ChartAccount(
                 tenantId, uniqueName("C"), "Credit account", AccountType.REVENUE, null, false)).getId();
+        cashAccountId = accounts.saveAndFlush(new ChartAccount(
+                tenantId, "1000", "Cash", AccountType.ASSET, null, true)).getId();
     }
 
     @Test
@@ -68,6 +71,49 @@ class JournalPostingConcurrencyIntegrationTest extends AbstractIntegrationTest {
             assertThat(entries.findByTenantIdAndPostingKey(tenantId, request.getPostingKey())).isPresent();
             assertThat(lineRepository.findByTenantIdAndJournalEntryIdOrderByLineNumberAsc(
                     tenantId, firstResult.getId())).hasSize(2);
+        } finally {
+            start.countDown();
+            pool.shutdownNow();
+        }
+    }
+
+    @Test
+    void concurrentCashOutflowsCannotSpendTheSameAvailableBalanceTwice() throws Exception {
+        JournalPostingRequest opening = new JournalPostingRequest(uniqueName("cash-opening"), "CASH_OPENING",
+                10L, LocalDate.of(2026, 10, 31), "Opening cash balance", null, Arrays.asList(
+                new JournalLineRequest(cashAccountId, "Opening cash", new BigDecimal("100.00"),
+                        BigDecimal.ZERO.setScale(2), null, null),
+                new JournalLineRequest(creditAccountId, "Opening equity", BigDecimal.ZERO.setScale(2),
+                        new BigDecimal("100.00"), null, null)));
+        postingService.post(tenantId, actorUserId, opening);
+
+        JournalPostingRequest firstRequest = cashOutRequest(uniqueName("cash-out-a"), new BigDecimal("80.00"));
+        JournalPostingRequest secondRequest = cashOutRequest(uniqueName("cash-out-b"), new BigDecimal("80.00"));
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            Future<JournalEntry> first = pool.submit(() -> postTogether(firstRequest, ready, start));
+            Future<JournalEntry> second = pool.submit(() -> postTogether(secondRequest, ready, start));
+            assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+
+            int successes = 0;
+            int insufficient = 0;
+            for (Future<JournalEntry> result : Arrays.asList(first, second)) {
+                try {
+                    result.get(30, TimeUnit.SECONDS);
+                    successes++;
+                } catch (java.util.concurrent.ExecutionException ex) {
+                    assertThat(ex.getCause()).isInstanceOf(ApiException.class);
+                    assertThat(((ApiException) ex.getCause()).getStatus().value()).isEqualTo(409);
+                    insufficient++;
+                }
+            }
+            assertThat(successes).isEqualTo(1);
+            assertThat(insufficient).isEqualTo(1);
+            assertThat(lineRepository.calculateDebitNormalBalance(tenantId, cashAccountId))
+                    .isEqualByComparingTo("20.00");
         } finally {
             start.countDown();
             pool.shutdownNow();
@@ -151,6 +197,13 @@ class JournalPostingConcurrencyIntegrationTest extends AbstractIntegrationTest {
             throw new IllegalStateException("Timed out waiting for concurrent posting");
         }
         return postingService.post(tenantId, actorUserId, request);
+    }
+
+    private JournalPostingRequest cashOutRequest(String key, BigDecimal amount) {
+        return new JournalPostingRequest(key, "CASH_OUTFLOW", 11L, LocalDate.of(2026, 10, 31),
+                "Cash outflow integration test", null, Arrays.asList(
+                new JournalLineRequest(debitAccountId, "Expense", amount, BigDecimal.ZERO, null, null),
+                new JournalLineRequest(cashAccountId, "Cash payment", BigDecimal.ZERO, amount, null, null)));
     }
 
     private JournalPostingRequest request(String key) {
