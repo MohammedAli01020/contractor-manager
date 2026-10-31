@@ -74,3 +74,13 @@
 - Added four tests covering page metadata, malformed response, duplicate IDs across pages, and empty next page.
 - Flutter 3.3.3 analyze + tests passed in PR validation run `41233389375`; log reports 8 passing tests.
 - Remaining: widget/integration-level retry and refresh tests plus real Android-device smoke test; branch synchronization with #14 is still required before merge.
+
+
+## Comparison refresh after documentation checkpoints
+The merge-plan and Flutter-test documentation commits were added directly to `feature/financial-foundation`. This moved that base branch forward, so the latest branch comparisons now show:
+- `feature/driver-worker-ledger`: 80 commits ahead, 2 behind `feature/financial-foundation`.
+- `feature/accounting-mobile-foundation`: 23 ahead, 5 behind `feature/accounting-api-foundation`.
+- `feature/trial-balance-report`: 9 ahead, 7 behind `feature/accounting-default-chart-completion`.
+- `feature/chart-of-accounts-api`: 6 ahead, 4 behind `feature/financial-foundation`.
+
+These counts include the latest branch tips at the time of this refresh. The two commits added to the financial foundation are documentation-only; nevertheless, branch synchronization and a fresh combined CI run remain required before merge.
