@@ -36,6 +36,7 @@ class DefaultChartOfAccountsServiceTest {
     @Test
     void createsTheCompleteDefaultChartForANewTenant() {
         when(accounts.findByTenantIdOrderByAccountCodeAsc(7L)).thenReturn(Collections.emptyList());
+        when(accounts.findByTenantIdOrderByAccountCodeAscForUpdate(7L)).thenReturn(Collections.emptyList());
         when(tenants.findByIdForUpdate(7L)).thenReturn(Optional.of(mock(Tenant.class)));
 
         service.initializeForTenant(7L);
@@ -61,6 +62,8 @@ class DefaultChartOfAccountsServiceTest {
         ChartAccount existingCash = new ChartAccount(7L, "1000", "Custom cash name", AccountType.ASSET, null, true);
         ChartAccount customAccount = new ChartAccount(7L, "9999", "Tenant custom account", AccountType.EXPENSE, null, false);
         when(accounts.findByTenantIdOrderByAccountCodeAsc(7L))
+                .thenReturn(Arrays.asList(existingCash, customAccount));
+        when(accounts.findByTenantIdOrderByAccountCodeAscForUpdate(7L))
                 .thenReturn(Arrays.asList(existingCash, customAccount));
         when(tenants.findByIdForUpdate(7L)).thenReturn(Optional.of(mock(Tenant.class)));
 
