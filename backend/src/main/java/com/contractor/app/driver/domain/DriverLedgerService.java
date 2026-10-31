@@ -122,7 +122,7 @@ public class DriverLedgerService {
         ChartAccount debitAccount="AGAINST_EARNED".equals(type)?account(tenantId,"2100"):account(tenantId,"1300");
         ChartAccount cash=accounts.findByIdAndTenantId(request.getPaymentAccountId(),tenantId)
                 .filter(ChartAccount::isActive).orElseThrow(()->ApiException.notFound("حساب الخزينة أو البنك غير موجود."));
-        if(cash.getAccountType()!=AccountType.ASSET || !Arrays.asList("1000","1010").contains(cash.getAccountCode()))
+        if(cash.getAccountType()!=AccountType.ASSET || !cash.isCashBankAccount())
             throw ApiException.badRequest("صرف السلفة يكون من حساب خزينة أو بنك مُعرّف لهذا الغرض فقط.");
         JournalEntry journal=journals.post(tenantId,user.getUserId(),new JournalPostingRequest(
                 "driver-advance:"+key,"AGAINST_EARNED".equals(type)?"DRIVER_ADVANCE_EARNED":"DRIVER_ADVANCE_RECOVERABLE",
