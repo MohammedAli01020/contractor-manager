@@ -35,22 +35,22 @@
 
 ## Verification status
 
-- Previous verified head: `9944b4a030f4d0b3864ec56f5209b7e15f393197`.
-- Previous successful Backend CI run: [41224106120](https://github.com/MohammedAli01020/contractor-manager/actions/runs/41224106120).
-- On that previous head, Maven reported **163 tests, 0 failures, 0 errors, 0 skipped**.
-- On that previous head, the required MySQL concurrency suite reported **8 tests, 0 failures, 0 errors, 0 skipped**.
-- Those results apply only to `9944b4a...`; they do not verify the migration-upgrade test or the newer commits below.
-- Added `CashBankClassificationMigrationIntegrationTest`: it migrates an isolated disposable MySQL database through V23, inserts representative existing tenant/account rows, applies V24, and verifies:
-  - Existing ASSET accounts 1000 and 1010 are classified as cash/bank.
-  - Other account codes remain unclassified.
-  - A 1000 LIABILITY account remains unclassified.
-  - The classification is tenant-scoped (including an existing 1010 account for another tenant).
-  - Existing account data and row count are unchanged.
-- Backend CI now has a separate guard requiring this V24 migration test to execute exactly once with zero skips, failures, or errors.
-- The new migration test and CI guard are committed on this branch; their CI result is **pending**. Do not treat the previous 163/8 results as validation of the new head.
-- PR #17 remains Draft and unmerged. No production database was used for migration testing.
+- Verified head: `bb2d358fb1bd89202551ed4465190895f253508f`.
+- Successful Backend CI push run: [41225181346](https://github.com/MohammedAli01020/contractor-manager/actions/runs/41225181346).
+- Successful Backend CI pull-request run: [41225186663](https://github.com/MohammedAli01020/contractor-manager/actions/runs/41225186663).
+- Downloaded Surefire reports from run 41225181346 and independently aggregated all 29 test-suite XML reports: **164 tests, 0 failures, 0 errors, 0 skipped**.
+- `JournalPostingConcurrencyIntegrationTest`: **8 tests, 0 failures, 0 errors, 0 skipped**.
+- `CashBankClassificationMigrationIntegrationTest`: **1 test, 0 failures, 0 errors, 0 skipped**. The test migrated a disposable MySQL database through V23, inserted representative existing tenant/account data, applied V24, and verified the intended classifications and unchanged existing account data.
+- Both CI runs passed the dedicated guards requiring the MySQL accounting integration tests and V24 existing-data migration test to execute; neither required test was skipped.
+- The earlier fixture-ID failure was fixed by retrieving tenant IDs from the same insert operation via `GeneratedKeyHolder`.
+- No migration was run against a real/deployed database.
+- PR #17 remains Draft and unmerged. No changes were made to `main`.
 
 ## Next steps
+
+1. Complete the final source/diff review and confirm the PR metadata remains unchanged.
+2. Keep PR #17 in Draft until the review is complete.
+3. Ask for explicit approval before merging into `feature/driver-worker-ledger`; do not merge to `main`.
 
 1. Confirm CI result and inspect any failing test logs.
 2. Fix issues on this branch only, then rerun CI.
