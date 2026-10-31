@@ -15,11 +15,15 @@ on:
       - feature/driver-worker-ledger
       - fix/treasury-concurrency-hardening
       - feature/accounting-default-chart-completion
+      - feature/trial-balance-report
     paths:
       - "backend/**"
       - ".github/workflows/backend-ci.yml"
       - "docs/ACCOUNTING-TREASURY-CONCURRENCY-2026-10-31.md"
-      - "docs/ACCOUNTING-DEFAULT-CHART-2026-10-31.md"\n      - "docs/ACCOUNTING-TRIAL-BALANCE-2026-10-31.md"\n      - "docs/PRODUCT_ROADMAP.md"\n      - "docs/phases/PHASE-02-FINANCIALS.md"
+      - "docs/ACCOUNTING-DEFAULT-CHART-2026-10-31.md"
+      - "docs/ACCOUNTING-TRIAL-BALANCE-2026-10-31.md"
+      - "docs/PRODUCT_ROADMAP.md"
+      - "docs/phases/PHASE-02-FINANCIALS.md"
   pull_request:
     branches:
       - feature/platform-owner-activation
@@ -28,6 +32,7 @@ on:
       - feature/request-tracking
       - feature/driver-worker-ledger
       - fix/treasury-concurrency-hardening
+      - feature/accounting-default-chart-completion
     paths:
       - "backend/**"
       - ".github/workflows/backend-ci.yml"
