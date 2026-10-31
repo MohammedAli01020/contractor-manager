@@ -92,6 +92,17 @@ class DefaultChartOfAccountsServiceTest {
     }
 
     @Test
+    void legacyConstructorOnlyClassifiesAssetAccountsAsCashOrBank() {
+        ChartAccount cash = new ChartAccount(
+                7L, "1000", "Cash", AccountType.ASSET, null, false);
+        ChartAccount liabilityWithSameCode = new ChartAccount(
+                8L, "1000", "Legacy liability code", AccountType.LIABILITY, null, false);
+
+        assertThat(cash.isCashBankAccount()).isTrue();
+        assertThat(liabilityWithSameCode.isCashBankAccount()).isFalse();
+    }
+
+    @Test
     void requiresAPersistedTenantId() {
         assertThatThrownBy(() -> service.initializeForTenant(null))
                 .isInstanceOf(IllegalArgumentException.class);
