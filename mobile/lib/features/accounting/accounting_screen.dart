@@ -2,9 +2,12 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/di/injector.dart';
+import 'journal_entry_form.dart';
 
 class AccountingScreen extends StatefulWidget {
-  const AccountingScreen({Key? key}) : super(key: key);
+  const AccountingScreen({Key? key, required this.canPostJournals}) : super(key: key);
+
+  final bool canPostJournals;
 
   @override
   State<AccountingScreen> createState() => _AccountingScreenState();
@@ -25,12 +28,31 @@ class _AccountingScreenState extends State<AccountingScreen>
   void initState() {
     super.initState();
     _tabs = TabController(length: 2, vsync: this);
+    _tabs.addListener(_handleTabChange);
     _loadAccounts();
     _loadJournals();
   }
 
+  void _handleTabChange() {
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _openJournalForm() async {
+    final posted = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(builder: (_) => const JournalEntryFormScreen()),
+    );
+    if (posted == true && mounted) {
+      await _loadJournals();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تم ترحيل القيد بنجاح')),
+      );
+    }
+  }
+
   @override
   void dispose() {
+    _tabs.removeListener(_handleTabChange);
     _tabs.dispose();
     super.dispose();
   }
@@ -176,6 +198,13 @@ class _AccountingScreenState extends State<AccountingScreen>
           ),
         ],
       ),
+      floatingActionButton: widget.canPostJournals && _tabs.index == 1
+          ? FloatingActionButton.extended(
+              onPressed: _openJournalForm,
+              icon: const Icon(Icons.add),
+              label: const Text('قيد جديد'),
+            )
+          : null,
     );
   }
 }
