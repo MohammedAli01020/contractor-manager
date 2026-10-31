@@ -1,6 +1,7 @@
 package com.contractor.app.driver.domain;
 
 import com.contractor.app.accounting.domain.ChartAccount;
+import com.contractor.app.accounting.domain.AccountType;
 import com.contractor.app.accounting.domain.JournalEntry;
 import com.contractor.app.accounting.domain.JournalLineRequest;
 import com.contractor.app.accounting.domain.JournalPostingRequest;
@@ -77,7 +78,7 @@ public class DriverLedgerService {
         ChartAccount payable=account(tenantId,"2100");
         ChartAccount cash=accounts.findByIdAndTenantId(request.getPaymentAccountId(),tenantId)
                 .filter(ChartAccount::isActive).orElseThrow(()->ApiException.notFound("حساب الخزينة أو البنك غير موجود."));
-        if(!Arrays.asList("1000","1010").contains(cash.getAccountCode()))
+        if(cash.getAccountType()!=AccountType.ASSET || !Arrays.asList("1000","1010").contains(cash.getAccountCode()))
             throw ApiException.badRequest("الصرف يكون من حساب الخزينة 1000 أو البنك 1010 فقط.");
         JournalEntry journal=journals.post(tenantId,user.getUserId(),new JournalPostingRequest(
                 "driver-payment:"+key,"DRIVER_PAYMENT",null,request.getPaymentDate(),description,null,Arrays.asList(
