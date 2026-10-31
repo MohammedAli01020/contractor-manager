@@ -34,7 +34,15 @@ BEGIN
            OR NOT (NEW.price <=> OLD.price)
            OR NOT (NEW.equipment_operating_cost <=> OLD.equipment_operating_cost)
            OR NOT (NEW.started_at <=> OLD.started_at)
-           OR NOT (NEW.finished_at <=> OLD.finished_at)
+           OR (
+               NOT (NEW.finished_at <=> OLD.finished_at)
+               AND NOT (
+                   OLD.status = 'IN_PROGRESS'
+                   AND NEW.status = 'COMPLETED'
+                   AND OLD.finished_at IS NULL
+                   AND NEW.finished_at IS NOT NULL
+               )
+           )
        ) THEN
         SIGNAL SQLSTATE '45000'
             SET MESSAGE_TEXT = 'POSTED_SHIFT_WAGE_IMMUTABLE';
