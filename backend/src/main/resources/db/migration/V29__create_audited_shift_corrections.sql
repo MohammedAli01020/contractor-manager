@@ -85,14 +85,14 @@ BEGIN
         ELSE
             SELECT COUNT(*)
               INTO matching_corrections
-              FROM journal_entries
-             WHERE id = NEW.driver_wage_journal_entry_id
-               AND tenant_id = NEW.tenant_id
-               AND status = 'POSTED'
+              FROM journal_entries j
+             WHERE j.id = NEW.driver_wage_journal_entry_id
+               AND j.tenant_id = NEW.tenant_id
+               AND j.status = 'POSTED'
                AND (
-                   (source_type = 'SHIFT_WAGE'
-                    AND source_id = NEW.id
-                    AND posting_key = CONCAT('shift-wage-', NEW.id))
+                   (j.source_type = 'SHIFT_WAGE'
+                    AND j.source_id = NEW.id
+                    AND j.posting_key = CONCAT('shift-wage-', NEW.id))
                    OR EXISTS (
                        SELECT 1
                          FROM shift_corrections c
