@@ -26,7 +26,7 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.jdbc.UncategorizedSQLException;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 class ShiftCorrectionIntegrationTest extends AbstractShiftIntegrationTest {
@@ -272,7 +272,8 @@ class ShiftCorrectionIntegrationTest extends AbstractShiftIntegrationTest {
                         + "'invalid transaction type test', ?, ?, ?, ?, UTC_TIMESTAMP(6))",
                 tenantId, driverId, today(), "invalid-ledger-type-" + UUID.randomUUID(),
                 started.path("id").asLong(), openingJournalId, actorUserId))
-                .isInstanceOf(DataIntegrityViolationException.class);
+                .isInstanceOf(UncategorizedSQLException.class)
+                .hasMessageContaining("chk_driver_ledger_type");
     }
 
     private long seedCashBalanceAndGetCashId() {
