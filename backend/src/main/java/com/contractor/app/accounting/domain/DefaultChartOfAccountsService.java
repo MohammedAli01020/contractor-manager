@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,9 +37,11 @@ public class DefaultChartOfAccountsService {
     );
 
     private final ChartAccountRepository accounts;
+    private final JdbcTemplate jdbc;
 
-    public DefaultChartOfAccountsService(ChartAccountRepository accounts) {
+    public DefaultChartOfAccountsService(ChartAccountRepository accounts, JdbcTemplate jdbc) {
         this.accounts = accounts;
+        this.jdbc = jdbc;
     }
 
     /**
@@ -49,6 +52,14 @@ public class DefaultChartOfAccountsService {
     public void initializeForTenant(Long tenantId) {
         if (tenantId == null || tenantId <= 0) {
             throw new IllegalArgumentException("A persisted tenant ID is required to initialize accounts.");
+        }
+
+        // Serialize baseline initialization for this tenant across application instances.
+        // The unique (tenant_id, account_code) index remains the final database invariant.
+        Integer lockedTenantId = jdbc.queryForObject(
+                "SELECT id FROM tenants WHERE id = ? FOR UPDATE", Integer.class, tenantId);
+        if (lockedTenantId == null) {
+            throw new IllegalArgumentException("A persisted tenant is required to initialize accounts.");
         }
 
         Set<String> existingCodes = accounts.findByTenantIdOrderByAccountCodeAsc(tenantId).stream()
