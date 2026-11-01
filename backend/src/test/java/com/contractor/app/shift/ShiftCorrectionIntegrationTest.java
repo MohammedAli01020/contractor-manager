@@ -271,6 +271,40 @@ class ShiftCorrectionIntegrationTest extends AbstractShiftIntegrationTest {
     }
 
     @Test
+    void correctionIsBlockedWhenDriverTookAnAdvanceAgainstEarnedWagesAfterTheShift() throws Exception {
+        long cashId = seedCashBalanceAndGetCashId();
+        JsonNode completed = finishShift(token,
+                startShift(token, shiftBody(siteId, driverId, equipmentId, today().minusDays(1), "MORNING")));
+
+        String advanceKey = "correction-earned-advance-" + UUID.randomUUID();
+        Map<String, Object> advance = new HashMap<>();
+        advance.put("clientRequestKey", advanceKey);
+        advance.put("advanceDate", today().toString());
+        advance.put("amount", new BigDecimal("10.00"));
+        advance.put("paymentAccountId", cashId);
+        advance.put("description", "سلفة من مستحقات السائق بعد الوردية");
+        advance.put("advanceType", "AGAINST_EARNED");
+        postJson("/api/v1/drivers/" + driverId + "/ledger/advances", advance, token)
+                .andExpect(status().isCreated());
+
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM driver_ledger_entries WHERE tenant_id=? AND driver_id=? "
+                        + "AND transaction_type='ADVANCE' AND client_request_key=?",
+                Integer.class, tenantId, driverId, advanceKey)).isEqualTo(1);
+        assertThat(jdbc.queryForObject(
+                "SELECT balance_effect FROM driver_ledger_entries WHERE tenant_id=? AND driver_id=? "
+                        + "AND transaction_type='ADVANCE' AND client_request_key=?",
+                BigDecimal.class, tenantId, driverId, advanceKey)).isEqualByComparingTo("-10.00");
+
+        Map<String, Object> request = correctionBody(completed, "earned-advance-correction-" + UUID.randomUUID());
+        postJson("/api/v1/shifts/" + completed.path("id").asLong() + "/corrections", request, token)
+                .andExpect(status().isConflict());
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM shift_corrections WHERE tenant_id=? AND shift_id=?",
+                Integer.class, tenantId, completed.path("id").asLong())).isZero();
+    }
+
+    @Test
     void correctionIsBlockedWhenDriverWasPaidAfterTheShift() throws Exception {
         long cashId = seedCashBalanceAndGetCashId();
         JsonNode completed = finishShift(token,

@@ -171,8 +171,10 @@ public class ShiftCorrectionService {
         if (ledger.existsByTenantIdAndDriverIdAndTransactionTypeAndCreatedAtAfter(
                     tenantId, shift.getDriverId(), "PAYMENT", shift.getFinishedAt())
                 || ledger.existsByTenantIdAndDriverIdAndTransactionTypeAndCreatedAtAfter(
+                    tenantId, shift.getDriverId(), "ADVANCE", shift.getFinishedAt())
+                || ledger.existsByTenantIdAndDriverIdAndTransactionTypeAndCreatedAtAfter(
                     tenantId, shift.getDriverId(), "ADVANCE_RECOVERY", shift.getFinishedAt())) {
-            throw ApiException.conflict("لا يمكن التصحيح لوجود صرف مستحقات أو استرداد سلفة لاحق للسائق. يلزم إجراء تسوية مستقل.");
+            throw ApiException.conflict("لا يمكن التصحيح لوجود صرف مستحقات أو سلفة من المستحقات أو استرداد سلفة لاحق للسائق. يلزم إجراء تسوية مستقل.");
         }
 
         if (shift.getDriverWageJournalEntryId() == null) {
