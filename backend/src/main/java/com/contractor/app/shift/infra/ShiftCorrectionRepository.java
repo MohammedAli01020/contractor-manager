@@ -9,5 +9,8 @@ public interface ShiftCorrectionRepository extends JpaRepository<ShiftCorrection
 
     Optional<ShiftCorrection> findByTenantIdAndIdempotencyKey(Long tenantId, String idempotencyKey);
 
+    Optional<ShiftCorrection> findByTenantIdAndShiftIdAndReplacementWageJournalEntryId(
+            Long tenantId, Long shiftId, Long replacementWageJournalEntryId);
+
     List<ShiftCorrection> findByTenantIdAndShiftIdOrderByCreatedAtDescIdDesc(Long tenantId, Long shiftId);
 }
