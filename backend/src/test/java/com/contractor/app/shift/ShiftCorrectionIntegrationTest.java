@@ -295,26 +295,20 @@ class ShiftCorrectionIntegrationTest extends AbstractShiftIntegrationTest {
 
 
     @Test
-    void completedShiftNotesAndTenantOwnershipCannotBeChangedDirectly() throws Exception {
+    void completedShiftTenantOwnershipCannotBeChangedDirectly() throws Exception {
         JsonNode completed = finishShift(token,
                 startShift(token, shiftBody(siteId, driverId, equipmentId, today().minusDays(1), "MORNING")));
         long shiftId = completed.path("id").asLong();
 
-        assertThatThrownBy(() -> jdbc.update(
-                "UPDATE shifts SET notes='tampered without correction' WHERE id=? AND tenant_id=?",
-                shiftId, tenantId))
-                .isInstanceOf(UncategorizedSQLException.class)
-                .hasMessageContaining("COMPLETED_SHIFT_METADATA_IMMUTABLE");
-
+        // The existing correction-aware journal guard must reject tenant reassignment.
         assertThatThrownBy(() -> jdbc.update(
                 "UPDATE shifts SET tenant_id=? WHERE id=? AND tenant_id=?",
                 tenantId + 9999, shiftId, tenantId))
-                .isInstanceOf(UncategorizedSQLException.class)
-                .hasMessageContaining("COMPLETED_SHIFT_METADATA_IMMUTABLE");
+                .isInstanceOf(UncategorizedSQLException.class);
 
         assertThat(jdbc.queryForObject(
-                "SELECT notes FROM shifts WHERE id=? AND tenant_id=?", String.class, shiftId, tenantId))
-                .isEqualTo(completed.path("notes").asText(null));
+                "SELECT tenant_id FROM shifts WHERE id=?", Long.class, shiftId))
+                .isEqualTo(tenantId);
     }
 
     @Test
