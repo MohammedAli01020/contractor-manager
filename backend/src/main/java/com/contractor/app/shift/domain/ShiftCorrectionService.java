@@ -200,8 +200,20 @@ public class ShiftCorrectionService {
 
         List<JournalLine> originalLines = journalLines.findByTenantIdAndJournalEntryIdOrderByLineNumberAsc(
                 tenantId, original.getId());
-        if (originalLines.size() < 2) {
-            throw ApiException.conflict("قيد الأجر الأصلي لا يحتوي على سطور مكتملة.");
+        ChartAccount wageExpense = defaultAccounts.requireSystemAccount(
+                tenantId, SystemAccountCode.DRIVER_WAGE_EXPENSE);
+        ChartAccount driverPayable = defaultAccounts.requireSystemAccount(
+                tenantId, SystemAccountCode.DRIVER_PAYABLE);
+        if (originalLines.size() != 2
+                || !Objects.equals(originalLines.get(0).getAccountId(), wageExpense.getId())
+                || originalLines.get(0).getDebit().compareTo(shift.getDriverWage()) != 0
+                || originalLines.get(0).getCredit().signum() != 0
+                || !Objects.equals(originalLines.get(0).getDriverId(), shift.getDriverId())
+                || !Objects.equals(originalLines.get(1).getAccountId(), driverPayable.getId())
+                || originalLines.get(1).getDebit().signum() != 0
+                || originalLines.get(1).getCredit().compareTo(shift.getDriverWage()) != 0
+                || !Objects.equals(originalLines.get(1).getDriverId(), shift.getDriverId())) {
+            throw ApiException.conflict("سطور قيد أجر الوردية الأصلي لا تطابق الترحيل القياسي؛ يلزم فحص محاسبي.");
         }
 
         ShiftCorrection correction = new ShiftCorrection(tenantId, shiftId, key, reason, actorId,
@@ -223,8 +235,6 @@ public class ShiftCorrectionService {
                 original.getId(), reversalLines));
         correction.setWageReversalJournalEntryId(reversal.getId());
 
-        ChartAccount wageExpense = defaultAccounts.requireSystemAccount(tenantId, SystemAccountCode.DRIVER_WAGE_EXPENSE);
-        ChartAccount driverPayable = defaultAccounts.requireSystemAccount(tenantId, SystemAccountCode.DRIVER_PAYABLE);
         JournalEntry replacement = posting.post(tenantId, actorId, new JournalPostingRequest(
                 "shift-wage-correction-" + correction.getId(), "SHIFT_WAGE_CORRECTION",
                 correction.getId(), request.getShiftDate(),
