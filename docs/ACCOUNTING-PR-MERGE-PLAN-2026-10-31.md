@@ -158,3 +158,66 @@ This section supersedes the earlier planned sequence where branch state or PR st
 - Current branch comparison: `feature/driver-worker-ledger` is **122 commits ahead / 0 behind** `feature/financial-foundation`; GitHub reports PR #20 mergeable.
 - PR #20 remains **Draft and unmerged** pending final review and explicit owner approval. This checkpoint does not authorize merging it or changing `main`.
 - No production Flyway migration was run.
+
+
+---
+
+## Current integration checkpoint — 2026-11-01 (supersedes earlier branch/PR status above)
+
+### Safety and merge strategy
+- No pull request in this stack has been merged during this checkpoint; `main` is unchanged.
+- Repository settings allow merge commits, squash merges and rebase merges. **Use merge commits for this stacked PR sequence** so parent ancestry remains intact when each child PR is retargeted. Do not squash or rebase these stacked PRs.
+- Do not run production Flyway migrations as part of PR integration.
+
+### Verified stacked PR graph
+
+1. **PR #20 — driver/worker ledger + Accounting API**
+   - Base: `feature/financial-foundation`; head: `feature/driver-worker-ledger`.
+   - Current head: `36da2bba79fb9bf0d43f465de25fbd2583916702`.
+   - Contains a two-parent integration commit carrying the original PR #14 Accounting API head `1fcb10d` and the original PR #20 head `8c4aa4b`; the chart tenant-isolation test was then made independent of hard-coded catalog size.
+   - Push CI `41288575292` and PR CI `41288578886` passed on the exact current head.
+
+2. **PR #23 — default chart/system-account reconciliation**
+   - Base: `feature/driver-worker-ledger`; head: `feature/default-chart-reconciliation`.
+   - Current head: `6be6cdb348f1f4392d2c0932b13f70b5e61b16c0`.
+   - Two-parent synchronization preserves PR #23's previous head and PR #20's verified head.
+   - Push CI `41289003396` and PR CI `41289006816` passed on the exact current head; the suite reported 192 tests, 0 failures, 0 errors and 0 skipped.
+
+3. **PR #24 — trial-balance API/report**
+   - Base: `feature/default-chart-reconciliation`; head: `feature/trial-balance-reconciliation`.
+   - Current head: `165cb529ff502cebea89cad9f94338e9a723c02a`.
+   - Two-parent synchronization preserves the previous trial-balance head and PR #23's verified head; the Accounting API files and chart-isolation test are carried forward.
+   - Push CI `41289229336` passed on this exact head. The earlier PR CI `41283660746` passed on the previous head, so a fresh PR-event run on the exact current head remains a final gate if the PR/base is changed.
+
+4. **PR #15 — Flutter accounting UI/manual journal**
+   - Base: `feature/trial-balance-reconciliation`; head: `feature/accounting-mobile-foundation`.
+   - Current head: `bca2bdf5c15c36d0c9a4780c256f8a168529bfe5`.
+   - The PR diff is limited to 9 mobile/workflow/documentation files; backend stack changes are inherited from PR #24 rather than repeated in this PR.
+   - Push CI `41290032205` and PR CI `41290035837` passed on the exact current head. Both full Flutter tests and `flutter analyze --no-fatal-infos` passed.
+   - The workflow conditionally runs the AuthInterceptor-specific test only when that test file exists; PR #13 supplies it in the next stack layer.
+
+5. **PR #13 — Flutter authentication/session tests**
+   - Base: `feature/accounting-mobile-foundation`; head: `test/flutter-auth-bloc`.
+   - Current head: `ce3cac83d3897f8e2fd51256a3fe92948fde8a66`.
+   - The PR diff is limited to 5 auth implementation/test files; the shared Flutter workflow is inherited from PR #15.
+   - PR CI `41290062161` passed on the exact current head, including focused AuthInterceptor tests, the full Flutter test suite and analyzer.
+
+6. **PR #14 — original Accounting API source PR**
+   - Remains open/Draft and unmerged. Its code is included in the PR #20 stack through the preserved two-parent merge commit.
+   - Do not integrate the same API a second time. After PR #20 is approved and merged into the feature foundation, close #14 as superseded with a clear cross-reference.
+
+### Recommended eventual integration order (not an authorization to merge)
+
+1. Review and, only with explicit owner approval, merge PR #20 into `feature/financial-foundation` using a merge commit.
+2. Retarget PR #23 to `feature/financial-foundation`; verify its diff contains only the default-chart work, rerun exact-head PR CI, then seek approval before merging.
+3. Retarget PR #24 to `feature/financial-foundation`; verify only trial-balance work remains, rerun exact-head PR CI, then seek approval before merging.
+4. Retarget PR #15 to `feature/financial-foundation`; verify only the 9 mobile/workflow/docs files remain, rerun Flutter CI, and complete real Android/API smoke testing before seeking approval.
+5. Retarget PR #13 to `feature/financial-foundation` after #15 is integrated; verify only the 5 auth files remain, rerun Flutter CI, then seek approval before merging.
+6. Close PR #14 as superseded after its implementation is safely integrated through #20.
+
+### Remaining release/quality gates
+- Real Android-device smoke test over Wireless ADB against a reachable backend: account list, journal pagination/detail, ADMIN-only manual journal posting and trial-balance report.
+- Validate Flyway/MySQL deployment and backup/rollback procedures separately; CI migration tests do not authorize production migration.
+- Review the final cumulative diff and exact PR-event CI before each merge.
+- Keep PR #15 and #13 Draft until their final real-device/API and review gates are satisfied.
+- No merge to `main` without separate explicit owner approval.
