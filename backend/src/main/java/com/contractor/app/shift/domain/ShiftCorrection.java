@@ -157,6 +157,7 @@ public class ShiftCorrection extends BaseTenantEntity {
     public Long getOldEarningLedgerEntryId() { return oldEarningLedgerEntryId; }
     public Long getReversedEarningLedgerEntryId() { return reversedEarningLedgerEntryId; }
     public Long getReplacementEarningLedgerEntryId() { return replacementEarningLedgerEntryId; }
+    public void setOldEarningLedgerEntryId(Long value) { this.oldEarningLedgerEntryId = value; }
     public void setWageReversalJournalEntryId(Long value) { this.wageReversalJournalEntryId = value; }
     public void setReplacementWageJournalEntryId(Long value) { this.replacementWageJournalEntryId = value; }
     public void setReversedEarningLedgerEntryId(Long value) { this.reversedEarningLedgerEntryId = value; }
