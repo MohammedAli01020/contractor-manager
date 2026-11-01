@@ -29,7 +29,7 @@ Allow an authorized administrator to correct a completed shift without rewriting
 
 ## Correction scope
 
-A correction may propose changes to shift date/type, site, driver, equipment, shift price, driver wage, and notes. All proposed values are validated with the same tenant ownership, active-resource, date, and money rules used by ordinary shift operations.
+The first release may propose changes to shift date/type, site, equipment, shift price, driver wage, and notes. It must keep the original driver unchanged. Driver changes are deferred until both driver rows can be locked in stable order and both ledgers can be reconciled safely. All proposed values are validated with the same tenant ownership, active-resource, date, and money rules used by ordinary shift operations.
 
 The corrected driver wage must remain strictly positive. The zero-wage completion protection must not be weakened.
 
@@ -44,8 +44,8 @@ For every accepted correction:
 5. Post an exact reversal of the original wage journal. Never update or delete the original journal.
 6. Post a correction wage journal for the corrected driver and corrected wage, using a unique correction posting key and a correction source reference.
 7. Add immutable driver-ledger entries that reverse the old earning and recognize the corrected earning. Keep both entries linked to the correction and their respective journal entries.
-8. If the original shift had advance recovery, reverse that journal and ledger effect. Recalculate recovery for the corrected driver and corrected wage only after proving no later recovery/payment has consumed the affected recoverable balance.
-9. Update the shift's current operational snapshot and point its wage-journal link to the new correction wage journal. The database trigger must permit this only when a matching correction record is in APPLYING state in the same tenant/shift; it must continue to reject ordinary updates.
+8. The first release rejects correction when the original shift has an ADVANCE_RECOVERY entry. Reversing and recalculating recoveries is deferred until the recovery allocation rules have a separately tested design. The first release also rejects any later PAYMENT or ADVANCE_RECOVERY for the driver after shift completion.
+9. Update the shift's current operational snapshot and point its wage-journal link to the new correction wage journal. The correction row stores the old journal, exact reversal journal, replacement journal, and old/reversed/replacement earning-ledger entry IDs before the shift update. The database trigger must permit this only when a matching correction record is in APPLYING state in the same tenant/shift; it must continue to reject ordinary updates.
 10. Mark the correction APPLIED and record actor, reason, timestamp, old snapshot, new snapshot, original journal IDs, reversal journal IDs, replacement journal IDs, and ledger entry IDs in the same database transaction.
 
 The journal posting service's exact-reversal validation must be reused. Original posted entries remain immutable and visible in the journal list and trial balance history.
@@ -116,7 +116,7 @@ The endpoint must be idempotent under retries. A repeated identical request must
 - Existing advance recovery is reversed and recomputed correctly when safe.
 - A later PAYMENT blocks correction.
 - A later ADVANCE_RECOVERY blocks correction.
-- Driver change locks both drivers in stable order and updates both ledgers safely.
+- Driver identity remains unchanged in the first release; a driver-change correction is rejected.
 - A failure at any posting/update step rolls back correction, journals, ledger, shift, and audit atomically.
 - Concurrent payment versus correction and concurrent duplicate correction are safe across multiple application instances.
 
@@ -138,11 +138,21 @@ The endpoint must be idempotent under retries. A repeated identical request must
 ## Explicit non-goals for the first release
 
 - No deletion or mutation of original journal or driver-ledger entries.
-- No correction after a later payment or later advance recovery for an affected driver.
+- No correction when the shift itself has an advance recovery, or after a later payment/recovery for the driver.
 - No automatic allocation or retroactive reallocation of historic driver payments.
 - No bypass of completed-shift database immutability.
 - No zero-wage completed shifts.
 - No change to `main` or automatic PR merges.
+
+## First-release scope tightening
+
+To avoid making assumptions about aggregate driver payments or retroactively reallocating recoverable advances, the initial implementation is intentionally narrower than the eventual workflow:
+- Driver identity cannot change.
+- A shift with its own ADVANCE_RECOVERY cannot be corrected.
+- A later PAYMENT or ADVANCE_RECOVERY for the driver blocks correction.
+- Only the wage earning is reversed and replaced; original journals and ledger rows remain immutable.
+- Shift notes are captured in the before/after correction snapshot.
+- The correction record retains original, reversal, and replacement wage journal/earning-ledger references.
 
 ## Rollout sequence
 
