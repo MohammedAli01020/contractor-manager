@@ -1,7 +1,7 @@
 # Phase 02 — Financial foundation and monthly close
 
 **Roadmap:** [PRODUCT_ROADMAP.md](../PRODUCT_ROADMAP.md#phase-2--financial-foundation-driver-ledger-equipment-expenses-and-monthly-closing)  
-**Status:** In progress — V17–V28 accounting and operational immutability foundations are present on the financial/driver branch. Default chart, system-account resolution and operational journal-link reconciliation are implemented on `feature/financial-foundation`; required backend CI passed on PR #23. Trial balance API/report implementation is on `feature/trial-balance-reconciliation` and awaits fresh CI on the synchronized base; monthly close remains separate outstanding work.
+**Status:** In progress — V17–V28 accounting and operational immutability foundations are present on the financial/driver branch. Default chart, system-account resolution and operational journal-link reconciliation are implemented on `feature/financial-foundation`; required backend CI passed on PR #23. Trial balance API/report implementation is on `feature/trial-balance-reconciliation`; it is synchronized with the actual financial foundation and fresh GitHub CI passed, including the required Trial Balance MySQL integration-test guard. Monthly close remains separate outstanding work.
 
 ## Goal
 Build auditable financial ledgers and monthly closing without double-counting shift wages, expenses, payments, or inventory consumption.
