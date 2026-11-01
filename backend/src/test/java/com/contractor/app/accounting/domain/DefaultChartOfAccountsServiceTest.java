@@ -3,6 +3,8 @@ package com.contractor.app.accounting.domain;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -15,16 +17,20 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 class DefaultChartOfAccountsServiceTest {
 
     private ChartAccountRepository accounts;
+    private JdbcTemplate jdbc;
     private DefaultChartOfAccountsService service;
 
     @BeforeEach
     void setUp() {
         accounts = mock(ChartAccountRepository.class);
-        service = new DefaultChartOfAccountsService(accounts);
+        jdbc = mock(JdbcTemplate.class);
+        when(jdbc.queryForObject(anyString(), eq(Long.class), eq(7L))).thenReturn(7L);
+        service = new DefaultChartOfAccountsService(accounts, jdbc);
     }
 
     @Test
