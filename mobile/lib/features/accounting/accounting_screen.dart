@@ -212,6 +212,7 @@ class _AccountingScreenState extends State<AccountingScreen>
             loading: _loadingAccounts,
             error: _accountsError,
             onRefresh: _loadAccounts,
+            canInitializeDefaults: widget.canPostJournals,
             onInitializeDefaults: _initializeDefaultAccounts,
             initializingDefaults: _initializingAccounts,
           ),
@@ -244,6 +245,7 @@ class _AccountsTab extends StatelessWidget {
     required this.loading,
     required this.error,
     required this.onRefresh,
+    required this.canInitializeDefaults,
     required this.onInitializeDefaults,
     required this.initializingDefaults,
   });
@@ -252,6 +254,7 @@ class _AccountsTab extends StatelessWidget {
   final bool loading;
   final String? error;
   final Future<void> Function() onRefresh;
+  final bool canInitializeDefaults;
   final Future<void> Function() onInitializeDefaults;
   final bool initializingDefaults;
 
@@ -278,20 +281,22 @@ class _AccountsTab extends StatelessWidget {
                 textAlign: TextAlign.center,
               ),
             ),
-            const SizedBox(height: 16),
-            Center(
-              child: ElevatedButton.icon(
-                onPressed: initializingDefaults ? null : onInitializeDefaults,
-                icon: initializingDefaults
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.account_tree_outlined),
-                label: Text(initializingDefaults ? 'جارٍ التجهيز...' : 'تجهيز دليل الحسابات'),
+            if (canInitializeDefaults) ...[
+              const SizedBox(height: 16),
+              Center(
+                child: ElevatedButton.icon(
+                  onPressed: initializingDefaults ? null : onInitializeDefaults,
+                  icon: initializingDefaults
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.account_tree_outlined),
+                  label: Text(initializingDefaults ? 'جارٍ التجهيز...' : 'تجهيز دليل الحسابات'),
+                ),
               ),
-            ),
+            ],
           ],
         ),
       );
