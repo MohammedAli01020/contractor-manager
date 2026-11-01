@@ -8,5 +8,6 @@ public enum AuditAction {
     REINSTATED,
     DEACTIVATED,
     PASSWORD_RESET,
-    PASSWORD_CHANGED
+    PASSWORD_CHANGED,
+    CORRECTED
 }
