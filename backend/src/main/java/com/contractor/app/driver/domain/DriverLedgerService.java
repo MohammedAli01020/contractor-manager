@@ -78,6 +78,9 @@ public class DriverLedgerService {
         idempotency.reserve(tenantId, "DRIVER_LEDGER", key,
                 RequestFingerprint.of("DRIVER_PAYMENT", driverId, request.getPaymentDate(), amount, description,
                         request.getPaymentAccountId()));
+        // Keep lazy chart initialization before the driver row lock. Shift completion follows
+        // the same tenant-then-driver lock order when defaults are missing.
+        defaultAccounts.initializeForTenant(tenantId);
         drivers.findByIdAndTenantIdForUpdate(driverId,tenantId)
                 .orElseThrow(()->ApiException.notFound("العامل غير موجود."));
         Optional<DriverLedgerEntry> prior=ledger.findByTenantIdAndClientRequestKey(tenantId,key);
@@ -92,7 +95,6 @@ public class DriverLedgerService {
         }
         BigDecimal balance=ledger.sumBalance(tenantId,driverId);
         if(balance.compareTo(amount)<0) throw ApiException.badRequest("المبلغ أكبر من مستحقات العامل المتاحة للصرف.");
-        defaultAccounts.initializeForTenant(tenantId);
         ChartAccount payable=defaultAccounts.requireSystemAccount(tenantId,SystemAccountCode.DRIVER_PAYABLE);
         ChartAccount cash=accounts.findByIdAndTenantId(request.getPaymentAccountId(),tenantId)
                 .filter(ChartAccount::isActive).orElseThrow(()->ApiException.notFound("حساب الخزينة أو البنك غير موجود."));
@@ -124,6 +126,8 @@ public class DriverLedgerService {
         idempotency.reserve(tenantId, "DRIVER_LEDGER", key,
                 RequestFingerprint.of("DRIVER_ADVANCE", driverId, request.getAdvanceDate(), amount, description, type,
                         request.getPaymentAccountId()));
+        // Match the tenant-then-driver lock order used by shift wage posting.
+        defaultAccounts.initializeForTenant(tenantId);
         drivers.findByIdAndTenantIdForUpdate(driverId,tenantId)
                 .orElseThrow(()->ApiException.notFound("العامل غير موجود."));
         String ledgerType="AGAINST_EARNED".equals(type)?"ADVANCE":"RECOVERABLE_ADVANCE";
@@ -140,7 +144,6 @@ public class DriverLedgerService {
         BigDecimal balance=ledger.sumBalance(tenantId,driverId);
         if("AGAINST_EARNED".equals(type) && balance.compareTo(amount)<0)
             throw ApiException.badRequest("السلفة أكبر من مستحقات العامل المتاحة.");
-        defaultAccounts.initializeForTenant(tenantId);
         ChartAccount debitAccount="AGAINST_EARNED".equals(type)
                 ?defaultAccounts.requireSystemAccount(tenantId,SystemAccountCode.DRIVER_PAYABLE)
                 :defaultAccounts.requireSystemAccount(tenantId,SystemAccountCode.RECOVERABLE_WORKER_ADVANCES);
