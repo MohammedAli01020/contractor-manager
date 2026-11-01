@@ -100,7 +100,9 @@ BEGIN
                           AND c.shift_id = NEW.id
                           AND c.status = 'APPLIED'
                           AND c.replacement_wage_journal_entry_id = NEW.driver_wage_journal_entry_id
-                          AND c.id = j.source_id
+                          AND j.source_type = 'SHIFT_WAGE_CORRECTION'
+                          AND j.source_id = c.id
+                          AND j.posting_key = CONCAT('shift-wage-correction-', c.id)
                    )
                );
 
@@ -171,6 +173,51 @@ BEGIN
            AND c.old_earning_ledger_entry_id IS NOT NULL
            AND c.reversed_earning_ledger_entry_id IS NOT NULL
            AND c.replacement_earning_ledger_entry_id IS NOT NULL
+           AND EXISTS (
+               SELECT 1
+                 FROM journal_entries r
+                WHERE r.id = c.wage_reversal_journal_entry_id
+                  AND r.tenant_id = c.tenant_id
+                  AND r.source_type = 'SHIFT_WAGE_CORRECTION_REVERSAL'
+                  AND r.source_id = c.id
+                  AND r.posting_key = CONCAT('shift-wage-correction-reversal-', c.id)
+                  AND r.reversal_of_entry_id = c.old_wage_journal_entry_id
+                  AND r.status = 'POSTED'
+           )
+           AND EXISTS (
+               SELECT 1
+                 FROM driver_ledger_entries old_earning
+                WHERE old_earning.id = c.old_earning_ledger_entry_id
+                  AND old_earning.tenant_id = c.tenant_id
+                  AND old_earning.driver_id = c.old_driver_id
+                  AND old_earning.shift_id = c.shift_id
+                  AND old_earning.transaction_type = 'EARNING'
+                  AND old_earning.journal_entry_id = c.old_wage_journal_entry_id
+           )
+           AND EXISTS (
+               SELECT 1
+                 FROM driver_ledger_entries reversed_earning
+                WHERE reversed_earning.id = c.reversed_earning_ledger_entry_id
+                  AND reversed_earning.tenant_id = c.tenant_id
+                  AND reversed_earning.driver_id = c.old_driver_id
+                  AND reversed_earning.shift_id = c.shift_id
+                  AND reversed_earning.transaction_type = 'CORRECTION_REVERSAL'
+                  AND reversed_earning.journal_entry_id = c.wage_reversal_journal_entry_id
+                  AND reversed_earning.amount = c.old_driver_wage
+                  AND reversed_earning.balance_effect = -c.old_driver_wage
+           )
+           AND EXISTS (
+               SELECT 1
+                 FROM driver_ledger_entries replacement_earning
+                WHERE replacement_earning.id = c.replacement_earning_ledger_entry_id
+                  AND replacement_earning.tenant_id = c.tenant_id
+                  AND replacement_earning.driver_id = c.new_driver_id
+                  AND replacement_earning.shift_id = c.shift_id
+                  AND replacement_earning.transaction_type = 'EARNING'
+                  AND replacement_earning.journal_entry_id = c.replacement_wage_journal_entry_id
+                  AND replacement_earning.amount = c.new_driver_wage
+                  AND replacement_earning.balance_effect = c.new_driver_wage
+           )
            -- A correction changes only the captured business/financial fields.
            -- Lifecycle timestamps, cancellation state and original journal linkage stay immutable.
            AND NEW.status = 'COMPLETED'
