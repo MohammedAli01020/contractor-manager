@@ -5,6 +5,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.contractor.app.accounting.domain.ChartAccount;
+import com.contractor.app.accounting.domain.DefaultChartOfAccountsService;
+import com.contractor.app.accounting.domain.JournalLineRequest;
+import com.contractor.app.accounting.domain.JournalPostingRequest;
+import com.contractor.app.accounting.domain.JournalPostingService;
+import com.contractor.app.accounting.infra.ChartAccountRepository;
 import com.contractor.app.driver.infra.DriverLedgerEntryRepository;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -20,9 +26,13 @@ class ShiftCorrectionIntegrationTest extends AbstractShiftIntegrationTest {
 
     @Autowired private JdbcTemplate jdbc;
     @Autowired private DriverLedgerEntryRepository ledger;
+    @Autowired private ChartAccountRepository accounts;
+    @Autowired private DefaultChartOfAccountsService defaultAccounts;
+    @Autowired private JournalPostingService journals;
 
     private String token;
     private long tenantId;
+    private long actorUserId;
     private long siteId;
     private long driverId;
     private long equipmentId;
@@ -33,6 +43,7 @@ class ShiftCorrectionIntegrationTest extends AbstractShiftIntegrationTest {
         JsonNode registered = registerTenant("Correction Co", uniqueName("correction"));
         token = registered.path("accessToken").asText();
         tenantId = registered.path("user").path("tenantId").asLong();
+        actorUserId = registered.path("user").path("id").asLong();
         siteId = createSite(token, "Correction Site");
         driverId = createDriver(token, "Correction Driver", "150", "175", "200");
         typeId = createType(token, "Correction Excavator");
@@ -134,6 +145,74 @@ class ShiftCorrectionIntegrationTest extends AbstractShiftIntegrationTest {
         assertThat(jdbc.queryForObject(
                 "SELECT COUNT(*) FROM shift_corrections WHERE tenant_id=? AND shift_id=?",
                 Integer.class, tenantId, shiftId)).isZero();
+    }
+
+
+    @Test
+    void correctionIsBlockedWhenTheShiftHasAnAdvanceRecovery() throws Exception {
+        long cashId = seedCashBalanceAndGetCashId();
+        Map<String, Object> advance = new HashMap<>();
+        advance.put("clientRequestKey", "correction-recovery-" + UUID.randomUUID());
+        advance.put("advanceDate", today().minusDays(2).toString());
+        advance.put("amount", new BigDecimal("100.00"));
+        advance.put("paymentAccountId", cashId);
+        advance.put("description", "سلفة قابلة للاسترداد قبل الوردية");
+        advance.put("advanceType", "RECOVERABLE");
+        postJson("/api/v1/drivers/" + driverId + "/ledger/advances", advance, token)
+                .andExpect(status().isCreated());
+
+        JsonNode completed = finishShift(token,
+                startShift(token, shiftBody(siteId, driverId, equipmentId, today().minusDays(1), "MORNING")));
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM driver_ledger_entries WHERE tenant_id=? AND shift_id=? "
+                        + "AND transaction_type='ADVANCE_RECOVERY'",
+                Integer.class, tenantId, completed.path("id").asLong())).isEqualTo(1);
+
+        Map<String, Object> request = correctionBody(completed, "recovery-correction-" + UUID.randomUUID());
+        postJson("/api/v1/shifts/" + completed.path("id").asLong() + "/corrections", request, token)
+                .andExpect(status().isConflict());
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM shift_corrections WHERE tenant_id=? AND shift_id=?",
+                Integer.class, tenantId, completed.path("id").asLong())).isZero();
+    }
+
+    @Test
+    void correctionIsBlockedWhenDriverWasPaidAfterTheShift() throws Exception {
+        long cashId = seedCashBalanceAndGetCashId();
+        JsonNode completed = finishShift(token,
+                startShift(token, shiftBody(siteId, driverId, equipmentId, today().minusDays(1), "MORNING")));
+
+        Map<String, Object> payment = new HashMap<>();
+        payment.put("clientRequestKey", "correction-payment-" + UUID.randomUUID());
+        payment.put("paymentDate", today().toString());
+        payment.put("amount", new BigDecimal("10.00"));
+        payment.put("paymentAccountId", cashId);
+        payment.put("description", "صرف لاحق لاختبار منع التصحيح");
+        postJson("/api/v1/drivers/" + driverId + "/ledger/payments", payment, token)
+                .andExpect(status().isCreated());
+
+        Map<String, Object> request = correctionBody(completed, "payment-correction-" + UUID.randomUUID());
+        postJson("/api/v1/shifts/" + completed.path("id").asLong() + "/corrections", request, token)
+                .andExpect(status().isConflict());
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM shift_corrections WHERE tenant_id=? AND shift_id=?",
+                Integer.class, tenantId, completed.path("id").asLong())).isZero();
+    }
+
+    private long seedCashBalanceAndGetCashId() {
+        defaultAccounts.initializeForTenant(tenantId);
+        ChartAccount cash = accounts.findByTenantIdAndAccountCodeIgnoreCase(tenantId, "1000")
+                .orElseThrow(() -> new IllegalStateException("Default cash account missing"));
+        ChartAccount capital = accounts.findByTenantIdAndAccountCodeIgnoreCase(tenantId, "3000")
+                .orElseThrow(() -> new IllegalStateException("Default capital account missing"));
+        journals.post(tenantId, actorUserId, new JournalPostingRequest(
+                "correction-test-opening-" + UUID.randomUUID(), "TEST_CASH_OPENING", null,
+                today(), "Correction test opening cash", null, java.util.Arrays.asList(
+                    new JournalLineRequest(cash.getId(), "Opening cash", new BigDecimal("1000.00"),
+                            BigDecimal.ZERO, null, null),
+                    new JournalLineRequest(capital.getId(), "Opening capital", BigDecimal.ZERO,
+                            new BigDecimal("1000.00"), null, null))));
+        return cash.getId();
     }
 
     private String login(String username) throws Exception {
