@@ -15,13 +15,11 @@ import com.contractor.app.common.error.ApiException;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Arrays;
-import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,8 +30,8 @@ import org.springframework.boot.test.mock.mockito.SpyBean;
 class JournalPostingConcurrencyIntegrationTest extends AbstractIntegrationTest {
     @Autowired private JournalPostingService postingService;
     @Autowired private JdbcTemplate jdbcTemplate;
-    @Autowired private ChartAccountRepository accounts;
-    @SpyBean private JournalEntryRepository entries;
+    @SpyBean private ChartAccountRepository accounts;
+    @Autowired private JournalEntryRepository entries;
     @Autowired private JournalLineRepository lineRepository;
     @SpyBean private JournalLineRepository lines;
 
@@ -94,19 +92,15 @@ class JournalPostingConcurrencyIntegrationTest extends AbstractIntegrationTest {
         String key = uniqueName("same-key-cash-outflow");
         JournalPostingRequest request = liquidityOutRequest(key, cashAccountId, new BigDecimal("80.00"));
 
-        CountDownLatch initialLookups = new CountDownLatch(2);
-        CountDownLatch releaseLookups = new CountDownLatch(1);
-        AtomicInteger lookupCount = new AtomicInteger();
+        CountDownLatch lockAttempts = new CountDownLatch(2);
+        CountDownLatch releaseLocks = new CountDownLatch(1);
         doAnswer(invocation -> {
-            Optional<JournalEntry> found = (Optional<JournalEntry>) invocation.callRealMethod();
-            if (lookupCount.incrementAndGet() <= 2) {
-                initialLookups.countDown();
-                if (!releaseLookups.await(10, TimeUnit.SECONDS)) {
-                    throw new IllegalStateException("Timed out coordinating duplicate posting lookups");
-                }
+            lockAttempts.countDown();
+            if (!releaseLocks.await(10, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("Timed out coordinating duplicate liquidity locks");
             }
-            return found;
-        }).when(entries).findByTenantIdAndPostingKey(tenantId, key);
+            return invocation.callRealMethod();
+        }).when(accounts).findCashOrBankByIdAndTenantIdForUpdate(cashAccountId, tenantId);
 
         CountDownLatch ready = new CountDownLatch(2);
         CountDownLatch start = new CountDownLatch(1);
@@ -116,8 +110,8 @@ class JournalPostingConcurrencyIntegrationTest extends AbstractIntegrationTest {
             Future<JournalEntry> second = pool.submit(() -> postTogether(request, ready, start));
             assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
             start.countDown();
-            assertThat(initialLookups.await(10, TimeUnit.SECONDS)).isTrue();
-            releaseLookups.countDown();
+            assertThat(lockAttempts.await(10, TimeUnit.SECONDS)).isTrue();
+            releaseLocks.countDown();
 
             JournalEntry firstResult = first.get(30, TimeUnit.SECONDS);
             JournalEntry secondResult = second.get(30, TimeUnit.SECONDS);
@@ -125,7 +119,7 @@ class JournalPostingConcurrencyIntegrationTest extends AbstractIntegrationTest {
             assertThat(lineRepository.calculateDebitNormalBalance(tenantId, cashAccountId))
                     .isEqualByComparingTo("20.00");
         } finally {
-            releaseLookups.countDown();
+            releaseLocks.countDown();
             start.countDown();
             pool.shutdownNow();
         }
