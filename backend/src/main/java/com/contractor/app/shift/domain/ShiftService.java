@@ -52,6 +52,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Isolation;
 
 @Service
 public class ShiftService {
@@ -245,7 +246,7 @@ public class ShiftService {
     }
 
     /** إنهاء الوردية وترحيل أجرها مرة واحدة داخل نفس المعاملة. */
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public ShiftResponse finish(Long tenantId, Long id, Long version, Long actorUserId) {
         Shift shift = findForUpdate(tenantId, id);
         if (shift.getStatus() != ShiftStatus.IN_PROGRESS) {
@@ -281,7 +282,7 @@ public class ShiftService {
                     shift.getShiftDate(), shift.getDriverWage(), shift.getDriverWage(),
                     "أجر الوردية رقم " + shift.getId(), "shift-wage-" + shift.getId(),
                     shift.getId(), wageJournal.getId(), actorUserId));
-            BigDecimal recoverable = driverLedger.sumRecoverableAdvanceBalanceForUpdate(tenantId, shift.getDriverId());
+            BigDecimal recoverable = driverLedger.sumRecoverableAdvanceBalance(tenantId, shift.getDriverId());
             if (recoverable.signum() > 0) {
                 BigDecimal recovery = recoverable.min(shift.getDriverWage());
                 ChartAccount advancesAsset = defaultAccounts.requireSystemAccount(
