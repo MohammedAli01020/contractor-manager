@@ -103,6 +103,32 @@ class ShiftCorrectionIntegrationTest extends AbstractShiftIntegrationTest {
         assertThat(jdbc.queryForObject(
                 "SELECT COUNT(*) FROM shift_corrections WHERE tenant_id=? AND shift_id=?",
                 Integer.class, tenantId, shiftId)).isEqualTo(1);
+
+        // A second, distinct correction must reverse the first replacement, not the original wage.
+        Map<String, Object> secondRequest = correctionBody(corrected, "corrected-again-" + UUID.randomUUID());
+        secondRequest.put("driverWage", new BigDecimal("210.00"));
+        secondRequest.put("price", new BigDecimal("1400.00"));
+        JsonNode correctedAgain = body(postJson("/api/v1/shifts/" + shiftId + "/corrections",
+                secondRequest, token).andExpect(status().isOk())
+                .andExpect(jsonPath("$.driverWage").value(210.00)));
+        Long secondReplacementJournalId = jdbc.queryForObject(
+                "SELECT driver_wage_journal_entry_id FROM shifts WHERE id = ?", Long.class, shiftId);
+        assertThat(secondReplacementJournalId).isNotEqualTo(replacementJournalId);
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM journal_entries WHERE tenant_id=? AND reversal_of_entry_id=?",
+                Integer.class, tenantId, replacementJournalId)).isEqualTo(1);
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM journal_entries WHERE tenant_id=? AND source_type='SHIFT_WAGE_CORRECTION'",
+                Integer.class, tenantId)).isEqualTo(2);
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM shift_corrections WHERE tenant_id=? AND shift_id=? AND status='APPLIED'",
+                Integer.class, tenantId, shiftId)).isEqualTo(2);
+        assertThat(ledger.sumBalance(tenantId, driverId)).isEqualByComparingTo("210.00");
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM driver_ledger_entries WHERE tenant_id=? AND shift_id=? "
+                        + "AND transaction_type='CORRECTION_REVERSAL'",
+                Integer.class, tenantId, shiftId)).isEqualTo(2);
+        assertThat(correctedAgain.path("driverId").asLong()).isEqualTo(driverId);
     }
 
     @Test
