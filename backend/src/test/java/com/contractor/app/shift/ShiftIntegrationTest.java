@@ -655,6 +655,27 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
     }
 
     @Test
+    void databaseRejectsReinstatingCancelledZeroWageShiftAsCompleted() throws Exception {
+        Map<String, Object> startBody = shiftBody(siteId, driverId, equipmentId, day(1), "MORNING");
+        startBody.put("driverWage", BigDecimal.ZERO);
+        JsonNode running = startShift(token, startBody);
+        long id = running.path("id").asLong();
+
+        // Reproduce a legacy cancelled record that still carries a finish timestamp.
+        jdbcTemplate.update(
+                "UPDATE shifts SET status = 'CANCELLED', finished_at = UTC_TIMESTAMP(6) WHERE id = ?", id);
+
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "UPDATE shifts SET status = 'COMPLETED' WHERE id = ?", id))
+                .hasMessageContaining("COMPLETED_SHIFT_WAGE_REQUIRED");
+
+        Shift unchanged = shiftRepository.findById(id).orElseThrow(AssertionError::new);
+        assertThat(unchanged.getStatus()).isEqualTo(com.contractor.app.shift.domain.ShiftStatus.CANCELLED);
+        assertThat(unchanged.getDriverWage()).isEqualByComparingTo("0.00");
+        assertThat(unchanged.getDriverWageJournalEntryId()).isNull();
+    }
+
+    @Test
     void databaseKeepsDriverLedgerAppendOnlyAndAllowsOnlyOneShiftEarning() throws Exception {
         JsonNode done = finishShift(token,
                 startShift(token, shiftBody(siteId, driverId, equipmentId, day(1), "MORNING")));
