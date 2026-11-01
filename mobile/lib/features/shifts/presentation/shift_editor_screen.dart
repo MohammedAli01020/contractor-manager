@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/di/injector.dart';
@@ -114,7 +115,8 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
 
   String _message(Object error) {
     if (error is AppFailure) return error.message;
-    return 'تعذر تنفيذ الطلب. تحقق من الاتصال وحاول مرة أخرى.';
+    if (error is DioError) return AppFailure.fromDio(error).message;
+    return 'تعذر تنفيذ الطلب. حدث خطأ غير متوقع.';
   }
 
   bool _available(Map<String, dynamic> item, String kind) {
