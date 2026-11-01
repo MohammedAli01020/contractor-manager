@@ -18,6 +18,11 @@ import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -149,6 +154,54 @@ class ShiftCorrectionIntegrationTest extends AbstractShiftIntegrationTest {
                 Integer.class, tenantId, shiftId)).isZero();
     }
 
+
+
+    @Test
+    void concurrentRetriesWithSameCorrectionKeyApplyExactlyOnce() throws Exception {
+        JsonNode completed = finishShift(token,
+                startShift(token, shiftBody(siteId, driverId, equipmentId, today().minusDays(1), "MORNING")));
+        long shiftId = completed.path("id").asLong();
+        Map<String, Object> request = correctionBody(completed, "concurrent-correction-" + UUID.randomUUID());
+
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<Integer> first = executor.submit(() -> concurrentCorrection(shiftId, request, ready, start));
+            Future<Integer> second = executor.submit(() -> concurrentCorrection(shiftId, request, ready, start));
+            assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+            assertThat(java.util.Arrays.asList(
+                    first.get(30, TimeUnit.SECONDS), second.get(30, TimeUnit.SECONDS)))
+                    .containsExactlyInAnyOrder(200, 200);
+        } finally {
+            start.countDown();
+            executor.shutdownNow();
+            executor.awaitTermination(10, TimeUnit.SECONDS);
+        }
+
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM shift_corrections WHERE tenant_id=? AND shift_id=? AND status='APPLIED'",
+                Integer.class, tenantId, shiftId)).isEqualTo(1);
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM driver_ledger_entries WHERE tenant_id=? AND shift_id=? "
+                        + "AND transaction_type='CORRECTION_REVERSAL'",
+                Integer.class, tenantId, shiftId)).isEqualTo(1);
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM journal_entries WHERE tenant_id=? "
+                        + "AND source_type='SHIFT_WAGE_CORRECTION'",
+                Integer.class, tenantId)).isEqualTo(1);
+    }
+
+    private int concurrentCorrection(long shiftId, Map<String, Object> request,
+                                     CountDownLatch ready, CountDownLatch start) throws Exception {
+        ready.countDown();
+        if (!start.await(10, TimeUnit.SECONDS)) {
+            throw new IllegalStateException("Timed out waiting to start concurrent corrections.");
+        }
+        return postJson("/api/v1/shifts/" + shiftId + "/corrections", request, token)
+                .andReturn().getResponse().getStatus();
+    }
 
     @Test
     void correctionIsBlockedWhenTheShiftHasAnAdvanceRecovery() throws Exception {
