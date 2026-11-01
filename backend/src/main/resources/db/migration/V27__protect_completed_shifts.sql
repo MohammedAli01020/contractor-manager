@@ -6,12 +6,32 @@ CREATE TRIGGER trg_shifts_protect_completed
 BEFORE UPDATE ON shifts
 FOR EACH ROW
 BEGIN
+    DECLARE matching_wage_journals INT DEFAULT 0;
+
     IF OLD.status = 'IN_PROGRESS'
        AND NEW.status = 'COMPLETED'
-       AND NEW.driver_wage > 0
-       AND NEW.driver_wage_journal_entry_id IS NULL THEN
-        SIGNAL SQLSTATE '45000'
-            SET MESSAGE_TEXT = 'COMPLETED_SHIFT_WAGE_JOURNAL_REQUIRED';
+       AND NEW.driver_wage > 0 THEN
+        IF NEW.driver_wage_journal_entry_id IS NULL THEN
+            SIGNAL SQLSTATE '45000'
+                SET MESSAGE_TEXT = 'COMPLETED_SHIFT_WAGE_JOURNAL_REQUIRED';
+        END IF;
+
+        -- A non-null journal link is insufficient: it must be this shift's
+        -- exact, posted wage-recognition journal for the same tenant/source.
+        SELECT COUNT(*)
+          INTO matching_wage_journals
+          FROM journal_entries
+         WHERE id = NEW.driver_wage_journal_entry_id
+           AND tenant_id = NEW.tenant_id
+           AND source_type = 'SHIFT_WAGE'
+           AND source_id = NEW.id
+           AND posting_key = CONCAT('shift-wage-', NEW.id)
+           AND status = 'POSTED';
+
+        IF matching_wage_journals <> 1 THEN
+            SIGNAL SQLSTATE '45000'
+                SET MESSAGE_TEXT = 'COMPLETED_SHIFT_WAGE_JOURNAL_MISMATCH';
+        END IF;
     END IF;
 
     IF OLD.status = 'COMPLETED'
