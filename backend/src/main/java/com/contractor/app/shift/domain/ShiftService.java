@@ -183,14 +183,17 @@ public class ShiftService {
             throw ApiException.conflict("لا يمكن تعديل وردية ملغاة. أعد تفعيلها أولًا.");
         }
         shift.requireVersion(request.getVersion());
-        if (shift.getDriverWageJournalEntryId() != null
+        if ((shift.getStatus() == ShiftStatus.COMPLETED || shift.getDriverWageJournalEntryId() != null)
                 && (!java.util.Objects.equals(request.getShiftDate(), shift.getShiftDate())
                     || !java.util.Objects.equals(request.getShiftType(), shift.getShiftType())
+                    || !java.util.Objects.equals(request.getSiteId(), shift.getSiteId())
                     || !java.util.Objects.equals(request.getDriverId(), shift.getDriverId())
                     || !java.util.Objects.equals(request.getEquipmentId(), shift.getEquipmentId())
                     || (request.getDriverWage() != null
-                        && request.getDriverWage().compareTo(shift.getDriverWage()) != 0))) {
-            throw ApiException.conflict("لا يمكن تعديل بيانات تؤثر على أجر وردية تم ترحيلها. استخدم قيد تصحيح بدلًا من ذلك.");
+                        && request.getDriverWage().compareTo(shift.getDriverWage()) != 0)
+                    || (request.getPrice() != null
+                        && request.getPrice().compareTo(shift.getPrice()) != 0))) {
+            throw ApiException.conflict("لا يمكن تعديل بيانات المصدر لوردية مكتملة أو تم ترحيل أجرها. استخدم إجراء تصحيح معتمدًا بدلًا من ذلك.");
         }
         if (request.getShiftDate() == null) {
             throw ApiException.badRequest("تاريخ الوردية مطلوب عند التعديل.");
@@ -317,6 +320,9 @@ public class ShiftService {
             throw ApiException.conflict("الوردية ملغاة بالفعل.");
         }
         shift.requireVersion(request.getVersion());
+        if (shift.getStatus() == ShiftStatus.COMPLETED) {
+            throw ApiException.conflict("لا يمكن إلغاء وردية مكتملة. استخدم إجراء تصحيح معتمدًا للحفاظ على سجل التشغيل والمحاسبة.");
+        }
         if (shift.getDriverWageJournalEntryId() != null) {
             throw ApiException.conflict("لا يمكن إلغاء وردية تم ترحيل أجرها. يجب إنشاء قيد عكسي أو تسوية أولًا.");
         }
