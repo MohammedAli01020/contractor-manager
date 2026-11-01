@@ -81,7 +81,7 @@ class PlatformOwnerActivationIntegrationTest extends AbstractIntegrationTest {
         JsonNode createdBody = objectMapper.readTree(created.getResponse().getContentAsString());
         long createdTenantId = createdBody.path("tenantId").asLong();
         assertTrue(createdTenantId > 0);
-        assertEquals(14, chartAccounts.findByTenantIdOrderByAccountCodeAsc(createdTenantId).size(),
+        assertEquals(15, chartAccounts.findByTenantIdOrderByAccountCodeAsc(createdTenantId).size(),
                 "Platform-created companies should receive the default chart of accounts");
         String activationUrl = createdBody.path("activationUrl").asText();
         String activationToken = activationUrl.substring(activationUrl.indexOf("token=") + 6);

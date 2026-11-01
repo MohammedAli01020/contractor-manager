@@ -1,6 +1,8 @@
 package com.contractor.app.driver.domain;
 
 import com.contractor.app.accounting.domain.ChartAccount;
+import com.contractor.app.accounting.domain.DefaultChartOfAccountsService;
+import com.contractor.app.accounting.domain.SystemAccountCode;
 import com.contractor.app.accounting.domain.AccountType;
 import com.contractor.app.accounting.domain.JournalEntry;
 import com.contractor.app.accounting.domain.JournalLineRequest;
@@ -28,6 +30,7 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Isolation;
 
 @Service
 public class DriverLedgerService {
@@ -39,12 +42,15 @@ public class DriverLedgerService {
     private final JournalLineRepository journalLines;
     private final FinancialIdempotencyService idempotency;
     private final JournalPostingService journals;
+    private final DefaultChartOfAccountsService defaultAccounts;
 
     public DriverLedgerService(DriverRepository drivers, DriverLedgerEntryRepository ledger,
             ChartAccountRepository accounts, JournalEntryRepository journalsRepo, JournalLineRepository journalLines,
-            FinancialIdempotencyService idempotency, JournalPostingService journals) {
+            FinancialIdempotencyService idempotency, JournalPostingService journals,
+            DefaultChartOfAccountsService defaultAccounts) {
         this.drivers=drivers; this.ledger=ledger; this.accounts=accounts; this.journalsRepo=journalsRepo;
         this.journalLines=journalLines; this.idempotency=idempotency; this.journals=journals;
+        this.defaultAccounts=defaultAccounts;
     }
 
     @Transactional(readOnly=true)
@@ -60,7 +66,9 @@ public class DriverLedgerService {
         return result;
     }
 
-    @Transactional
+    // READ_COMMITTED is intentional: lazy chart reads may precede the driver lock;
+    // balance aggregates after that lock must see commits made by the previous lock holder.
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public DriverLedgerEntryResponse pay(Long driverId, DriverLedgerPaymentRequest request) {
         AuthenticatedUser user=CurrentUser.get();
         Long tenantId=user.getTenantId();
@@ -73,6 +81,9 @@ public class DriverLedgerService {
         idempotency.reserve(tenantId, "DRIVER_LEDGER", key,
                 RequestFingerprint.of("DRIVER_PAYMENT", driverId, request.getPaymentDate(), amount, description,
                         request.getPaymentAccountId()));
+        // Keep lazy chart initialization before the driver row lock. Shift completion follows
+        // the same tenant-then-driver lock order when defaults are missing.
+        defaultAccounts.initializeForTenant(tenantId);
         drivers.findByIdAndTenantIdForUpdate(driverId,tenantId)
                 .orElseThrow(()->ApiException.notFound("العامل غير موجود."));
         Optional<DriverLedgerEntry> prior=ledger.findByTenantIdAndClientRequestKey(tenantId,key);
@@ -87,7 +98,7 @@ public class DriverLedgerService {
         }
         BigDecimal balance=ledger.sumBalance(tenantId,driverId);
         if(balance.compareTo(amount)<0) throw ApiException.badRequest("المبلغ أكبر من مستحقات العامل المتاحة للصرف.");
-        ChartAccount payable=account(tenantId,"2100");
+        ChartAccount payable=defaultAccounts.requireSystemAccount(tenantId,SystemAccountCode.DRIVER_PAYABLE);
         ChartAccount cash=accounts.findByIdAndTenantId(request.getPaymentAccountId(),tenantId)
                 .filter(ChartAccount::isActive).orElseThrow(()->ApiException.notFound("حساب الخزينة أو البنك غير موجود."));
         if(cash.getAccountType()!=AccountType.ASSET || !cash.isCashBankAccount())
@@ -102,7 +113,8 @@ public class DriverLedgerService {
     }
 
 
-    @Transactional
+    // Keep advance availability checks on a fresh committed snapshot after locking the driver.
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public DriverLedgerEntryResponse advance(Long driverId, DriverLedgerAdvanceRequest request) {
         AuthenticatedUser user=CurrentUser.get();
         Long tenantId=user.getTenantId();
@@ -118,6 +130,8 @@ public class DriverLedgerService {
         idempotency.reserve(tenantId, "DRIVER_LEDGER", key,
                 RequestFingerprint.of("DRIVER_ADVANCE", driverId, request.getAdvanceDate(), amount, description, type,
                         request.getPaymentAccountId()));
+        // Match the tenant-then-driver lock order used by shift wage posting.
+        defaultAccounts.initializeForTenant(tenantId);
         drivers.findByIdAndTenantIdForUpdate(driverId,tenantId)
                 .orElseThrow(()->ApiException.notFound("العامل غير موجود."));
         String ledgerType="AGAINST_EARNED".equals(type)?"ADVANCE":"RECOVERABLE_ADVANCE";
@@ -134,7 +148,9 @@ public class DriverLedgerService {
         BigDecimal balance=ledger.sumBalance(tenantId,driverId);
         if("AGAINST_EARNED".equals(type) && balance.compareTo(amount)<0)
             throw ApiException.badRequest("السلفة أكبر من مستحقات العامل المتاحة.");
-        ChartAccount debitAccount="AGAINST_EARNED".equals(type)?account(tenantId,"2100"):account(tenantId,"1300");
+        ChartAccount debitAccount="AGAINST_EARNED".equals(type)
+                ?defaultAccounts.requireSystemAccount(tenantId,SystemAccountCode.DRIVER_PAYABLE)
+                :defaultAccounts.requireSystemAccount(tenantId,SystemAccountCode.RECOVERABLE_WORKER_ADVANCES);
         ChartAccount cash=accounts.findByIdAndTenantId(request.getPaymentAccountId(),tenantId)
                 .filter(ChartAccount::isActive).orElseThrow(()->ApiException.notFound("حساب الخزينة أو البنك غير موجود."));
         if(cash.getAccountType()!=AccountType.ASSET || !cash.isCashBankAccount())
@@ -155,15 +171,6 @@ public class DriverLedgerService {
                 .anyMatch(line -> line.getAccountId().equals(accountId) && line.getCredit().signum() > 0);
     }
 
-    private ChartAccount account(Long tenantId,String code) {
-        ChartAccount account=accounts.findByTenantIdAndAccountCodeIgnoreCase(tenantId,code)
-                .filter(ChartAccount::isActive)
-                .orElseThrow(()->ApiException.conflict("الحساب الافتراضي "+code+" غير مهيأ."));
-        AccountType expected="2100".equals(code)?AccountType.LIABILITY:AccountType.ASSET;
-        if(account.getAccountType()!=expected)
-            throw ApiException.conflict("نوع الحساب الافتراضي "+code+" غير صحيح.");
-        return account;
-    }
     private BigDecimal money(BigDecimal v) {
         if(v==null||v.signum()<=0) throw ApiException.badRequest("المبلغ يجب أن يكون أكبر من صفر.");
         try{return v.setScale(2,RoundingMode.UNNECESSARY);}
