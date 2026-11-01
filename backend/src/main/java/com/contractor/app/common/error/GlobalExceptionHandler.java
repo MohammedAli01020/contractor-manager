@@ -80,6 +80,12 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                     request, null);
         }
 
+        if (causeMessage.contains("uk_shift_corrections_tenant_key")) {
+            return build(HttpStatus.CONFLICT, "SHIFT_CORRECTION_KEY_CONFLICT",
+                    "مفتاح التصحيح مستخدم بالفعل. أعد تحميل الوردية وتحقق من نتيجة طلب التصحيح.",
+                    request, null);
+        }
+
         // Map only known business uniqueness constraints. Unknown integrity failures may
         // indicate a schema, foreign-key, CHECK, or data problem and must not masquerade
         // as an ordinary business conflict.
