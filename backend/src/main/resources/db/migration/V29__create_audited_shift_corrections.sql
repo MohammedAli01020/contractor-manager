@@ -115,7 +115,15 @@ BEGIN
            AND c.old_price = OLD.price
            AND c.new_price = NEW.price
            AND c.old_equipment_operating_cost = OLD.equipment_operating_cost
-           AND c.new_equipment_operating_cost = NEW.equipment_operating_cost;
+           AND c.new_equipment_operating_cost = NEW.equipment_operating_cost
+           -- A correction changes only the captured business/financial fields.
+           -- Lifecycle timestamps, cancellation state and original journal linkage stay immutable.
+           AND NEW.status = 'COMPLETED'
+           AND NEW.driver_wage > 0
+           AND (NEW.started_at <=> OLD.started_at)
+           AND (NEW.finished_at <=> OLD.finished_at)
+           AND (NEW.driver_wage_journal_entry_id <=> OLD.driver_wage_journal_entry_id)
+           AND (NEW.cancel_reason <=> OLD.cancel_reason);
 
         IF matching_corrections <> 1 THEN
             SIGNAL SQLSTATE '45000'
