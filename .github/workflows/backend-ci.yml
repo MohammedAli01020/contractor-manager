@@ -33,6 +33,8 @@ on:
       - feature/platform-owner-totp-2fa
       - feature/request-tracking
       - feature/driver-worker-ledger
+      - feature/default-chart-reconciliation
+      - feature/trial-balance-reconciliation
       - feature/financial-foundation
     paths:
       - "backend/**"
