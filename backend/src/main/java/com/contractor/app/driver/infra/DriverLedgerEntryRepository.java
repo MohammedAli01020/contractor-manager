@@ -10,6 +10,11 @@ import org.springframework.data.repository.query.Param;
 
 public interface DriverLedgerEntryRepository extends JpaRepository<DriverLedgerEntry, Long> {
     Optional<DriverLedgerEntry> findByTenantIdAndClientRequestKey(Long tenantId, String key);
+
+    boolean existsByTenantIdAndShiftIdAndTransactionType(Long tenantId, Long shiftId, String transactionType);
+
+    boolean existsByTenantIdAndDriverIdAndTransactionTypeAndCreatedAtAfter(
+            Long tenantId, Long driverId, String transactionType, java.time.LocalDateTime createdAt);
     List<DriverLedgerEntry> findByTenantIdAndDriverIdOrderByTransactionDateAscIdAsc(Long tenantId, Long driverId);
     @Query("select coalesce(sum(e.balanceEffect), 0) from DriverLedgerEntry e where e.tenantId=:tenantId and e.driverId=:driverId")
     BigDecimal sumBalance(@Param("tenantId") Long tenantId, @Param("driverId") Long driverId);
