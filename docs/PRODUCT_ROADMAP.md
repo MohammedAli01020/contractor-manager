@@ -202,7 +202,7 @@ The roadmap below is the only source of truth for phase order and overall status
 **Exit criteria:** contractor can manage master data and run the agreed shift workflow reliably.
 
 ### Phase 2 — Financial foundation, driver ledger, equipment expenses and monthly closing
-**Status:** In progress — V17–V27 accounting, immutable posted-source and zero-wage shift protections are present on the financial/driver foundation. Tenant default-chart catalog and resolver are being reconciled on `feature/default-chart-reconciliation`; fresh CI is pending. Trial balance/reporting, safe account-management workflows and monthly close remain outstanding.  
+**Status:** In progress — V17–V27 accounting, immutable posted-source and zero-wage shift protections are present on the financial/driver foundation. Tenant default-chart catalog and resolver are implemented on `feature/default-chart-reconciliation`; required backend CI passed on PR #23. Trial balance/reporting, safe account-management workflows and monthly close remain outstanding.  
 **Detailed plan:** [PHASE-02-FINANCIALS.md](phases/PHASE-02-FINANCIALS.md).  
 - Define and test the exact accounting rules first, including sign conventions for positive/negative balances and the period in which each transaction is recognized. Initial chart/journal schema and posting-service validation code now exist; run backend tests and Flyway against MySQL before proceeding.
 - Implement driver ledger movements: opening balance, shift wages, advances, approved deductions, bonuses/allowances, actual payments, adjustments and reversals.
