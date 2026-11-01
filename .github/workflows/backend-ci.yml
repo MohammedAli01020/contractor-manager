@@ -152,7 +152,7 @@ jobs:
                   sys.exit(f"{name} reported failures or errors.")
           PY
 
-      - name: Require completed zero-wage shift integration tests to execute
+      - name: Require shift wage and zero-cost equipment integration tests to execute
         run: |
           python3 - <<'PY'
           import glob
@@ -169,16 +169,18 @@ jobs:
                     for key in ("tests", "failures", "errors", "skipped")}
           names = [case.attrib.get("name") for case in root.findall(".//testcase")]
           required = {
-              "completedZeroWageShiftIsFinalizedAndCannotBeChangedOrCancelled",
-              "databaseProtectsCompletedZeroWageShiftFromDirectMutationAndDeletion",
+              "zeroWageShiftCannotBeCompleted",
+              "databaseRejectsDirectCompletionOfZeroWageShift",
               "databaseRejectsCompletingPositiveWageShiftWithoutJournal",
+              "databaseRejectsUnrelatedJournalLinkEvenWhenShiftWageIsZero",
+              "zeroEquipmentOperatingCostDoesNotPreventShiftCompletion",
           }
           print(f"ShiftIntegrationTest: {totals}")
           missing = required.difference(names)
           if missing:
-              sys.exit(f"Required completed zero-wage shift tests did not execute: {sorted(missing)}")
+              sys.exit(f"Required shift wage/equipment tests did not execute: {sorted(missing)}")
           if any(names.count(name) != 1 for name in required):
-              sys.exit("Completed zero-wage shift integration tests must each execute exactly once.")
+              sys.exit("Required shift wage/equipment integration tests must each execute exactly once.")
           if totals["skipped"] != 0:
               sys.exit("Shift integration tests were skipped; Docker/MySQL must be available in CI.")
           if totals["failures"] != 0 or totals["errors"] != 0:
@@ -202,8 +204,8 @@ jobs:
                     for key in ("tests", "failures", "errors", "skipped")}
           print(f"ChartOfAccountsTenantIsolationIntegrationTest: {totals}")
 
-          if totals["tests"] != 2:
-              sys.exit("Chart-of-accounts tenant-isolation tests did not execute exactly twice.")
+          if totals["tests"] != 3:
+              sys.exit("Chart-of-accounts tenant-isolation integration test class must execute exactly three tests.")
           if totals["skipped"] != 0:
               sys.exit("Chart-of-accounts tenant-isolation tests were skipped.")
           if totals["failures"] != 0 or totals["errors"] != 0:
