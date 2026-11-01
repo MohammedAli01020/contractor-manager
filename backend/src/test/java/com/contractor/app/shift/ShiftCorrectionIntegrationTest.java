@@ -295,6 +295,29 @@ class ShiftCorrectionIntegrationTest extends AbstractShiftIntegrationTest {
 
 
     @Test
+    void completedShiftNotesAndTenantOwnershipCannotBeChangedDirectly() throws Exception {
+        JsonNode completed = finishShift(token,
+                startShift(token, shiftBody(siteId, driverId, equipmentId, today().minusDays(1), "MORNING")));
+        long shiftId = completed.path("id").asLong();
+
+        assertThatThrownBy(() -> jdbc.update(
+                "UPDATE shifts SET notes='tampered without correction' WHERE id=? AND tenant_id=?",
+                shiftId, tenantId))
+                .isInstanceOf(UncategorizedSQLException.class)
+                .hasMessageContaining("COMPLETED_SHIFT_METADATA_IMMUTABLE");
+
+        assertThatThrownBy(() -> jdbc.update(
+                "UPDATE shifts SET tenant_id=? WHERE id=? AND tenant_id=?",
+                tenantId + 9999, shiftId, tenantId))
+                .isInstanceOf(UncategorizedSQLException.class)
+                .hasMessageContaining("COMPLETED_SHIFT_METADATA_IMMUTABLE");
+
+        assertThat(jdbc.queryForObject(
+                "SELECT notes FROM shifts WHERE id=? AND tenant_id=?", String.class, shiftId, tenantId))
+                .isEqualTo(completed.path("notes").asText(null));
+    }
+
+    @Test
     void driverLedgerDatabaseConstraintRejectsUnknownTransactionTypes() throws Exception {
         seedCashBalanceAndGetCashId();
         JsonNode started = startShift(token,
