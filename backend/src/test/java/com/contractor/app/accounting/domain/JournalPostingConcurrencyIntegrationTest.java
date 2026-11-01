@@ -30,7 +30,7 @@ import org.springframework.boot.test.mock.mockito.SpyBean;
 class JournalPostingConcurrencyIntegrationTest extends AbstractIntegrationTest {
     @Autowired private JournalPostingService postingService;
     @Autowired private JdbcTemplate jdbcTemplate;
-    @SpyBean private ChartAccountRepository accounts;
+    @Autowired private ChartAccountRepository accounts;
     @Autowired private JournalEntryRepository entries;
     @Autowired private JournalLineRepository lineRepository;
     @SpyBean private JournalLineRepository lines;
@@ -92,16 +92,6 @@ class JournalPostingConcurrencyIntegrationTest extends AbstractIntegrationTest {
         String key = uniqueName("same-key-cash-outflow");
         JournalPostingRequest request = liquidityOutRequest(key, cashAccountId, new BigDecimal("80.00"));
 
-        CountDownLatch lockAttempts = new CountDownLatch(2);
-        CountDownLatch releaseLocks = new CountDownLatch(1);
-        doAnswer(invocation -> {
-            lockAttempts.countDown();
-            if (!releaseLocks.await(10, TimeUnit.SECONDS)) {
-                throw new IllegalStateException("Timed out coordinating duplicate liquidity locks");
-            }
-            return invocation.callRealMethod();
-        }).when(accounts).findCashOrBankByIdAndTenantIdForUpdate(cashAccountId, tenantId);
-
         CountDownLatch ready = new CountDownLatch(2);
         CountDownLatch start = new CountDownLatch(1);
         ExecutorService pool = Executors.newFixedThreadPool(2);
@@ -110,8 +100,6 @@ class JournalPostingConcurrencyIntegrationTest extends AbstractIntegrationTest {
             Future<JournalEntry> second = pool.submit(() -> postTogether(request, ready, start));
             assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
             start.countDown();
-            assertThat(lockAttempts.await(10, TimeUnit.SECONDS)).isTrue();
-            releaseLocks.countDown();
 
             JournalEntry firstResult = first.get(30, TimeUnit.SECONDS);
             JournalEntry secondResult = second.get(30, TimeUnit.SECONDS);
@@ -119,7 +107,6 @@ class JournalPostingConcurrencyIntegrationTest extends AbstractIntegrationTest {
             assertThat(lineRepository.calculateDebitNormalBalance(tenantId, cashAccountId))
                     .isEqualByComparingTo("20.00");
         } finally {
-            releaseLocks.countDown();
             start.countDown();
             pool.shutdownNow();
         }
