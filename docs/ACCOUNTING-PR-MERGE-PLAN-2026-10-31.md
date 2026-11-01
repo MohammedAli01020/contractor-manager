@@ -221,3 +221,13 @@ This section supersedes the earlier planned sequence where branch state or PR st
 - Review the final cumulative diff and exact PR-event CI before each merge.
 - Keep PR #15 and #13 Draft until their final real-device/API and review gates are satisfied.
 - No merge to `main` without separate explicit owner approval.
+
+
+## PR #24 synchronization checkpoint — 2026-11-01 (actual financial-foundation base)
+
+- The intended base is `feature/financial-foundation` at `5250dbbf5c40956fc9e9f13cc49ab52c8c3e3d88` (the actual PR #23 merge commit).
+- The trial-balance implementation being synchronized is preserved from prior head `e99eae377f865e0723baa6549b87b9187d266a81`.
+- The synchronization uses a two-parent merge commit with the trial-balance head as first parent and the financial foundation as second parent; it does not squash or rebase the stacked history.
+- The combined workflow is based on the current financial foundation and retains its financial idempotency, V24 migration, zero-wage shift, chart tenant-isolation and default-chart/journal-linkage guards, with the seven-test TrialBalanceIntegrationTest guard added.
+- Fresh PR CI on the resulting exact head is required before PR #24 can be considered merge-ready.
+- PR #24 remains unmerged. No change to `main` is authorized or performed.

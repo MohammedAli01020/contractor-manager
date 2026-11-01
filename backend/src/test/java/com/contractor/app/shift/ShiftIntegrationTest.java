@@ -296,11 +296,11 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
         assertThat(debit).isEqualByComparingTo("150.00");
         assertThat(credit).isEqualByComparingTo("150.00");
         Long wageExpenseAccountId = jdbcTemplate.queryForObject(
-                "SELECT id FROM chart_of_accounts WHERE tenant_id = ? AND account_code = '5000'",
-                Long.class, tenantId);
+                "SELECT id FROM chart_of_accounts WHERE tenant_id = (SELECT tenant_id FROM shifts WHERE id = ?) AND account_code = '5000'",
+                Long.class, running.path("id").asLong());
         Long driverPayableAccountId = jdbcTemplate.queryForObject(
-                "SELECT id FROM chart_of_accounts WHERE tenant_id = ? AND account_code = '2100'",
-                Long.class, tenantId);
+                "SELECT id FROM chart_of_accounts WHERE tenant_id = (SELECT tenant_id FROM shifts WHERE id = ?) AND account_code = '2100'",
+                Long.class, running.path("id").asLong());
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT account_id FROM journal_lines WHERE journal_entry_id = ? AND debit > 0",
                 Long.class, done.path("driverWageJournalEntryId").asLong())).isEqualTo(wageExpenseAccountId);
@@ -317,6 +317,22 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
                 .andExpect(jsonPath("$.code").value("CONCURRENT_UPDATE"));
         postJson("/api/v1/shifts/" + other.path("id").asLong() + "/finish", new HashMap<String, Object>(), token)
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void zeroEquipmentOperatingCostDoesNotPreventShiftCompletion() throws Exception {
+        long zeroCostEquipmentId = createEquipment(token, "EX-ZERO", typeId, "0", "1200");
+        JsonNode running = startShift(token,
+                shiftBody(siteId, driverId, zeroCostEquipmentId, day(1), "MORNING"));
+
+        assertThat(running.path("equipmentOperatingCost").decimalValue()).isEqualByComparingTo("0.00");
+        assertThat(running.path("driverWage").decimalValue()).isGreaterThan(BigDecimal.ZERO);
+
+        JsonNode completed = finishShift(token, running);
+
+        assertThat(completed.path("status").asText()).isEqualTo("COMPLETED");
+        assertThat(completed.path("equipmentOperatingCost").decimalValue()).isEqualByComparingTo("0.00");
+        assertThat(completed.path("driverWageJournalEntryId").isNull()).isFalse();
     }
 
     // ---------------------------------------------------------------- snapshots
@@ -594,40 +610,23 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
     }
 
     @Test
-    void completedZeroWageShiftIsFinalizedAndCannotBeChangedOrCancelled() throws Exception {
+    void zeroWageShiftCannotBeCompleted() throws Exception {
         Map<String, Object> startBody = shiftBody(siteId, driverId, equipmentId, day(1), "MORNING");
         startBody.put("driverWage", BigDecimal.ZERO);
         JsonNode running = startShift(token, startBody);
-        JsonNode done = finishShift(token, running);
-        long id = done.path("id").asLong();
 
-        assertThat(done.path("status").asText()).isEqualTo("COMPLETED");
-        assertThat(done.path("driverWage").decimalValue()).isEqualByComparingTo("0.00");
-        assertThat(done.path("driverWageJournalEntryId").isNull()).isTrue();
+        Map<String, Object> finish = versionBody(running.path("version").asLong());
+        postJson("/api/v1/shifts/" + running.path("id").asLong() + "/finish", finish, token)
+                .andExpect(status().isConflict());
+
+        Shift unchanged = shiftRepository.findById(running.path("id").asLong())
+                .orElseThrow(AssertionError::new);
+        assertThat(unchanged.getStatus().name()).isEqualTo("IN_PROGRESS");
+        assertThat(unchanged.getDriverWage()).isEqualByComparingTo("0.00");
+        assertThat(unchanged.getDriverWageJournalEntryId()).isNull();
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM driver_ledger_entries WHERE shift_id = ? AND transaction_type = 'EARNING'",
-                Integer.class, id)).isZero();
-
-        Map<String, Object> changedWage = shiftBody(siteId, driverId, equipmentId, day(1), "MORNING");
-        changedWage.put("driverWage", new BigDecimal("100.00"));
-        changedWage.put("version", done.path("version").asLong());
-        putJson("/api/v1/shifts/" + id, changedWage, token).andExpect(status().isConflict());
-
-        Map<String, Object> changedDate = shiftBody(siteId, driverId, equipmentId, day(2), "MORNING");
-        changedDate.put("version", done.path("version").asLong());
-        putJson("/api/v1/shifts/" + id, changedDate, token).andExpect(status().isConflict());
-
-        Map<String, Object> cancel = versionBody(done.path("version").asLong());
-        cancel.put("reason", "incorrect completion");
-        postJson("/api/v1/shifts/" + id + "/cancel", cancel, token).andExpect(status().isConflict());
-
-        // Operational notes remain editable without changing the finalized source record.
-        Map<String, Object> noteOnly = shiftBody(siteId, driverId, equipmentId, day(1), "MORNING");
-        noteOnly.put("notes", "ملاحظة بعد الإنهاء");
-        noteOnly.put("version", done.path("version").asLong());
-        JsonNode noted = body(putJson("/api/v1/shifts/" + id, noteOnly, token).andExpect(status().isOk()));
-        assertThat(noted.path("status").asText()).isEqualTo("COMPLETED");
-        assertThat(noted.path("driverWage").decimalValue()).isEqualByComparingTo("0.00");
+                Integer.class, running.path("id").asLong())).isZero();
     }
 
     @Test
@@ -651,26 +650,41 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
     }
 
     @Test
-    void databaseProtectsCompletedZeroWageShiftFromDirectMutationAndDeletion() throws Exception {
+    void databaseRejectsDirectCompletionOfZeroWageShift() throws Exception {
         Map<String, Object> startBody = shiftBody(siteId, driverId, equipmentId, day(1), "MORNING");
         startBody.put("driverWage", BigDecimal.ZERO);
-        JsonNode done = finishShift(token, startShift(token, startBody));
-        long id = done.path("id").asLong();
-        assertThat(done.path("driverWageJournalEntryId").isNull()).isTrue();
+        JsonNode running = startShift(token, startBody);
+        long id = running.path("id").asLong();
 
         assertThatThrownBy(() -> jdbcTemplate.update(
-                "UPDATE shifts SET driver_wage = ? WHERE id = ?", new BigDecimal("250.00"), id))
-                .hasMessageContaining("COMPLETED_SHIFT_IMMUTABLE");
-        assertThatThrownBy(() -> jdbcTemplate.update(
-                "UPDATE shifts SET status = 'CANCELLED' WHERE id = ?", id))
-                .hasMessageContaining("COMPLETED_SHIFT_IMMUTABLE");
-        assertThatThrownBy(() -> jdbcTemplate.update(
-                "DELETE FROM shifts WHERE id = ?", id))
-                .hasMessageContaining("COMPLETED_SHIFT_CANNOT_BE_DELETED");
+                "UPDATE shifts SET status = 'COMPLETED', finished_at = UTC_TIMESTAMP(6) WHERE id = ?", id))
+                .hasMessageContaining("COMPLETED_SHIFT_WAGE_REQUIRED");
 
         Shift unchanged = shiftRepository.findById(id).orElseThrow(AssertionError::new);
-        assertThat(unchanged.getStatus().name()).isEqualTo("COMPLETED");
+        assertThat(unchanged.getStatus().name()).isEqualTo("IN_PROGRESS");
         assertThat(unchanged.getDriverWage()).isEqualByComparingTo("0.00");
+        assertThat(unchanged.getDriverWageJournalEntryId()).isNull();
+    }
+
+    @Test
+    void databaseRejectsReinstatingCancelledZeroWageShiftAsCompleted() throws Exception {
+        Map<String, Object> startBody = shiftBody(siteId, driverId, equipmentId, day(1), "MORNING");
+        startBody.put("driverWage", BigDecimal.ZERO);
+        JsonNode running = startShift(token, startBody);
+        long id = running.path("id").asLong();
+
+        // Reproduce a legacy cancelled record that still carries a finish timestamp.
+        jdbcTemplate.update(
+                "UPDATE shifts SET status = 'CANCELLED', finished_at = UTC_TIMESTAMP(6) WHERE id = ?", id);
+
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "UPDATE shifts SET status = 'COMPLETED' WHERE id = ?", id))
+                .hasMessageContaining("COMPLETED_SHIFT_WAGE_REQUIRED");
+
+        Shift unchanged = shiftRepository.findById(id).orElseThrow(AssertionError::new);
+        assertThat(unchanged.getStatus()).isEqualTo(com.contractor.app.shift.domain.ShiftStatus.CANCELLED);
+        assertThat(unchanged.getDriverWage()).isEqualByComparingTo("0.00");
+        assertThat(unchanged.getDriverWageJournalEntryId()).isNull();
     }
 
     @Test
@@ -921,6 +935,68 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
                 .andExpect(status().isCreated()));
         assertThat(result.path("transactionType").asText()).isEqualTo("ADVANCE");
         assertThat(result.path("balanceAfter").decimalValue()).isEqualByComparingTo("100.00");
+    }
+
+    @Test
+    void databaseRejectsCompletingShiftWithAnotherShiftsWageJournal() throws Exception {
+        JsonNode running = startShift(token,
+                shiftBody(siteId, driverId, equipmentId, day(1), "MORNING"));
+        long shiftId = running.path("id").asLong();
+
+        ChartAccount wageExpense = chartAccounts.findByTenantIdAndAccountCodeIgnoreCase(tenantId, "5000")
+                .orElseThrow(() -> new AssertionError("Wage expense account missing"));
+        ChartAccount driverPayable = chartAccounts.findByTenantIdAndAccountCodeIgnoreCase(tenantId, "2100")
+                .orElseThrow(() -> new AssertionError("Driver payable account missing"));
+        com.contractor.app.accounting.domain.JournalEntry unrelatedJournal = journalPostingService.post(
+                tenantId, actorUserId, new JournalPostingRequest(
+                        "unrelated-shift-wage-test-" + shiftId, "TEST_UNRELATED_WAGE", null,
+                        today(), "Unrelated balanced journal", null, java.util.Arrays.asList(
+                        new JournalLineRequest(wageExpense.getId(), "Test debit",
+                                BigDecimal.ONE, BigDecimal.ZERO, null, null),
+                        new JournalLineRequest(driverPayable.getId(), "Test credit",
+                                BigDecimal.ZERO, BigDecimal.ONE, null, null))));
+
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "UPDATE shifts SET driver_wage_journal_entry_id = ?, status = 'COMPLETED', "
+                        + "finished_at = UTC_TIMESTAMP(6) WHERE id = ?",
+                unrelatedJournal.getId(), shiftId))
+                .hasMessageContaining("COMPLETED_SHIFT_WAGE_JOURNAL_MISMATCH");
+
+        Shift unchanged = shiftRepository.findById(shiftId).orElseThrow(AssertionError::new);
+        assertThat(unchanged.getStatus()).isEqualTo(com.contractor.app.shift.domain.ShiftStatus.IN_PROGRESS);
+        assertThat(unchanged.getDriverWageJournalEntryId()).isNull();
+    }
+
+    @Test
+    void databaseRejectsUnrelatedJournalLinkEvenWhenShiftWageIsZero() throws Exception {
+        Map<String, Object> startBody = shiftBody(siteId, driverId, equipmentId, day(1), "MORNING");
+        startBody.put("driverWage", BigDecimal.ZERO);
+        JsonNode running = startShift(token, startBody);
+        long shiftId = running.path("id").asLong();
+
+        ChartAccount wageExpense = chartAccounts.findByTenantIdAndAccountCodeIgnoreCase(tenantId, "5000")
+                .orElseThrow(() -> new AssertionError("Wage expense account missing"));
+        ChartAccount driverPayable = chartAccounts.findByTenantIdAndAccountCodeIgnoreCase(tenantId, "2100")
+                .orElseThrow(() -> new AssertionError("Driver payable account missing"));
+        com.contractor.app.accounting.domain.JournalEntry unrelatedJournal = journalPostingService.post(
+                tenantId, actorUserId, new JournalPostingRequest(
+                        "unrelated-zero-shift-test-" + shiftId, "TEST_UNRELATED_WAGE", null,
+                        today(), "Unrelated balanced journal", null, java.util.Arrays.asList(
+                        new JournalLineRequest(wageExpense.getId(), "Test debit",
+                                BigDecimal.ONE, BigDecimal.ZERO, null, null),
+                        new JournalLineRequest(driverPayable.getId(), "Test credit",
+                                BigDecimal.ZERO, BigDecimal.ONE, null, null))));
+
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "UPDATE shifts SET driver_wage_journal_entry_id = ?, status = 'COMPLETED', "
+                        + "finished_at = UTC_TIMESTAMP(6) WHERE id = ?",
+                unrelatedJournal.getId(), shiftId))
+                .hasMessageContaining("COMPLETED_SHIFT_WAGE_JOURNAL_MISMATCH");
+
+        Shift unchanged = shiftRepository.findById(shiftId).orElseThrow(AssertionError::new);
+        assertThat(unchanged.getStatus()).isEqualTo(com.contractor.app.shift.domain.ShiftStatus.IN_PROGRESS);
+        assertThat(unchanged.getDriverWage()).isEqualByComparingTo("0.00");
+        assertThat(unchanged.getDriverWageJournalEntryId()).isNull();
     }
 
 }

@@ -1,7 +1,7 @@
 # Default chart of accounts and system-account resolution
 
-**Implementation branch:** `feature/default-chart-reconciliation`  
-**Base:** `feature/driver-worker-ledger`  
+**Implementation branch:** `feature/financial-foundation`  
+**Base:** `feature/financial-foundation`  
 **Status:** Implementation and required backend CI verified on PR #23 head `ac3544a46f700bcaa56cdcc75f1405565c15804b` (push run 41283166719 and PR run 41283170499 passed). PR review remains open; no merge or production migration has occurred.
 
 ## Scope
@@ -39,7 +39,7 @@ All account lookups are tenant-scoped and the server supplies the resolved tenan
 - No existing Flyway migration was edited; no production migration was applied for this feature.
 - No historical expense or shift is automatically backfilled or reposted.
 - Existing posted journals remain immutable; corrections must use the established reversal/correction workflow.
-- This branch is a reviewable reconciliation branch. PR #18 remains open and unmerged until the resulting code and CI evidence are reviewed. PR #19 remains dependent on the final PR #18 base/head relationship.
+- This branch is a reviewable reconciliation branch. PR #18 and PR #19 were closed as superseded; PR #23 carries the reconciled default-chart implementation. PR #19 remains dependent on the final PR #18 base/head relationship.
 
 ## Concurrent balance-read isolation
 

@@ -3,6 +3,7 @@ package com.contractor.app.accounting.domain;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 
 import com.contractor.app.AbstractIntegrationTest;
@@ -79,6 +80,32 @@ class JournalPostingConcurrencyIntegrationTest extends AbstractIntegrationTest {
             assertThat(entries.findByTenantIdAndPostingKey(tenantId, request.getPostingKey())).isPresent();
             assertThat(lineRepository.findByTenantIdAndJournalEntryIdOrderByLineNumberAsc(
                     tenantId, firstResult.getId())).hasSize(2);
+        } finally {
+            start.countDown();
+            pool.shutdownNow();
+        }
+    }
+
+    @Test
+    void concurrentIdenticalCashOutflowRetriesReturnTheOriginalJournalAfterWaitingForAccountLock() throws Exception {
+        openLiquidityAccount(cashAccountId, uniqueName("same-key-cash-opening"), new BigDecimal("100.00"));
+        String key = uniqueName("same-key-cash-outflow");
+        JournalPostingRequest request = liquidityOutRequest(key, cashAccountId, new BigDecimal("80.00"));
+
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            Future<JournalEntry> first = pool.submit(() -> postTogether(request, ready, start));
+            Future<JournalEntry> second = pool.submit(() -> postTogether(request, ready, start));
+            assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+
+            JournalEntry firstResult = first.get(30, TimeUnit.SECONDS);
+            JournalEntry secondResult = second.get(30, TimeUnit.SECONDS);
+            assertThat(firstResult.getId()).isEqualTo(secondResult.getId());
+            assertThat(lineRepository.calculateDebitNormalBalance(tenantId, cashAccountId))
+                    .isEqualByComparingTo("20.00");
         } finally {
             start.countDown();
             pool.shutdownNow();

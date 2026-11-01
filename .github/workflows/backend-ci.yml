@@ -10,11 +10,11 @@ on:
       - fix/multi-instance-accounting-safety
       - fix/accounting-concurrency-hardening
       - feature/financial-foundation
+      - feature/trial-balance-reconciliation
       - feature/default-chart-of-accounts
       - feature/equipment-expenses-accounting
       - feature/driver-worker-ledger
       - feature/default-chart-reconciliation
-      - feature/trial-balance-reconciliation
       - feature/accounting-api-foundation
       - fix/treasury-concurrency-hardening
     paths:
@@ -26,6 +26,7 @@ on:
       - "docs/ACCOUNTING-DEFAULT-CHART-2026-10-31.md"
       - "docs/ACCOUNTING-DEFAULT-CHART-2026-11-01.md"
       - "docs/ACCOUNTING-TRIAL-BALANCE-2026-10-31.md"
+      - "docs/ACCOUNTING-DEFAULT-CHART-2026-11-01.md"
   pull_request:
     branches:
       - feature/platform-owner-activation
@@ -33,18 +34,14 @@ on:
       - feature/platform-owner-totp-2fa
       - feature/request-tracking
       - feature/driver-worker-ledger
-      - feature/default-chart-reconciliation
-      - feature/trial-balance-reconciliation
       - feature/financial-foundation
+      - feature/trial-balance-reconciliation
     paths:
       - "backend/**"
       - ".github/workflows/backend-ci.yml"
       - "docs/ACCOUNTING-TREASURY-CONCURRENCY-2026-10-31.md"
       - "docs/ACCOUNTING-PR-MERGE-PLAN-2026-10-31.md"
       - "docs/DRIVER_WORKER_LEDGER_DESIGN.md"
-      - "docs/ACCOUNTING-DEFAULT-CHART-2026-10-31.md"
-      - "docs/ACCOUNTING-DEFAULT-CHART-2026-11-01.md"
-      - "docs/ACCOUNTING-TRIAL-BALANCE-2026-10-31.md"
   workflow_dispatch:
 
 permissions:
@@ -162,35 +159,7 @@ jobs:
                   sys.exit(f"{name} reported failures or errors.")
           PY
 
-      - name: Require default chart and journal-linkage tests to execute
-        run: |
-          python3 - <<'PY'
-          import glob
-          import sys
-          import xml.etree.ElementTree as ET
-
-          required = {
-              "DefaultChartOfAccountsServiceTest": 8,
-              "DefaultChartOfAccountsConcurrencyIntegrationTest": 1,
-              "ShiftIntegrationTest": 1,
-              "ExpenseIntegrationTest": 1,
-          }
-          for suite, minimum in required.items():
-              pattern = f"target/surefire-reports/TEST-*{suite}.xml"
-              reports = glob.glob(pattern)
-              if not reports:
-                  sys.exit(f"Required accounting report missing: {pattern}")
-              root = ET.parse(reports[0]).getroot()
-              totals = {key: int(root.attrib.get(key, 0))
-                        for key in ("tests", "failures", "errors", "skipped")}
-              print(f"{suite}: {totals}")
-              if totals["tests"] < minimum:
-                  sys.exit(f"{suite} did not execute the required number of tests.")
-              if totals["skipped"] != 0 or totals["failures"] != 0 or totals["errors"] != 0:
-                  sys.exit(f"{suite} has skipped tests, failures, or errors.")
-          PY
-
-      - name: Require completed zero-wage shift integration tests to execute
+      - name: Require shift wage and zero-cost equipment integration tests to execute
         run: |
           python3 - <<'PY'
           import glob
@@ -207,16 +176,18 @@ jobs:
                     for key in ("tests", "failures", "errors", "skipped")}
           names = [case.attrib.get("name") for case in root.findall(".//testcase")]
           required = {
-              "completedZeroWageShiftIsFinalizedAndCannotBeChangedOrCancelled",
-              "databaseProtectsCompletedZeroWageShiftFromDirectMutationAndDeletion",
+              "zeroWageShiftCannotBeCompleted",
+              "databaseRejectsDirectCompletionOfZeroWageShift",
               "databaseRejectsCompletingPositiveWageShiftWithoutJournal",
+              "databaseRejectsUnrelatedJournalLinkEvenWhenShiftWageIsZero",
+              "zeroEquipmentOperatingCostDoesNotPreventShiftCompletion",
           }
           print(f"ShiftIntegrationTest: {totals}")
           missing = required.difference(names)
           if missing:
-              sys.exit(f"Required completed zero-wage shift tests did not execute: {sorted(missing)}")
+              sys.exit(f"Required shift wage/equipment tests did not execute: {sorted(missing)}")
           if any(names.count(name) != 1 for name in required):
-              sys.exit("Completed zero-wage shift integration tests must each execute exactly once.")
+              sys.exit("Required shift wage/equipment integration tests must each execute exactly once.")
           if totals["skipped"] != 0:
               sys.exit("Shift integration tests were skipped; Docker/MySQL must be available in CI.")
           if totals["failures"] != 0 or totals["errors"] != 0:
@@ -240,12 +211,40 @@ jobs:
                     for key in ("tests", "failures", "errors", "skipped")}
           print(f"ChartOfAccountsTenantIsolationIntegrationTest: {totals}")
 
-          if totals["tests"] != 2:
-              sys.exit("Chart-of-accounts tenant-isolation tests did not execute exactly twice.")
+          if totals["tests"] != 3:
+              sys.exit("Chart-of-accounts tenant-isolation integration test class must execute exactly three tests.")
           if totals["skipped"] != 0:
               sys.exit("Chart-of-accounts tenant-isolation tests were skipped.")
           if totals["failures"] != 0 or totals["errors"] != 0:
               sys.exit("Chart-of-accounts tenant-isolation tests reported failures or errors.")
+          PY
+
+      - name: Require default chart and journal-linkage tests to execute
+        run: |
+          python3 - <<'PY'
+          import glob
+          import sys
+          import xml.etree.ElementTree as ET
+
+          required = {
+              "DefaultChartOfAccountsServiceTest": 9,
+              "DefaultChartOfAccountsConcurrencyIntegrationTest": 1,
+              "ShiftIntegrationTest": 1,
+              "ExpenseIntegrationTest": 1,
+          }
+          for suite, minimum in required.items():
+              pattern = f"target/surefire-reports/TEST-*{suite}.xml"
+              reports = glob.glob(pattern)
+              if not reports:
+                  sys.exit(f"Required accounting report missing: {pattern}")
+              root = ET.parse(reports[0]).getroot()
+              totals = {key: int(root.attrib.get(key, 0))
+                        for key in ("tests", "failures", "errors", "skipped")}
+              print(f"{suite}: {totals}")
+              if totals["tests"] < minimum:
+                  sys.exit(f"{suite} did not execute the required number of tests.")
+              if totals["skipped"] != 0 or totals["failures"] != 0 or totals["errors"] != 0:
+                  sys.exit(f"{suite} has skipped tests, failures, or errors.")
           PY
 
       - name: Require trial-balance MySQL integration tests to execute

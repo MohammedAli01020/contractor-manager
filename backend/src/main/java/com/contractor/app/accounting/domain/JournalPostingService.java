@@ -137,6 +137,22 @@ public class JournalPostingService {
 
         Map<Long, ChartAccount> lockedCashBankAccounts = lockCashBankAccounts(tenantId, normalized.lines);
 
+        // A duplicate liquidity request may have passed the initial lookup before waiting
+        // for the same account lock. Re-read its key as a locking/current read after the
+        // lock, so it replays the committed journal instead of checking its outflow twice.
+        // Non-liquidity journals retain the existing unique-key collision recovery path.
+        if (!lockedCashBankAccounts.isEmpty()) {
+            Optional<JournalEntry> afterLiquidityLock =
+                    entries.findByTenantIdAndPostingKeyForUpdate(tenantId, normalized.postingKey);
+            if (afterLiquidityLock.isPresent()) {
+                JournalEntry prior = afterLiquidityLock.get();
+                if (sameRequest(tenantId, prior, normalized, true)) {
+                    return prior;
+                }
+                throw ApiException.conflict("مفتاح الترحيل مستخدم بالفعل لحركة مالية مختلفة.");
+            }
+        }
+
         for (NormalizedLine line : normalized.lines) {
             ChartAccount account = lockedCashBankAccounts.containsKey(line.accountId)
                     ? lockedCashBankAccounts.get(line.accountId)
@@ -266,6 +282,11 @@ public class JournalPostingService {
     }
 
     private boolean sameRequest(Long tenantId, JournalEntry prior, NormalizedJournal request) {
+        return sameRequest(tenantId, prior, request, false);
+    }
+
+    private boolean sameRequest(Long tenantId, JournalEntry prior, NormalizedJournal request,
+                                boolean lockingCurrentRead) {
         if (!Objects.equals(prior.getSourceType(), request.sourceType)
                 || !Objects.equals(prior.getSourceId(), request.sourceId)
                 || !Objects.equals(prior.getAccountingDate(), request.accountingDate)
@@ -273,8 +294,12 @@ public class JournalPostingService {
                 || !Objects.equals(prior.getReversalOfEntryId(), request.reversalOfEntryId)) {
             return false;
         }
-        List<JournalLine> priorLines = lines.findByTenantIdAndJournalEntryIdOrderByLineNumberAsc(
-                tenantId, prior.getId());
+        // Under MySQL REPEATABLE READ, a normal SELECT may reuse the transaction's
+        // earlier snapshot even after the locking header read observed a newly committed
+        // journal. Use a locking/current read for its lines on the duplicate-liquidity path.
+        List<JournalLine> priorLines = lockingCurrentRead
+                ? lines.findByTenantIdAndJournalEntryIdOrderByLineNumberAscForUpdate(tenantId, prior.getId())
+                : lines.findByTenantIdAndJournalEntryIdOrderByLineNumberAsc(tenantId, prior.getId());
         if (priorLines.size() != request.lines.size()) {
             return false;
         }

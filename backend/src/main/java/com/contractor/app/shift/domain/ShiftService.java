@@ -264,8 +264,8 @@ public class ShiftService {
                 tenantId, SystemAccountCode.DRIVER_WAGE_EXPENSE);
         ChartAccount driverPayable = defaultAccounts.requireSystemAccount(
                 tenantId, SystemAccountCode.DRIVER_PAYABLE);
-        if (shift.getDriverWage() == null || shift.getDriverWage().signum() < 0) {
-            throw ApiException.conflict("أجر الوردية غير صالح للترحيل.");
+        if (shift.getDriverWage() == null || shift.getDriverWage().signum() <= 0) {
+            throw ApiException.conflict("لا يمكن إكمال الوردية قبل تحديد أجر موجب للسائق.");
         }
         // Serialize wage recognition against payments for the same worker.
         drivers.findByIdAndTenantIdForUpdate(shift.getDriverId(), tenantId)
@@ -345,6 +345,13 @@ public class ShiftService {
 
         ShiftStatus restoredStatus;
         if (shift.getFinishedAt() != null) {
+            // A legacy cancelled shift may have been completed before wage posting became mandatory.
+            // Never restore it as completed unless its positive wage and immutable journal link exist.
+            if (shift.getDriverWage() == null || shift.getDriverWage().signum() <= 0
+                    || shift.getDriverWageJournalEntryId() == null) {
+                throw ApiException.conflict(
+                        "لا يمكن إعادة تفعيل وردية منتهية دون أجر موجب وقيد أجر محاسبي صحيح.");
+            }
             // وردية كانت منتهية قبل إلغائها: أعدها منتهية مع الاحتفاظ بوقت الإنهاء والقيم المحفوظة.
             restoredStatus = ShiftStatus.COMPLETED;
         } else {
