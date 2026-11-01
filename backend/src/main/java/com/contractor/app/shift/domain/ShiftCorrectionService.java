@@ -133,6 +133,17 @@ public class ShiftCorrectionService {
         BigDecimal newPrice = money(request.getPrice());
         BigDecimal newOperatingCost = money(request.getEquipmentOperatingCost());
         String newNotes = Texts.blankToNull(request.getNotes());
+        boolean protectedFieldsChanged =
+                !Objects.equals(shift.getShiftDate(), request.getShiftDate())
+                || !Objects.equals(shift.getShiftType(), request.getShiftType())
+                || !Objects.equals(shift.getSiteId(), request.getSiteId())
+                || !Objects.equals(shift.getEquipmentId(), request.getEquipmentId())
+                || shift.getDriverWage().compareTo(newWage) != 0
+                || shift.getPrice().compareTo(newPrice) != 0
+                || shift.getEquipmentOperatingCost().compareTo(newOperatingCost) != 0;
+        if (!protectedFieldsChanged) {
+            throw ApiException.badRequest("لا توجد تغييرات تشغيلية أو مالية لتصحيحها. استخدم تعديل الملاحظات العادي إذا لزم الأمر.");
+        }
 
         Site site = sites.findByIdAndTenantId(request.getSiteId(), tenantId)
                 .orElseThrow(() -> ApiException.notFound("الموقع غير موجود."));
