@@ -582,6 +582,66 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
     }
 
     @Test
+    void completedZeroWageShiftIsFinalizedAndCannotBeChangedOrCancelled() throws Exception {
+        Map<String, Object> startBody = shiftBody(siteId, driverId, equipmentId, day(1), "MORNING");
+        startBody.put("driverWage", BigDecimal.ZERO);
+        JsonNode running = startShift(token, startBody);
+        JsonNode done = finishShift(token, running);
+        long id = done.path("id").asLong();
+
+        assertThat(done.path("status").asText()).isEqualTo("COMPLETED");
+        assertThat(done.path("driverWage").decimalValue()).isEqualByComparingTo("0.00");
+        assertThat(done.path("driverWageJournalEntryId").isNull()).isTrue();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM driver_ledger_entries WHERE shift_id = ? AND transaction_type = 'EARNING'",
+                Integer.class, id)).isZero();
+
+        Map<String, Object> changedWage = shiftBody(siteId, driverId, equipmentId, day(1), "MORNING");
+        changedWage.put("driverWage", new BigDecimal("100.00"));
+        changedWage.put("version", done.path("version").asLong());
+        putJson("/api/v1/shifts/" + id, changedWage, token).andExpect(status().isConflict());
+
+        Map<String, Object> changedDate = shiftBody(siteId, driverId, equipmentId, day(2), "MORNING");
+        changedDate.put("version", done.path("version").asLong());
+        putJson("/api/v1/shifts/" + id, changedDate, token).andExpect(status().isConflict());
+
+        Map<String, Object> cancel = versionBody(done.path("version").asLong());
+        cancel.put("reason", "incorrect completion");
+        postJson("/api/v1/shifts/" + id + "/cancel", cancel, token).andExpect(status().isConflict());
+
+        // Operational notes remain editable without changing the finalized source record.
+        Map<String, Object> noteOnly = shiftBody(siteId, driverId, equipmentId, day(1), "MORNING");
+        noteOnly.put("notes", "ملاحظة بعد الإنهاء");
+        noteOnly.put("version", done.path("version").asLong());
+        JsonNode noted = body(putJson("/api/v1/shifts/" + id, noteOnly, token).andExpect(status().isOk()));
+        assertThat(noted.path("status").asText()).isEqualTo("COMPLETED");
+        assertThat(noted.path("driverWage").decimalValue()).isEqualByComparingTo("0.00");
+    }
+
+    @Test
+    void databaseProtectsCompletedZeroWageShiftFromDirectMutationAndDeletion() throws Exception {
+        Map<String, Object> startBody = shiftBody(siteId, driverId, equipmentId, day(1), "MORNING");
+        startBody.put("driverWage", BigDecimal.ZERO);
+        JsonNode done = finishShift(token, startShift(token, startBody));
+        long id = done.path("id").asLong();
+        assertThat(done.path("driverWageJournalEntryId").isNull()).isTrue();
+
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "UPDATE shifts SET driver_wage = ? WHERE id = ?", new BigDecimal("250.00"), id))
+                .hasMessageContaining("COMPLETED_SHIFT_IMMUTABLE");
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "UPDATE shifts SET status = 'CANCELLED' WHERE id = ?", id))
+                .hasMessageContaining("COMPLETED_SHIFT_IMMUTABLE");
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "DELETE FROM shifts WHERE id = ?", id))
+                .hasMessageContaining("COMPLETED_SHIFT_CANNOT_BE_DELETED");
+
+        Shift unchanged = shiftRepository.findById(id).orElseThrow(AssertionError::new);
+        assertThat(unchanged.getStatus().name()).isEqualTo("COMPLETED");
+        assertThat(unchanged.getDriverWage()).isEqualByComparingTo("0.00");
+    }
+
+    @Test
     void databaseKeepsDriverLedgerAppendOnlyAndAllowsOnlyOneShiftEarning() throws Exception {
         JsonNode done = finishShift(token,
                 startShift(token, shiftBody(siteId, driverId, equipmentId, day(1), "MORNING")));
