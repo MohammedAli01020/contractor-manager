@@ -3,10 +3,13 @@ import 'package:dio/dio.dart';
 import '../storage/auth_token_storage.dart';
 
 class AuthInterceptor extends Interceptor {
-  AuthInterceptor({required Dio dio, required AuthTokenStorage storage})
-      : _dio = dio,
+  AuthInterceptor({
+    required Dio dio,
+    required AuthTokenStorage storage,
+    Dio? refreshDio,
+  })  : _dio = dio,
         _storage = storage,
-        _refreshDio = Dio(BaseOptions(
+        _refreshDio = refreshDio ?? Dio(BaseOptions(
           baseUrl: dio.options.baseUrl,
           connectTimeout: dio.options.connectTimeout,
           receiveTimeout: dio.options.receiveTimeout,
@@ -29,7 +32,7 @@ class AuthInterceptor extends Interceptor {
       '/health',
     ];
     final normalized = path.split('?').first;
-    return publicPaths.any(normalized.endsWith);
+    return publicPaths.contains(normalized);
   }
 
   @override
@@ -56,6 +59,14 @@ class AuthInterceptor extends Interceptor {
     }
     final token = await _refreshToken();
     if (token == null) {
+      // A transient refresh failure leaves the refresh token in storage. Mark
+      // the original 401 so AuthBloc does not mistake it for a rejected session.
+      try {
+        final refresh = await _storage.readRefreshToken();
+        if (refresh != null && refresh.isNotEmpty) {
+          request.extra['authRefreshUnavailable'] = true;
+        }
+      } catch (_) {}
       handler.next(error);
       return;
     }
@@ -64,6 +75,12 @@ class AuthInterceptor extends Interceptor {
     try {
       handler.resolve(await _dio.fetch<dynamic>(request));
     } on DioError catch (retryError) {
+      if (retryError.response?.statusCode == 401) {
+        // The refreshed access token was rejected; invalidate the stale session.
+        try {
+          await _storage.clear();
+        } catch (_) {}
+      }
       handler.next(retryError);
     } catch (_) {
       handler.next(error);
@@ -101,10 +118,18 @@ class AuthInterceptor extends Interceptor {
       }
       await _storage.save(accessToken: access, refreshToken: nextRefresh);
       return access;
+    } on DioError catch (error) {
+      final statusCode = error.response?.statusCode;
+      if (statusCode == 400 || statusCode == 401 || statusCode == 403) {
+        // The server explicitly rejected the refresh credentials.
+        try {
+          await _storage.clear();
+        } catch (_) {}
+      }
+      // Keep tokens for network failures and temporary server errors.
+      return null;
     } catch (_) {
-      try {
-        await _storage.clear();
-      } catch (_) {}
+      // Storage or unexpected failures must not sign the user out.
       return null;
     }
   }
