@@ -11,6 +11,8 @@ import org.springframework.data.repository.query.Param;
 public interface DriverLedgerEntryRepository extends JpaRepository<DriverLedgerEntry, Long> {
     Optional<DriverLedgerEntry> findByTenantIdAndClientRequestKey(Long tenantId, String key);
 
+    Optional<DriverLedgerEntry> findByTenantIdAndJournalEntryId(Long tenantId, Long journalEntryId);
+
     boolean existsByTenantIdAndShiftIdAndTransactionType(Long tenantId, Long shiftId, String transactionType);
 
     boolean existsByTenantIdAndDriverIdAndTransactionTypeAndCreatedAtAfter(
