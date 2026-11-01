@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.contractor.app.AbstractIntegrationTest;
 import com.contractor.app.accounting.domain.AccountType;
 import com.contractor.app.accounting.domain.DefaultChartOfAccountsService;
+import com.contractor.app.accounting.domain.SystemAccountCode;
 import com.contractor.app.accounting.domain.ChartAccount;
 import com.contractor.app.accounting.infra.ChartAccountRepository;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -95,7 +96,7 @@ class ChartOfAccountsTenantIsolationIntegrationTest extends AbstractIntegrationT
         }
 
         assertThat(chartAccountRepository.findByTenantIdOrderByAccountCodeAsc(tenantA))
-                .hasSize(15)
+                .hasSize(SystemAccountCode.values().length + 1) // 15 defaults plus tenant-specific 9900
                 .extracting(ChartAccount::getAccountCode)
                 .doesNotHaveDuplicates()
                 .contains("1000", "1010", "1300", "5200", "9900");
