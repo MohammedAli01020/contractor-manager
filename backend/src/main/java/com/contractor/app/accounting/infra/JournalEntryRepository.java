@@ -14,5 +14,11 @@ public interface JournalEntryRepository extends JpaRepository<JournalEntry, Long
 
     Optional<JournalEntry> findByTenantIdAndPostingKey(Long tenantId, String postingKey);
 
+    @org.springframework.data.jpa.repository.Lock(org.springframework.data.jpa.repository.LockModeType.PESSIMISTIC_WRITE)
+    @org.springframework.data.jpa.repository.Query("select e from JournalEntry e where e.tenantId = :tenantId and e.postingKey = :postingKey")
+    Optional<JournalEntry> findByTenantIdAndPostingKeyForUpdate(
+            @org.springframework.data.repository.query.Param("tenantId") Long tenantId,
+            @org.springframework.data.repository.query.Param("postingKey") String postingKey);
+
     boolean existsByTenantIdAndReversalOfEntryId(Long tenantId, Long reversalOfEntryId);
 }
