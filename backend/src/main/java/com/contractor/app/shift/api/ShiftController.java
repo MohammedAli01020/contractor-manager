@@ -4,11 +4,13 @@ import com.contractor.app.audit.api.dto.AuditResponse;
 import com.contractor.app.common.api.PageResponse;
 import com.contractor.app.common.security.CurrentUser;
 import com.contractor.app.shift.api.dto.ShiftCancelRequest;
+import com.contractor.app.shift.api.dto.ShiftCorrectionRequest;
 import com.contractor.app.shift.api.dto.ShiftDefaultsResponse;
 import com.contractor.app.shift.api.dto.ShiftRequest;
 import com.contractor.app.shift.api.dto.ShiftResponse;
 import com.contractor.app.shift.api.dto.ShiftVersionRequest;
 import com.contractor.app.shift.domain.ShiftService;
+import com.contractor.app.shift.domain.ShiftCorrectionService;
 import com.contractor.app.shift.domain.ShiftStatus;
 import com.contractor.app.shift.domain.ShiftType;
 import com.contractor.app.audit.domain.AuditEntityType;
@@ -39,10 +41,13 @@ public class ShiftController {
 
     private final ShiftService service;
     private final AuditService auditService;
+    private final ShiftCorrectionService correctionService;
 
-    public ShiftController(ShiftService service, AuditService auditService) {
+    public ShiftController(ShiftService service, AuditService auditService,
+                           ShiftCorrectionService correctionService) {
         this.service = service;
         this.auditService = auditService;
+        this.correctionService = correctionService;
     }
 
     @GetMapping
@@ -99,6 +104,13 @@ public class ShiftController {
     @Operation(summary = "تعديل وردية (يتطلب version، ويُسجَّل كل تغيير في سجل التدقيق)")
     public ShiftResponse update(@PathVariable Long id, @Valid @RequestBody ShiftRequest request) {
         return service.update(CurrentUser.tenantId(), id, request);
+    }
+
+    @PreAuthorize("hasRole('ADMIN')")
+    @PostMapping("/{id}/corrections")
+    @Operation(summary = "تصحيح وردية مكتملة مع عكس القيود المالية وإعادة ترحيل الأجر (ADMIN فقط)")
+    public ShiftResponse correct(@PathVariable Long id, @Valid @RequestBody ShiftCorrectionRequest request) {
+        return correctionService.correct(CurrentUser.tenantId(), id, CurrentUser.get().getUserId(), request);
     }
 
     @PreAuthorize("hasAnyRole('ADMIN','OPERATOR')")
