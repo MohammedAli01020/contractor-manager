@@ -9,9 +9,13 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.contractor.app.accounting.infra.ChartAccountRepository;
+import com.contractor.app.tenant.domain.Tenant;
+import com.contractor.app.tenant.infra.TenantRepository;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
+import com.contractor.app.common.error.ApiException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -19,17 +23,21 @@ import org.mockito.ArgumentCaptor;
 class DefaultChartOfAccountsServiceTest {
 
     private ChartAccountRepository accounts;
+    private TenantRepository tenants;
     private DefaultChartOfAccountsService service;
 
     @BeforeEach
     void setUp() {
         accounts = mock(ChartAccountRepository.class);
-        service = new DefaultChartOfAccountsService(accounts);
+        tenants = mock(TenantRepository.class);
+        service = new DefaultChartOfAccountsService(accounts, tenants);
     }
 
     @Test
     void createsTheCompleteDefaultChartForANewTenant() {
         when(accounts.findByTenantIdOrderByAccountCodeAsc(7L)).thenReturn(Collections.emptyList());
+        when(accounts.findByTenantIdOrderByAccountCodeAscForUpdate(7L)).thenReturn(Collections.emptyList());
+        when(tenants.findByIdForUpdate(7L)).thenReturn(Optional.of(mock(Tenant.class)));
 
         service.initializeForTenant(7L);
 
@@ -37,9 +45,9 @@ class DefaultChartOfAccountsServiceTest {
         ArgumentCaptor<List<ChartAccount>> captor = ArgumentCaptor.forClass((Class) List.class);
         verify(accounts).saveAll(captor.capture());
         List<ChartAccount> created = captor.getValue();
-        assertThat(created).hasSize(14);
+        assertThat(created).hasSize(15);
         assertThat(created).extracting(ChartAccount::getAccountCode)
-                .contains("1000", "1010", "2100", "4000", "5000", "5200");
+                .contains("1000", "1010", "1400", "2100", "4000", "5000", "5200");
         assertThat(created.stream().filter(ChartAccount::isCashBankAccount)
                 .map(ChartAccount::getAccountCode))
                 .containsExactlyInAnyOrder("1000", "1010");
@@ -55,6 +63,9 @@ class DefaultChartOfAccountsServiceTest {
         ChartAccount customAccount = new ChartAccount(7L, "9999", "Tenant custom account", AccountType.EXPENSE, null, false);
         when(accounts.findByTenantIdOrderByAccountCodeAsc(7L))
                 .thenReturn(Arrays.asList(existingCash, customAccount));
+        when(accounts.findByTenantIdOrderByAccountCodeAscForUpdate(7L))
+                .thenReturn(Arrays.asList(existingCash, customAccount));
+        when(tenants.findByIdForUpdate(7L)).thenReturn(Optional.of(mock(Tenant.class)));
 
         service.initializeForTenant(7L);
 
@@ -62,7 +73,7 @@ class DefaultChartOfAccountsServiceTest {
         ArgumentCaptor<List<ChartAccount>> captor = ArgumentCaptor.forClass((Class) List.class);
         verify(accounts).saveAll(captor.capture());
         List<ChartAccount> created = captor.getValue();
-        assertThat(created).hasSize(13);
+        assertThat(created).hasSize(14);
         assertThat(created).extracting(ChartAccount::getAccountCode).doesNotContain("1000", "9999");
         assertThat(existingCash.getName()).isEqualTo("Custom cash name");
     }
@@ -75,6 +86,7 @@ class DefaultChartOfAccountsServiceTest {
                 new ChartAccount(7L, "1100", "Receivables", AccountType.ASSET, null, true),
                 new ChartAccount(7L, "1200", "Fixed assets", AccountType.ASSET, null, true),
                 new ChartAccount(7L, "1300", "Recoverable worker advances", AccountType.ASSET, null, true),
+                new ChartAccount(7L, "1400", "Inventory", AccountType.ASSET, null, true),
                 new ChartAccount(7L, "2000", "Suppliers", AccountType.LIABILITY, null, true),
                 new ChartAccount(7L, "2100", "Driver payable", AccountType.LIABILITY, null, true),
                 new ChartAccount(7L, "2200", "Partner payable", AccountType.LIABILITY, null, true),
@@ -89,6 +101,61 @@ class DefaultChartOfAccountsServiceTest {
         service.initializeForTenant(7L);
 
         verify(accounts, never()).saveAll(anyList());
+    }
+
+    @Test
+    void rechecksMissingAccountsAfterAcquiringTenantLock() {
+        when(accounts.findByTenantIdOrderByAccountCodeAsc(7L)).thenReturn(Collections.emptyList());
+        when(accounts.findByTenantIdOrderByAccountCodeAscForUpdate(7L)).thenReturn(defaultAccountsForTenant());
+        when(tenants.findByIdForUpdate(7L)).thenReturn(Optional.of(mock(Tenant.class)));
+
+        service.initializeForTenant(7L);
+
+        verify(accounts).findByTenantIdOrderByAccountCodeAsc(7L);
+        verify(accounts).findByTenantIdOrderByAccountCodeAscForUpdate(7L);
+        verify(accounts, never()).saveAll(anyList());
+    }
+
+    private List<ChartAccount> defaultAccountsForTenant() {
+        List<ChartAccount> result = new java.util.ArrayList<>();
+        for (SystemAccountCode code : SystemAccountCode.values()) {
+            result.add(new ChartAccount(7L, code.getCode(), code.getDefaultName(),
+                    code.getAccountType(), null, true, code.isCashBankAccount()));
+        }
+        return result;
+    }
+
+    @Test
+    void resolvesSystemAccountsByTenantAndValidatesTheirAccountingClassification() {
+        ChartAccount driverPayable = new ChartAccount(
+                7L, "2100", "مستحقات السائقين", AccountType.LIABILITY, null, true, false);
+        when(accounts.findByTenantIdAndAccountCodeIgnoreCase(7L, "2100"))
+                .thenReturn(Optional.of(driverPayable));
+
+        assertThat(service.requireSystemAccount(7L, SystemAccountCode.DRIVER_PAYABLE))
+                .isSameAs(driverPayable);
+    }
+
+    @Test
+    void rejectsMisclassifiedSystemAccountInsteadOfPostingToIt() {
+        ChartAccount wrongType = new ChartAccount(
+                7L, "2100", "حساب خاطئ", AccountType.ASSET, null, true, false);
+        when(accounts.findByTenantIdAndAccountCodeIgnoreCase(7L, "2100"))
+                .thenReturn(Optional.of(wrongType));
+
+        assertThatThrownBy(() -> service.requireSystemAccount(7L, SystemAccountCode.DRIVER_PAYABLE))
+                .isInstanceOf(ApiException.class);
+    }
+
+    @Test
+    void rejectsSystemAccountLookupWhenAccountIsMissingOrTenantIsInvalid() {
+        when(accounts.findByTenantIdAndAccountCodeIgnoreCase(7L, "2000"))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.requireSystemAccount(7L, SystemAccountCode.SUPPLIER_PAYABLE))
+                .isInstanceOf(ApiException.class);
+        assertThatThrownBy(() -> service.requireSystemAccount(null, SystemAccountCode.SUPPLIER_PAYABLE))
+                .isInstanceOf(ApiException.class);
     }
 
     @Test
