@@ -596,7 +596,7 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
 
         assertThatThrownBy(() -> jdbcTemplate.update(
                 "UPDATE shifts SET driver_wage = ? WHERE id = ?", new BigDecimal("999.00"), id))
-                .hasMessageContaining("POSTED_SHIFT_WAGE_IMMUTABLE");
+                .hasMessageContaining("COMPLETED_SHIFT_IMMUTABLE");
         assertThatThrownBy(() -> jdbcTemplate.update(
                 "UPDATE shifts SET status = 'CANCELLED' WHERE id = ?", id))
                 .hasMessageContaining("POSTED_SHIFT_WAGE_IMMUTABLE");
