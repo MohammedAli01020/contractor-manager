@@ -91,9 +91,9 @@ public class DriverLedgerService {
                     ||!p.getDescription().equals(description)||!"PAYMENT".equals(p.getTransactionType())
                     ||!journalCreditsAccount(p.getJournalEntryId(), tenantId, request.getPaymentAccountId()))
                 throw ApiException.conflict("مفتاح العملية مستخدم لعملية أخرى.");
-            return new DriverLedgerEntryResponse(p,ledger.sumBalance(tenantId,driverId));
+            return new DriverLedgerEntryResponse(p,ledger.sumBalanceForUpdate(tenantId,driverId));
         }
-        BigDecimal balance=ledger.sumBalance(tenantId,driverId);
+        BigDecimal balance=ledger.sumBalanceForUpdate(tenantId,driverId);
         if(balance.compareTo(amount)<0) throw ApiException.badRequest("المبلغ أكبر من مستحقات العامل المتاحة للصرف.");
         ChartAccount payable=defaultAccounts.requireSystemAccount(tenantId,SystemAccountCode.DRIVER_PAYABLE);
         ChartAccount cash=accounts.findByIdAndTenantId(request.getPaymentAccountId(),tenantId)
@@ -139,9 +139,9 @@ public class DriverLedgerService {
                     ||!p.getDescription().equals(description)||!ledgerType.equals(p.getTransactionType())
                     ||!journalCreditsAccount(p.getJournalEntryId(), tenantId, request.getPaymentAccountId()))
                 throw ApiException.conflict("مفتاح العملية مستخدم بالفعل لحركة مالية مختلفة.");
-            return new DriverLedgerEntryResponse(p,ledger.sumBalance(tenantId,driverId));
+            return new DriverLedgerEntryResponse(p,ledger.sumBalanceForUpdate(tenantId,driverId));
         }
-        BigDecimal balance=ledger.sumBalance(tenantId,driverId);
+        BigDecimal balance=ledger.sumBalanceForUpdate(tenantId,driverId);
         if("AGAINST_EARNED".equals(type) && balance.compareTo(amount)<0)
             throw ApiException.badRequest("السلفة أكبر من مستحقات العامل المتاحة.");
         ChartAccount debitAccount="AGAINST_EARNED".equals(type)

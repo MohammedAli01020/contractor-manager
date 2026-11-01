@@ -281,7 +281,7 @@ public class ShiftService {
                     shift.getShiftDate(), shift.getDriverWage(), shift.getDriverWage(),
                     "أجر الوردية رقم " + shift.getId(), "shift-wage-" + shift.getId(),
                     shift.getId(), wageJournal.getId(), actorUserId));
-            BigDecimal recoverable = driverLedger.sumRecoverableAdvanceBalance(tenantId, shift.getDriverId());
+            BigDecimal recoverable = driverLedger.sumRecoverableAdvanceBalanceForUpdate(tenantId, shift.getDriverId());
             if (recoverable.signum() > 0) {
                 BigDecimal recovery = recoverable.min(shift.getDriverWage());
                 ChartAccount advancesAsset = defaultAccounts.requireSystemAccount(
