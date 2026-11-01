@@ -100,7 +100,7 @@ BEGIN
                           AND c.shift_id = NEW.id
                           AND c.status = 'APPLIED'
                           AND c.replacement_wage_journal_entry_id = NEW.driver_wage_journal_entry_id
-                          AND c.id = CAST(SUBSTRING_INDEX(NEW.driver_wage_journal_entry_id, '-', -1) AS UNSIGNED)
+                          AND c.id = j.source_id
                    )
                );
 
