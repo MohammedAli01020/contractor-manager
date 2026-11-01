@@ -29,11 +29,16 @@ BEGIN
     END IF;
 
     IF OLD.status = 'IN_PROGRESS'
-       AND NEW.status = 'COMPLETED'
-       AND NEW.driver_wage > 0
-       AND NEW.driver_wage_journal_entry_id IS NULL THEN
-        SIGNAL SQLSTATE '45000'
-            SET MESSAGE_TEXT = 'COMPLETED_SHIFT_WAGE_JOURNAL_REQUIRED';
+       AND NEW.status = 'COMPLETED' THEN
+        IF NEW.driver_wage IS NULL OR NEW.driver_wage <= 0 THEN
+            SIGNAL SQLSTATE '45000'
+                SET MESSAGE_TEXT = 'COMPLETED_SHIFT_WAGE_REQUIRED';
+        END IF;
+
+        IF NEW.driver_wage_journal_entry_id IS NULL THEN
+            SIGNAL SQLSTATE '45000'
+                SET MESSAGE_TEXT = 'COMPLETED_SHIFT_WAGE_JOURNAL_REQUIRED';
+        END IF;
     END IF;
 
     IF OLD.status = 'COMPLETED'
