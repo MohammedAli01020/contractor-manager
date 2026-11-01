@@ -263,8 +263,8 @@ public class ShiftService {
                 .orElseThrow(() -> ApiException.conflict("حساب مصروف أجور السائقين غير مهيأ."));
         ChartAccount driverPayable = chartAccounts.findByTenantIdAndAccountCodeIgnoreCase(tenantId, "2100")
                 .orElseThrow(() -> ApiException.conflict("حساب مستحقات السائقين غير مهيأ."));
-        if (shift.getDriverWage() == null || shift.getDriverWage().signum() < 0) {
-            throw ApiException.conflict("أجر الوردية غير صالح للترحيل.");
+        if (shift.getDriverWage() == null || shift.getDriverWage().signum() <= 0) {
+            throw ApiException.conflict("لا يمكن إكمال الوردية قبل تحديد أجر موجب للسائق.");
         }
         // Serialize wage recognition against payments for the same worker.
         drivers.findByIdAndTenantIdForUpdate(shift.getDriverId(), tenantId)
