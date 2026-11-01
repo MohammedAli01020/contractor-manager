@@ -1,6 +1,7 @@
 package com.contractor.app.shift;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -20,6 +21,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 class ShiftCorrectionIntegrationTest extends AbstractShiftIntegrationTest {
@@ -197,6 +199,27 @@ class ShiftCorrectionIntegrationTest extends AbstractShiftIntegrationTest {
         assertThat(jdbc.queryForObject(
                 "SELECT COUNT(*) FROM shift_corrections WHERE tenant_id=? AND shift_id=?",
                 Integer.class, tenantId, completed.path("id").asLong())).isZero();
+    }
+
+
+    @Test
+    void driverLedgerDatabaseConstraintRejectsUnknownTransactionTypes() throws Exception {
+        seedCashBalanceAndGetCashId();
+        JsonNode started = startShift(token,
+                shiftBody(siteId, driverId, equipmentId, today().minusDays(1), "MORNING"));
+        Long openingJournalId = jdbc.queryForObject(
+                "SELECT id FROM journal_entries WHERE tenant_id=? AND source_type='TEST_CASH_OPENING' "
+                        + "ORDER BY id DESC LIMIT 1",
+                Long.class, tenantId);
+
+        assertThatThrownBy(() -> jdbc.update(
+                "INSERT INTO driver_ledger_entries (tenant_id, driver_id, transaction_type, transaction_date, "
+                        + "amount, balance_effect, description, client_request_key, shift_id, journal_entry_id, "
+                        + "created_by_user_id, created_at) VALUES (?, ?, 'NOT_ALLOWED', ?, 1.00, 1.00, "
+                        + "'invalid transaction type test', ?, ?, ?, ?, UTC_TIMESTAMP(6))",
+                tenantId, driverId, today(), "invalid-ledger-type-" + UUID.randomUUID(),
+                started.path("id").asLong(), openingJournalId, actorUserId))
+                .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     private long seedCashBalanceAndGetCashId() {
