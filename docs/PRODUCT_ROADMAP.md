@@ -170,7 +170,7 @@ The roadmap below is the only source of truth for phase order and overall status
 |---|---|---|
 | 0 — Stabilize and verify the existing core | In progress — re-verify current branch and refresh test evidence before acceptance | [PHASE-00-CORE.md](phases/PHASE-00-CORE.md) |
 | 1 — Master data and shift usability | In progress — compare existing implementation with the phase exit criteria | [PHASE-01-MASTER-DATA.md](phases/PHASE-01-MASTER-DATA.md) |
-| 2 — Financial foundation and monthly close | In progress — reconciled backend driver ledger/default chart/system-account reconciliation/trial-balance API are implemented with passing backend CI; Flutter accounting UI and auth/session test stack are implemented on draft PRs #25/#26 with fresh Flutter CI passing; live-device/API checks and remaining financial workflows are pending | [PHASE-02-FINANCIALS.md](phases/PHASE-02-FINANCIALS.md) and [financial design](phases/FINANCIAL-FOUNDATION-DESIGN.md) |
+| 2 — Financial foundation and monthly close | In progress — reconciled backend accounting foundation and Flutter accounting UI (PR #25 merged) are in place; Flutter auth/session hardening is under review in PR #27; live-device/API checks and remaining financial workflows are pending | [PHASE-02-FINANCIALS.md](phases/PHASE-02-FINANCIALS.md) and [financial design](phases/FINANCIAL-FOUNDATION-DESIGN.md) |
 | 3 — Purchases, suppliers and inventory | Not started | Tracked in this roadmap until a detailed plan is needed |
 | 4 — Reports and exports | Not started | Tracked in this roadmap until a detailed plan is needed |
 | 5 — Authentication redesign and optional driver accounts | Not started as a redesign phase | [PHASE-05-AUTHENTICATION.md](phases/PHASE-05-AUTHENTICATION.md) |
