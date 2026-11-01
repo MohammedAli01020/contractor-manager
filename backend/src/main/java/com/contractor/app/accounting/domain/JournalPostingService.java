@@ -11,6 +11,9 @@ import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -90,6 +93,38 @@ public class JournalPostingService {
         }
     }
 
+    private Map<Long, ChartAccount> lockCashBankAccounts(Long tenantId, List<NormalizedLine> journalLines) {
+        List<Long> accountIds = new ArrayList<>();
+        for (NormalizedLine line : journalLines) {
+            if (!accountIds.contains(line.accountId)) accountIds.add(line.accountId);
+        }
+        Collections.sort(accountIds);
+        Map<Long, ChartAccount> locked = new LinkedHashMap<>();
+        for (Long accountId : accountIds) {
+            accounts.findCashOrBankByIdAndTenantIdForUpdate(accountId, tenantId)
+                    .ifPresent(account -> locked.put(accountId, account));
+        }
+        return locked;
+    }
+
+    private void validateCashBankFloors(Long tenantId, List<NormalizedLine> journalLines,
+                                        Map<Long, ChartAccount> lockedAccounts) {
+        for (ChartAccount account : lockedAccounts.values()) {
+            BigDecimal netChange = ZERO;
+            for (NormalizedLine line : journalLines) {
+                if (account.getId().equals(line.accountId)) {
+                    netChange = netChange.add(line.debit).subtract(line.credit);
+                }
+            }
+            BigDecimal currentBalance = lines.calculateDebitNormalBalance(tenantId, account.getId());
+            if (currentBalance.add(netChange).compareTo(ZERO) < 0) {
+                String name = "الخزينة أو البنك";
+                throw ApiException.conflict("الرصيد المتاح في حساب " + name
+                        + " غير كافٍ لإتمام العملية. لا يمكن أن يصبح الرصيد سالبًا.");
+            }
+        }
+    }
+
     private JournalEntry postNormalized(Long tenantId, Long actorUserId, NormalizedJournal normalized) {
         Optional<JournalEntry> existing = entries.findByTenantIdAndPostingKey(tenantId, normalized.postingKey);
         if (existing.isPresent()) {
@@ -100,8 +135,28 @@ public class JournalPostingService {
             throw ApiException.conflict("مفتاح الترحيل مستخدم بالفعل لحركة مالية مختلفة.");
         }
 
+        Map<Long, ChartAccount> lockedCashBankAccounts = lockCashBankAccounts(tenantId, normalized.lines);
+
+        // A duplicate liquidity request may have passed the initial lookup before waiting
+        // for the same account lock. Re-read its key as a locking/current read after the
+        // lock, so it replays the committed journal instead of checking its outflow twice.
+        // Non-liquidity journals retain the existing unique-key collision recovery path.
+        if (!lockedCashBankAccounts.isEmpty()) {
+            Optional<JournalEntry> afterLiquidityLock =
+                    entries.findByTenantIdAndPostingKeyForUpdate(tenantId, normalized.postingKey);
+            if (afterLiquidityLock.isPresent()) {
+                JournalEntry prior = afterLiquidityLock.get();
+                if (sameRequest(tenantId, prior, normalized, true)) {
+                    return prior;
+                }
+                throw ApiException.conflict("مفتاح الترحيل مستخدم بالفعل لحركة مالية مختلفة.");
+            }
+        }
+
         for (NormalizedLine line : normalized.lines) {
-            ChartAccount account = accounts.findByIdAndTenantId(line.accountId, tenantId)
+            ChartAccount account = lockedCashBankAccounts.containsKey(line.accountId)
+                    ? lockedCashBankAccounts.get(line.accountId)
+                    : accounts.findByIdAndTenantId(line.accountId, tenantId)
                     .orElseThrow(() -> ApiException.notFound("الحساب المحاسبي غير موجود."));
             if (!account.isActive()) {
                 throw ApiException.badRequest("لا يمكن الترحيل على حساب محاسبي معطّل.");
@@ -114,6 +169,8 @@ public class JournalPostingService {
                 throw ApiException.notFound("المعدة المرتبطة بالقيد غير موجودة.");
             }
         }
+
+        validateCashBankFloors(tenantId, normalized.lines, lockedCashBankAccounts);
 
         if (normalized.reversalOfEntryId != null) {
             JournalEntry original = entries.findByIdAndTenantId(normalized.reversalOfEntryId, tenantId)
@@ -225,6 +282,11 @@ public class JournalPostingService {
     }
 
     private boolean sameRequest(Long tenantId, JournalEntry prior, NormalizedJournal request) {
+        return sameRequest(tenantId, prior, request, false);
+    }
+
+    private boolean sameRequest(Long tenantId, JournalEntry prior, NormalizedJournal request,
+                                boolean lockingCurrentRead) {
         if (!Objects.equals(prior.getSourceType(), request.sourceType)
                 || !Objects.equals(prior.getSourceId(), request.sourceId)
                 || !Objects.equals(prior.getAccountingDate(), request.accountingDate)
@@ -232,8 +294,12 @@ public class JournalPostingService {
                 || !Objects.equals(prior.getReversalOfEntryId(), request.reversalOfEntryId)) {
             return false;
         }
-        List<JournalLine> priorLines = lines.findByTenantIdAndJournalEntryIdOrderByLineNumberAsc(
-                tenantId, prior.getId());
+        // Under MySQL REPEATABLE READ, a normal SELECT may reuse the transaction's
+        // earlier snapshot even after the locking header read observed a newly committed
+        // journal. Use a locking/current read for its lines on the duplicate-liquidity path.
+        List<JournalLine> priorLines = lockingCurrentRead
+                ? lines.findByTenantIdAndJournalEntryIdOrderByLineNumberAscForUpdate(tenantId, prior.getId())
+                : lines.findByTenantIdAndJournalEntryIdOrderByLineNumberAsc(tenantId, prior.getId());
         if (priorLines.size() != request.lines.size()) {
             return false;
         }

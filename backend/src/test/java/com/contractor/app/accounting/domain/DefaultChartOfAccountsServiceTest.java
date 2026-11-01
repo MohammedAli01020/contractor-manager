@@ -3,6 +3,8 @@ package com.contractor.app.accounting.domain;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -15,16 +17,20 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 class DefaultChartOfAccountsServiceTest {
 
     private ChartAccountRepository accounts;
+    private JdbcTemplate jdbc;
     private DefaultChartOfAccountsService service;
 
     @BeforeEach
     void setUp() {
         accounts = mock(ChartAccountRepository.class);
-        service = new DefaultChartOfAccountsService(accounts);
+        jdbc = mock(JdbcTemplate.class);
+        when(jdbc.queryForObject(anyString(), eq(Long.class), eq(7L))).thenReturn(7L);
+        service = new DefaultChartOfAccountsService(accounts, jdbc);
     }
 
     @Test
@@ -37,9 +43,12 @@ class DefaultChartOfAccountsServiceTest {
         ArgumentCaptor<List<ChartAccount>> captor = ArgumentCaptor.forClass((Class) List.class);
         verify(accounts).saveAll(captor.capture());
         List<ChartAccount> created = captor.getValue();
-        assertThat(created).hasSize(13);
+        assertThat(created).hasSize(14);
         assertThat(created).extracting(ChartAccount::getAccountCode)
                 .contains("1000", "1010", "2100", "4000", "5000", "5200");
+        assertThat(created.stream().filter(ChartAccount::isCashBankAccount)
+                .map(ChartAccount::getAccountCode))
+                .containsExactlyInAnyOrder("1000", "1010");
         assertThat(created).allSatisfy(account -> {
             assertThat(account.getTenantId()).isEqualTo(7L);
             assertThat(account.isSystemManaged()).isTrue();
@@ -59,7 +68,7 @@ class DefaultChartOfAccountsServiceTest {
         ArgumentCaptor<List<ChartAccount>> captor = ArgumentCaptor.forClass((Class) List.class);
         verify(accounts).saveAll(captor.capture());
         List<ChartAccount> created = captor.getValue();
-        assertThat(created).hasSize(12);
+        assertThat(created).hasSize(13);
         assertThat(created).extracting(ChartAccount::getAccountCode).doesNotContain("1000", "9999");
         assertThat(existingCash.getName()).isEqualTo("Custom cash name");
     }
@@ -71,6 +80,7 @@ class DefaultChartOfAccountsServiceTest {
                 new ChartAccount(7L, "1010", "Bank", AccountType.ASSET, null, true),
                 new ChartAccount(7L, "1100", "Receivables", AccountType.ASSET, null, true),
                 new ChartAccount(7L, "1200", "Fixed assets", AccountType.ASSET, null, true),
+                new ChartAccount(7L, "1300", "Recoverable worker advances", AccountType.ASSET, null, true),
                 new ChartAccount(7L, "2000", "Suppliers", AccountType.LIABILITY, null, true),
                 new ChartAccount(7L, "2100", "Driver payable", AccountType.LIABILITY, null, true),
                 new ChartAccount(7L, "2200", "Partner payable", AccountType.LIABILITY, null, true),
@@ -85,6 +95,17 @@ class DefaultChartOfAccountsServiceTest {
         service.initializeForTenant(7L);
 
         verify(accounts, never()).saveAll(anyList());
+    }
+
+    @Test
+    void legacyConstructorOnlyClassifiesAssetAccountsAsCashOrBank() {
+        ChartAccount cash = new ChartAccount(
+                7L, "1000", "Cash", AccountType.ASSET, null, false);
+        ChartAccount liabilityWithSameCode = new ChartAccount(
+                8L, "1000", "Legacy liability code", AccountType.LIABILITY, null, false);
+
+        assertThat(cash.isCashBankAccount()).isTrue();
+        assertThat(liabilityWithSameCode.isCashBankAccount()).isFalse();
     }
 
     @Test

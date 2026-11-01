@@ -13,11 +13,14 @@ on:
       - feature/default-chart-of-accounts
       - feature/equipment-expenses-accounting
       - feature/driver-worker-ledger
+      - feature/accounting-api-foundation
       - fix/treasury-concurrency-hardening
     paths:
       - "backend/**"
       - ".github/workflows/backend-ci.yml"
       - "docs/ACCOUNTING-TREASURY-CONCURRENCY-2026-10-31.md"
+      - "docs/ACCOUNTING-PR-MERGE-PLAN-2026-10-31.md"
+      - "docs/DRIVER_WORKER_LEDGER_DESIGN.md"
   pull_request:
     branches:
       - feature/platform-owner-activation
@@ -30,6 +33,8 @@ on:
       - "backend/**"
       - ".github/workflows/backend-ci.yml"
       - "docs/ACCOUNTING-TREASURY-CONCURRENCY-2026-10-31.md"
+      - "docs/ACCOUNTING-PR-MERGE-PLAN-2026-10-31.md"
+      - "docs/DRIVER_WORKER_LEDGER_DESIGN.md"
   workflow_dispatch:
 
 permissions:
@@ -117,6 +122,94 @@ jobs:
               sys.exit("V24 migration test was skipped; Docker/MySQL must be available in CI.")
           if totals["failures"] != 0 or totals["errors"] != 0:
               sys.exit("V24 migration test reported failures or errors.")
+          PY
+
+      - name: Require financial idempotency MySQL integration tests to execute
+        run: |
+          python3 - <<'PY'
+          import glob
+          import sys
+          import xml.etree.ElementTree as ET
+
+          required = {
+              "DriverLedgerIdempotencyIntegrationTest": 4,
+              "ExpenseIntegrationTest": 12,
+          }
+          for name, expected in required.items():
+              pattern = f"target/surefire-reports/TEST-com.contractor.app.{'driver' if name.startswith('Driver') else 'expense'}.{name}.xml"
+              reports = glob.glob(pattern)
+              if not reports:
+                  sys.exit(f"Required financial idempotency report missing: {pattern}")
+              root = ET.parse(reports[0]).getroot()
+              totals = {key: int(root.attrib.get(key, 0))
+                        for key in ("tests", "failures", "errors", "skipped")}
+              print(f"{name}: {totals}")
+              if totals["tests"] < expected:
+                  sys.exit(f"{name} must execute at least {expected} tests.")
+              if totals["skipped"] != 0:
+                  sys.exit(f"{name} was skipped; Docker/MySQL must be available in CI.")
+              if totals["failures"] != 0 or totals["errors"] != 0:
+                  sys.exit(f"{name} reported failures or errors.")
+          PY
+
+      - name: Require shift wage and zero-cost equipment integration tests to execute
+        run: |
+          python3 - <<'PY'
+          import glob
+          import sys
+          import xml.etree.ElementTree as ET
+
+          pattern = "target/surefire-reports/TEST-com.contractor.app.shift.ShiftIntegrationTest.xml"
+          reports = glob.glob(pattern)
+          if not reports:
+              sys.exit(f"Required shift integration-test report missing: {pattern}")
+
+          root = ET.parse(reports[0]).getroot()
+          totals = {key: int(root.attrib.get(key, 0))
+                    for key in ("tests", "failures", "errors", "skipped")}
+          names = [case.attrib.get("name") for case in root.findall(".//testcase")]
+          required = {
+              "zeroWageShiftCannotBeCompleted",
+              "databaseRejectsDirectCompletionOfZeroWageShift",
+              "databaseRejectsCompletingPositiveWageShiftWithoutJournal",
+              "databaseRejectsUnrelatedJournalLinkEvenWhenShiftWageIsZero",
+              "zeroEquipmentOperatingCostDoesNotPreventShiftCompletion",
+          }
+          print(f"ShiftIntegrationTest: {totals}")
+          missing = required.difference(names)
+          if missing:
+              sys.exit(f"Required shift wage/equipment tests did not execute: {sorted(missing)}")
+          if any(names.count(name) != 1 for name in required):
+              sys.exit("Required shift wage/equipment integration tests must each execute exactly once.")
+          if totals["skipped"] != 0:
+              sys.exit("Shift integration tests were skipped; Docker/MySQL must be available in CI.")
+          if totals["failures"] != 0 or totals["errors"] != 0:
+              sys.exit("Shift integration tests reported failures or errors.")
+          PY
+
+      - name: Require chart-of-accounts tenant-isolation integration tests to execute
+        run: |
+          python3 - <<'PY'
+          import glob
+          import sys
+          import xml.etree.ElementTree as ET
+
+          pattern = "target/surefire-reports/TEST-com.contractor.app.accounting.ChartOfAccountsTenantIsolationIntegrationTest.xml"
+          reports = glob.glob(pattern)
+          if not reports:
+              sys.exit(f"Required chart tenant-isolation test report missing: {pattern}")
+
+          root = ET.parse(reports[0]).getroot()
+          totals = {key: int(root.attrib.get(key, 0))
+                    for key in ("tests", "failures", "errors", "skipped")}
+          print(f"ChartOfAccountsTenantIsolationIntegrationTest: {totals}")
+
+          if totals["tests"] != 3:
+              sys.exit("Chart-of-accounts tenant-isolation integration test class must execute exactly three tests.")
+          if totals["skipped"] != 0:
+              sys.exit("Chart-of-accounts tenant-isolation tests were skipped.")
+          if totals["failures"] != 0 or totals["errors"] != 0:
+              sys.exit("Chart-of-accounts tenant-isolation tests reported failures or errors.")
           PY
 
       - name: Write test summary

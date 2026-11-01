@@ -31,7 +31,7 @@ class AuthFlowIntegrationTest extends AbstractIntegrationTest {
         assertThat(res.path("user").path("username").asText()).isEqualTo(username);
         long tenantId = res.path("user").path("tenantId").asLong();
         assertThat(tenantId).isPositive();
-        assertThat(chartAccounts.findByTenantIdOrderByAccountCodeAsc(tenantId)).hasSize(13);
+        assertThat(chartAccounts.findByTenantIdOrderByAccountCodeAsc(tenantId)).hasSize(14);
     }
 
     @Test
