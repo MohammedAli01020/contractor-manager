@@ -3,13 +3,14 @@ name: Flutter CI
 on:
   push:
     branches:
-      - test/flutter-auth-bloc
+      - feature/accounting-mobile-foundation
     paths:
       - "mobile/**"
       - ".github/workflows/flutter-ci.yml"
   pull_request:
     branches:
-      - feature/financial-foundation
+      - feature/trial-balance-reconciliation
+      - feature/accounting-mobile-foundation
     paths:
       - "mobile/**"
       - ".github/workflows/flutter-ci.yml"

@@ -1,8 +1,9 @@
 package com.contractor.app.accounting.domain;
 
 import com.contractor.app.accounting.infra.ChartAccountRepository;
+import com.contractor.app.common.error.ApiException;
+import com.contractor.app.tenant.infra.TenantRepository;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -11,72 +12,88 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * Creates the tenant's baseline accounts without overwriting accounts that already exist.
- * Account codes are stable identifiers; names can be customized later by the tenant.
- */
+/** Creates missing tenant defaults and resolves system accounts for journal posting. */
 @Service
 public class DefaultChartOfAccountsService {
-
-    private static final List<AccountTemplate> DEFAULT_ACCOUNTS = Arrays.asList(
-            new AccountTemplate("1000", "الخزينة", AccountType.ASSET),
-            new AccountTemplate("1010", "البنوك", AccountType.ASSET),
-            new AccountTemplate("1100", "العملاء والمستحقات", AccountType.ASSET),
-            new AccountTemplate("1200", "الأصول الثابتة", AccountType.ASSET),
-            new AccountTemplate("2000", "الموردون", AccountType.LIABILITY),
-            new AccountTemplate("2100", "مستحقات السائقين", AccountType.LIABILITY),
-            new AccountTemplate("2200", "مستحقات الملاك والشركاء", AccountType.LIABILITY),
-            new AccountTemplate("3000", "رأس المال", AccountType.EQUITY),
-            new AccountTemplate("4000", "إيرادات الورديات", AccountType.REVENUE),
-            new AccountTemplate("4100", "إيرادات أخرى", AccountType.REVENUE),
-            new AccountTemplate("5000", "مصروف أجور السائقين", AccountType.EXPENSE),
-            new AccountTemplate("5100", "مصروفات تشغيل المعدات", AccountType.EXPENSE),
-            new AccountTemplate("5200", "مصروفات أخرى", AccountType.EXPENSE)
-    );
-
     private final ChartAccountRepository accounts;
+    private final TenantRepository tenants;
 
-    public DefaultChartOfAccountsService(ChartAccountRepository accounts) {
+    public DefaultChartOfAccountsService(ChartAccountRepository accounts, TenantRepository tenants) {
         this.accounts = accounts;
+        this.tenants = tenants;
     }
 
-    /**
-     * Idempotently adds missing baseline accounts for one tenant. Existing account names,
-     * active flags and other tenant-specific edits are intentionally preserved.
-     */
+    /** Adds missing baseline accounts without overwriting tenant edits or custom accounts. */
     @Transactional
     public void initializeForTenant(Long tenantId) {
-        if (tenantId == null || tenantId <= 0) {
-            throw new IllegalArgumentException("A persisted tenant ID is required to initialize accounts.");
+        requireTenantId(tenantId);
+        Set<String> existingCodes = existingCodes(tenantId);
+        if (missingAccounts(tenantId, existingCodes).isEmpty()) {
+            return;
         }
 
-        Set<String> existingCodes = accounts.findByTenantIdOrderByAccountCodeAsc(tenantId).stream()
+        // Lock only while defaults are missing. Normal posting does not serialize on this row
+        // once the chart has been initialized.
+        tenants.findByIdForUpdate(tenantId)
+                .orElseThrow(() -> ApiException.notFound("الشركة غير موجودة لتهيئة دليل الحسابات."));
+
+        // A locking query is a MySQL current read under REPEATABLE READ. The initial read above
+        // may have established an older snapshot while this transaction waited for the tenant lock.
+        existingCodes = accounts.findByTenantIdOrderByAccountCodeAscForUpdate(tenantId).stream()
                 .map(ChartAccount::getAccountCode)
                 .filter(code -> code != null)
                 .map(code -> code.toUpperCase(Locale.ROOT))
                 .collect(Collectors.toCollection(HashSet::new));
-
-        List<ChartAccount> missing = new ArrayList<>();
-        for (AccountTemplate template : DEFAULT_ACCOUNTS) {
-            if (!existingCodes.contains(template.code)) {
-                missing.add(new ChartAccount(tenantId, template.code, template.name, template.type, null, true));
-            }
-        }
-
+        List<ChartAccount> missing = missingAccounts(tenantId, existingCodes);
         if (!missing.isEmpty()) {
             accounts.saveAll(missing);
         }
     }
 
-    private static final class AccountTemplate {
-        private final String code;
-        private final String name;
-        private final AccountType type;
+    private Set<String> existingCodes(Long tenantId) {
+        return accounts.findByTenantIdOrderByAccountCodeAsc(tenantId).stream()
+                .map(ChartAccount::getAccountCode)
+                .filter(code -> code != null)
+                .map(code -> code.toUpperCase(Locale.ROOT))
+                .collect(Collectors.toCollection(HashSet::new));
+    }
 
-        private AccountTemplate(String code, String name, AccountType type) {
-            this.code = code;
-            this.name = name;
-            this.type = type;
+    private List<ChartAccount> missingAccounts(Long tenantId, Set<String> existingCodes) {
+        List<ChartAccount> missing = new ArrayList<>();
+        for (SystemAccountCode template : SystemAccountCode.values()) {
+            if (!existingCodes.contains(template.getCode())) {
+                missing.add(new ChartAccount(tenantId, template.getCode(), template.getDefaultName(),
+                        template.getAccountType(), null, true, template.isCashBankAccount()));
+            }
+        }
+        return missing;
+    }
+
+    /** Resolves a system account within one tenant and validates its accounting role. */
+    @Transactional(readOnly = true)
+    public ChartAccount requireSystemAccount(Long tenantId, SystemAccountCode systemCode) {
+        if (tenantId == null || tenantId <= 0) {
+            throw ApiException.badRequest("معرّف الشركة مطلوب لقراءة دليل الحسابات.");
+        }
+        if (systemCode == null) {
+            throw ApiException.badRequest("نوع الحساب الافتراضي مطلوب.");
+        }
+        ChartAccount account = accounts.findByTenantIdAndAccountCodeIgnoreCase(tenantId, systemCode.getCode())
+                .filter(ChartAccount::isActive)
+                .orElseThrow(() -> ApiException.conflict(
+                        "الحساب الافتراضي " + systemCode.getCode() + " غير مهيأ أو معطّل."));
+        if (!account.isSystemManaged()
+                || account.getAccountType() != systemCode.getAccountType()
+                || account.isCashBankAccount() != systemCode.isCashBankAccount()) {
+            throw ApiException.conflict(
+                    "إعداد الحساب الافتراضي " + systemCode.getCode() + " غير متوافق مع دليل الحسابات.");
+        }
+        return account;
+    }
+
+    private void requireTenantId(Long tenantId) {
+        if (tenantId == null || tenantId <= 0) {
+            throw new IllegalArgumentException("A persisted tenant ID is required to initialize accounts.");
         }
     }
 }
