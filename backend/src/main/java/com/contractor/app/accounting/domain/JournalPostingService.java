@@ -146,7 +146,7 @@ public class JournalPostingService {
                     entries.findByTenantIdAndPostingKeyForUpdate(tenantId, normalized.postingKey);
             if (afterLiquidityLock.isPresent()) {
                 JournalEntry prior = afterLiquidityLock.get();
-                if (sameRequest(tenantId, prior, normalized)) {
+                if (sameRequest(tenantId, prior, normalized, true)) {
                     return prior;
                 }
                 throw ApiException.conflict("مفتاح الترحيل مستخدم بالفعل لحركة مالية مختلفة.");
@@ -282,6 +282,11 @@ public class JournalPostingService {
     }
 
     private boolean sameRequest(Long tenantId, JournalEntry prior, NormalizedJournal request) {
+        return sameRequest(tenantId, prior, request, false);
+    }
+
+    private boolean sameRequest(Long tenantId, JournalEntry prior, NormalizedJournal request,
+                                boolean lockingCurrentRead) {
         if (!Objects.equals(prior.getSourceType(), request.sourceType)
                 || !Objects.equals(prior.getSourceId(), request.sourceId)
                 || !Objects.equals(prior.getAccountingDate(), request.accountingDate)
@@ -289,8 +294,12 @@ public class JournalPostingService {
                 || !Objects.equals(prior.getReversalOfEntryId(), request.reversalOfEntryId)) {
             return false;
         }
-        List<JournalLine> priorLines = lines.findByTenantIdAndJournalEntryIdOrderByLineNumberAsc(
-                tenantId, prior.getId());
+        // Under MySQL REPEATABLE READ, a normal SELECT may reuse the transaction's
+        // earlier snapshot even after the locking header read observed a newly committed
+        // journal. Use a locking/current read for its lines on the duplicate-liquidity path.
+        List<JournalLine> priorLines = lockingCurrentRead
+                ? lines.findByTenantIdAndJournalEntryIdOrderByLineNumberAscForUpdate(tenantId, prior.getId())
+                : lines.findByTenantIdAndJournalEntryIdOrderByLineNumberAsc(tenantId, prior.getId());
         if (priorLines.size() != request.lines.size()) {
             return false;
         }
