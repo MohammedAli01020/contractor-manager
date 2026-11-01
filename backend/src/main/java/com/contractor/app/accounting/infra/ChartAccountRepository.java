@@ -16,6 +16,11 @@ public interface ChartAccountRepository extends JpaRepository<ChartAccount, Long
     @Query("select a from ChartAccount a where a.id = :id and a.tenantId = :tenantId and a.accountType = com.contractor.app.accounting.domain.AccountType.ASSET and a.cashBankAccount = true")
     Optional<ChartAccount> findCashOrBankByIdAndTenantIdForUpdate(@Param("id") Long id, @Param("tenantId") Long tenantId);
     List<ChartAccount> findByTenantIdOrderByAccountCodeAsc(Long tenantId);
+
+    /** Current read used after the tenant initialization lock; avoids stale REPEATABLE READ snapshots. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select a from ChartAccount a where a.tenantId = :tenantId order by a.accountCode asc")
+    List<ChartAccount> findByTenantIdOrderByAccountCodeAscForUpdate(@Param("tenantId") Long tenantId);
     boolean existsByTenantIdAndAccountCodeIgnoreCase(Long tenantId, String accountCode);
     Optional<ChartAccount> findByTenantIdAndAccountCodeIgnoreCase(Long tenantId, String accountCode);
 }

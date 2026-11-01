@@ -22,8 +22,6 @@ on:
       - "docs/ACCOUNTING-TREASURY-CONCURRENCY-2026-10-31.md"
       - "docs/ACCOUNTING-DEFAULT-CHART-2026-10-31.md"
       - "docs/ACCOUNTING-TRIAL-BALANCE-2026-10-31.md"
-      - "docs/PRODUCT_ROADMAP.md"
-      - "docs/phases/PHASE-02-FINANCIALS.md"
   pull_request:
     branches:
       - feature/platform-owner-activation
@@ -33,9 +31,14 @@ on:
       - feature/driver-worker-ledger
       - fix/treasury-concurrency-hardening
       - feature/accounting-default-chart-completion
+      - feature/trial-balance-report
     paths:
       - "backend/**"
       - ".github/workflows/backend-ci.yml"
+      - "docs/ACCOUNTING-DEFAULT-CHART-2026-10-31.md"
+      - "docs/ACCOUNTING-TREASURY-CONCURRENCY-2026-10-31.md"
+      - "docs/ACCOUNTING-DEFAULT-CHART-2026-10-31.md"
+      - "docs/ACCOUNTING-TRIAL-BALANCE-2026-10-31.md"
   workflow_dispatch:
 
 permissions:
@@ -130,6 +133,7 @@ jobs:
 
           required = {
               "DefaultChartOfAccountsServiceTest": 8,
+              "DefaultChartOfAccountsConcurrencyIntegrationTest": 1,
               "ShiftIntegrationTest": 1,
               "ExpenseIntegrationTest": 1,
           }

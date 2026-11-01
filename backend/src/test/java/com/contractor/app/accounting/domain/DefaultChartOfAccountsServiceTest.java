@@ -36,6 +36,7 @@ class DefaultChartOfAccountsServiceTest {
     @Test
     void createsTheCompleteDefaultChartForANewTenant() {
         when(accounts.findByTenantIdOrderByAccountCodeAsc(7L)).thenReturn(Collections.emptyList());
+        when(accounts.findByTenantIdOrderByAccountCodeAscForUpdate(7L)).thenReturn(Collections.emptyList());
         when(tenants.findByIdForUpdate(7L)).thenReturn(Optional.of(mock(Tenant.class)));
 
         service.initializeForTenant(7L);
@@ -61,6 +62,8 @@ class DefaultChartOfAccountsServiceTest {
         ChartAccount existingCash = new ChartAccount(7L, "1000", "Custom cash name", AccountType.ASSET, null, true);
         ChartAccount customAccount = new ChartAccount(7L, "9999", "Tenant custom account", AccountType.EXPENSE, null, false);
         when(accounts.findByTenantIdOrderByAccountCodeAsc(7L))
+                .thenReturn(Arrays.asList(existingCash, customAccount));
+        when(accounts.findByTenantIdOrderByAccountCodeAscForUpdate(7L))
                 .thenReturn(Arrays.asList(existingCash, customAccount));
         when(tenants.findByIdForUpdate(7L)).thenReturn(Optional.of(mock(Tenant.class)));
 
@@ -102,13 +105,14 @@ class DefaultChartOfAccountsServiceTest {
 
     @Test
     void rechecksMissingAccountsAfterAcquiringTenantLock() {
-        when(accounts.findByTenantIdOrderByAccountCodeAsc(7L))
-                .thenReturn(Collections.emptyList(), defaultAccountsForTenant());
+        when(accounts.findByTenantIdOrderByAccountCodeAsc(7L)).thenReturn(Collections.emptyList());
+        when(accounts.findByTenantIdOrderByAccountCodeAscForUpdate(7L)).thenReturn(defaultAccountsForTenant());
         when(tenants.findByIdForUpdate(7L)).thenReturn(Optional.of(mock(Tenant.class)));
 
         service.initializeForTenant(7L);
 
-        verify(accounts, org.mockito.Mockito.times(2)).findByTenantIdOrderByAccountCodeAsc(7L);
+        verify(accounts).findByTenantIdOrderByAccountCodeAsc(7L);
+        verify(accounts).findByTenantIdOrderByAccountCodeAscForUpdate(7L);
         verify(accounts, never()).saveAll(anyList());
     }
 
@@ -152,6 +156,17 @@ class DefaultChartOfAccountsServiceTest {
                 .isInstanceOf(ApiException.class);
         assertThatThrownBy(() -> service.requireSystemAccount(null, SystemAccountCode.SUPPLIER_PAYABLE))
                 .isInstanceOf(ApiException.class);
+    }
+
+    @Test
+    void legacyConstructorOnlyClassifiesAssetAccountsAsCashOrBank() {
+        ChartAccount cash = new ChartAccount(
+                7L, "1000", "Cash", AccountType.ASSET, null, false);
+        ChartAccount liabilityWithSameCode = new ChartAccount(
+                8L, "1000", "Legacy liability code", AccountType.LIABILITY, null, false);
+
+        assertThat(cash.isCashBankAccount()).isTrue();
+        assertThat(liabilityWithSameCode.isCashBankAccount()).isFalse();
     }
 
     @Test
