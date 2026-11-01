@@ -8,16 +8,10 @@ FOR EACH ROW
 BEGIN
     DECLARE matching_wage_journals INT DEFAULT 0;
 
-    IF OLD.status = 'IN_PROGRESS'
-       AND NEW.status = 'COMPLETED'
-       AND NEW.driver_wage > 0 THEN
-        IF NEW.driver_wage_journal_entry_id IS NULL THEN
-            SIGNAL SQLSTATE '45000'
-                SET MESSAGE_TEXT = 'COMPLETED_SHIFT_WAGE_JOURNAL_REQUIRED';
-        END IF;
-
-        -- A non-null journal link is insufficient: it must be this shift's
-        -- exact, posted wage-recognition journal for the same tenant/source.
+    -- Validate every non-null link, not only links used during positive-wage
+    -- completion. This also prevents attaching an unrelated journal to a
+    -- zero-wage shift or to a still-running shift for later misuse.
+    IF NEW.driver_wage_journal_entry_id IS NOT NULL THEN
         SELECT COUNT(*)
           INTO matching_wage_journals
           FROM journal_entries
@@ -32,6 +26,14 @@ BEGIN
             SIGNAL SQLSTATE '45000'
                 SET MESSAGE_TEXT = 'COMPLETED_SHIFT_WAGE_JOURNAL_MISMATCH';
         END IF;
+    END IF;
+
+    IF OLD.status = 'IN_PROGRESS'
+       AND NEW.status = 'COMPLETED'
+       AND NEW.driver_wage > 0
+       AND NEW.driver_wage_journal_entry_id IS NULL THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'COMPLETED_SHIFT_WAGE_JOURNAL_REQUIRED';
     END IF;
 
     IF OLD.status = 'COMPLETED'
