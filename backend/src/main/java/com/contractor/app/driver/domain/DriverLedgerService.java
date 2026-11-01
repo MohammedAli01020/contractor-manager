@@ -1,6 +1,8 @@
 package com.contractor.app.driver.domain;
 
 import com.contractor.app.accounting.domain.ChartAccount;
+import com.contractor.app.accounting.domain.DefaultChartOfAccountsService;
+import com.contractor.app.accounting.domain.SystemAccountCode;
 import com.contractor.app.accounting.domain.AccountType;
 import com.contractor.app.accounting.domain.JournalEntry;
 import com.contractor.app.accounting.domain.JournalLineRequest;
@@ -39,12 +41,15 @@ public class DriverLedgerService {
     private final JournalLineRepository journalLines;
     private final FinancialIdempotencyService idempotency;
     private final JournalPostingService journals;
+    private final DefaultChartOfAccountsService defaultAccounts;
 
     public DriverLedgerService(DriverRepository drivers, DriverLedgerEntryRepository ledger,
             ChartAccountRepository accounts, JournalEntryRepository journalsRepo, JournalLineRepository journalLines,
-            FinancialIdempotencyService idempotency, JournalPostingService journals) {
+            FinancialIdempotencyService idempotency, JournalPostingService journals,
+            DefaultChartOfAccountsService defaultAccounts) {
         this.drivers=drivers; this.ledger=ledger; this.accounts=accounts; this.journalsRepo=journalsRepo;
         this.journalLines=journalLines; this.idempotency=idempotency; this.journals=journals;
+        this.defaultAccounts=defaultAccounts;
     }
 
     @Transactional(readOnly=true)
@@ -87,7 +92,8 @@ public class DriverLedgerService {
         }
         BigDecimal balance=ledger.sumBalance(tenantId,driverId);
         if(balance.compareTo(amount)<0) throw ApiException.badRequest("المبلغ أكبر من مستحقات العامل المتاحة للصرف.");
-        ChartAccount payable=account(tenantId,"2100");
+        defaultAccounts.initializeForTenant(tenantId);
+        ChartAccount payable=defaultAccounts.requireSystemAccount(tenantId,SystemAccountCode.DRIVER_PAYABLE);
         ChartAccount cash=accounts.findByIdAndTenantId(request.getPaymentAccountId(),tenantId)
                 .filter(ChartAccount::isActive).orElseThrow(()->ApiException.notFound("حساب الخزينة أو البنك غير موجود."));
         if(cash.getAccountType()!=AccountType.ASSET || !cash.isCashBankAccount())
@@ -134,7 +140,10 @@ public class DriverLedgerService {
         BigDecimal balance=ledger.sumBalance(tenantId,driverId);
         if("AGAINST_EARNED".equals(type) && balance.compareTo(amount)<0)
             throw ApiException.badRequest("السلفة أكبر من مستحقات العامل المتاحة.");
-        ChartAccount debitAccount="AGAINST_EARNED".equals(type)?account(tenantId,"2100"):account(tenantId,"1300");
+        defaultAccounts.initializeForTenant(tenantId);
+        ChartAccount debitAccount="AGAINST_EARNED".equals(type)
+                ?defaultAccounts.requireSystemAccount(tenantId,SystemAccountCode.DRIVER_PAYABLE)
+                :defaultAccounts.requireSystemAccount(tenantId,SystemAccountCode.RECOVERABLE_WORKER_ADVANCES);
         ChartAccount cash=accounts.findByIdAndTenantId(request.getPaymentAccountId(),tenantId)
                 .filter(ChartAccount::isActive).orElseThrow(()->ApiException.notFound("حساب الخزينة أو البنك غير موجود."));
         if(cash.getAccountType()!=AccountType.ASSET || !cash.isCashBankAccount())
@@ -155,15 +164,6 @@ public class DriverLedgerService {
                 .anyMatch(line -> line.getAccountId().equals(accountId) && line.getCredit().signum() > 0);
     }
 
-    private ChartAccount account(Long tenantId,String code) {
-        ChartAccount account=accounts.findByTenantIdAndAccountCodeIgnoreCase(tenantId,code)
-                .filter(ChartAccount::isActive)
-                .orElseThrow(()->ApiException.conflict("الحساب الافتراضي "+code+" غير مهيأ."));
-        AccountType expected="2100".equals(code)?AccountType.LIABILITY:AccountType.ASSET;
-        if(account.getAccountType()!=expected)
-            throw ApiException.conflict("نوع الحساب الافتراضي "+code+" غير صحيح.");
-        return account;
-    }
     private BigDecimal money(BigDecimal v) {
         if(v==null||v.signum()<=0) throw ApiException.badRequest("المبلغ يجب أن يكون أكبر من صفر.");
         try{return v.setScale(2,RoundingMode.UNNECESSARY);}
