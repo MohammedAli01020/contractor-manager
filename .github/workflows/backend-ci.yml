@@ -10,6 +10,7 @@ on:
       - fix/multi-instance-accounting-safety
       - fix/accounting-concurrency-hardening
       - feature/financial-foundation
+      - feature/trial-balance-reconciliation
       - feature/default-chart-of-accounts
       - feature/equipment-expenses-accounting
       - feature/driver-worker-ledger
@@ -23,6 +24,10 @@ on:
       - "docs/ACCOUNTING-PR-MERGE-PLAN-2026-10-31.md"
       - "docs/DRIVER_WORKER_LEDGER_DESIGN.md"
       - "docs/ACCOUNTING-DEFAULT-CHART-2026-11-01.md"
+      - "docs/ACCOUNTING-TRIAL-BALANCE-2026-10-31.md"
+      - "docs/ACCOUNTING-DEFAULT-CHART-2026-10-31.md"
+      - "docs/ACCOUNTING-DEFAULT-CHART-2026-11-01.md"
+      - "docs/ACCOUNTING-TRIAL-BALANCE-2026-10-31.md"
   pull_request:
     branches:
       - feature/platform-owner-activation
@@ -31,6 +36,7 @@ on:
       - feature/request-tracking
       - feature/driver-worker-ledger
       - feature/financial-foundation
+      - feature/trial-balance-reconciliation
     paths:
       - "backend/**"
       - ".github/workflows/backend-ci.yml"
@@ -240,6 +246,28 @@ jobs:
                   sys.exit(f"{suite} did not execute the required number of tests.")
               if totals["skipped"] != 0 or totals["failures"] != 0 or totals["errors"] != 0:
                   sys.exit(f"{suite} has skipped tests, failures, or errors.")
+          PY
+
+      - name: Require trial-balance MySQL integration tests to execute
+        run: |
+          python3 - <<'PY'
+          import glob
+          import sys
+          import xml.etree.ElementTree as ET
+
+          pattern = "target/surefire-reports/TEST-com.contractor.app.accounting.TrialBalanceIntegrationTest.xml"
+          reports = glob.glob(pattern)
+          if not reports:
+              sys.exit(f"Required trial-balance integration-test report missing: {pattern}")
+
+          root = ET.parse(reports[0]).getroot()
+          totals = {key: int(root.attrib.get(key, 0))
+                    for key in ("tests", "failures", "errors", "skipped")}
+          print(f"TrialBalanceIntegrationTest: {totals}")
+          if totals["tests"] < 7:
+              sys.exit("Trial-balance integration tests did not all execute.")
+          if totals["skipped"] != 0 or totals["failures"] != 0 or totals["errors"] != 0:
+              sys.exit("Trial-balance integration tests were skipped or reported failures/errors.")
           PY
 
       - name: Write test summary
