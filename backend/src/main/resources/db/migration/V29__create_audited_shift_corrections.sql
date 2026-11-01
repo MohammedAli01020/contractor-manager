@@ -107,6 +107,7 @@ BEGIN
            AND c.new_site_id = NEW.site_id
            AND c.old_driver_id = OLD.driver_id
            AND c.new_driver_id = NEW.driver_id
+           AND c.new_driver_id = c.old_driver_id
            AND c.old_equipment_id = OLD.equipment_id
            AND c.new_equipment_id = NEW.equipment_id
            AND c.old_driver_wage = OLD.driver_wage
