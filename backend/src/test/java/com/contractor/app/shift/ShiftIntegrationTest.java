@@ -619,6 +619,26 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
     }
 
     @Test
+    void databaseRejectsCompletingPositiveWageShiftWithoutJournal() throws Exception {
+        JsonNode running = startShift(token,
+                shiftBody(siteId, driverId, equipmentId, day(1), "MORNING"));
+        long id = running.path("id").asLong();
+
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "UPDATE shifts SET status = 'COMPLETED', finished_at = UTC_TIMESTAMP(6) WHERE id = ?", id))
+                .hasMessageContaining("COMPLETED_SHIFT_WAGE_JOURNAL_REQUIRED");
+
+        Shift unchanged = shiftRepository.findById(id).orElseThrow(AssertionError::new);
+        assertThat(unchanged.getStatus().name()).isEqualTo("IN_PROGRESS");
+        assertThat(unchanged.getDriverWageJournalEntryId()).isNull();
+
+        // The supported service flow posts the journal first and can still complete the shift.
+        JsonNode completed = finishShift(token, running);
+        assertThat(completed.path("status").asText()).isEqualTo("COMPLETED");
+        assertThat(completed.path("driverWageJournalEntryId").isNull()).isFalse();
+    }
+
+    @Test
     void databaseProtectsCompletedZeroWageShiftFromDirectMutationAndDeletion() throws Exception {
         Map<String, Object> startBody = shiftBody(siteId, driverId, equipmentId, day(1), "MORNING");
         startBody.put("driverWage", BigDecimal.ZERO);
