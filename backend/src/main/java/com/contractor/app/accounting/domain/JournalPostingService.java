@@ -137,18 +137,20 @@ public class JournalPostingService {
 
         Map<Long, ChartAccount> lockedCashBankAccounts = lockCashBankAccounts(tenantId, normalized.lines);
 
-        // A duplicate request may have passed the initial lookup before waiting for a
-        // cash/bank account lock. Re-read the posting key as a locking/current read after
-        // acquiring liquidity locks, so a committed identical posting is replayed rather
-        // than rejected by the balance-floor check against its own already-applied outflow.
-        Optional<JournalEntry> afterLiquidityLock =
-                entries.findByTenantIdAndPostingKeyForUpdate(tenantId, normalized.postingKey);
-        if (afterLiquidityLock.isPresent()) {
-            JournalEntry prior = afterLiquidityLock.get();
-            if (sameRequest(tenantId, prior, normalized)) {
-                return prior;
+        // A duplicate liquidity request may have passed the initial lookup before waiting
+        // for the same account lock. Re-read its key as a locking/current read after the
+        // lock, so it replays the committed journal instead of checking its outflow twice.
+        // Non-liquidity journals retain the existing unique-key collision recovery path.
+        if (!lockedCashBankAccounts.isEmpty()) {
+            Optional<JournalEntry> afterLiquidityLock =
+                    entries.findByTenantIdAndPostingKeyForUpdate(tenantId, normalized.postingKey);
+            if (afterLiquidityLock.isPresent()) {
+                JournalEntry prior = afterLiquidityLock.get();
+                if (sameRequest(tenantId, prior, normalized)) {
+                    return prior;
+                }
+                throw ApiException.conflict("مفتاح الترحيل مستخدم بالفعل لحركة مالية مختلفة.");
             }
-            throw ApiException.conflict("مفتاح الترحيل مستخدم بالفعل لحركة مالية مختلفة.");
         }
 
         for (NormalizedLine line : normalized.lines) {
