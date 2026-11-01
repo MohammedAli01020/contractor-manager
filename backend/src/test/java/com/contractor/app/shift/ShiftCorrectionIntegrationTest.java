@@ -129,6 +129,19 @@ class ShiftCorrectionIntegrationTest extends AbstractShiftIntegrationTest {
                         + "AND transaction_type='CORRECTION_REVERSAL'",
                 Integer.class, tenantId, shiftId)).isEqualTo(2);
         assertThat(correctedAgain.path("driverId").asLong()).isEqualTo(driverId);
+
+        Long appliedCorrectionId = jdbc.queryForObject(
+                "SELECT id FROM shift_corrections WHERE tenant_id=? AND shift_id=? "
+                        + "ORDER BY id ASC LIMIT 1", Long.class, tenantId, shiftId);
+        assertThatThrownBy(() -> jdbc.update(
+                "UPDATE shift_corrections SET reason='tampered audit reason' WHERE id=? AND tenant_id=?",
+                appliedCorrectionId, tenantId))
+                .isInstanceOf(UncategorizedSQLException.class)
+                .hasMessageContaining("SHIFT_CORRECTION_AUDIT_IMMUTABLE");
+        assertThatThrownBy(() -> jdbc.update(
+                "DELETE FROM shift_corrections WHERE id=? AND tenant_id=?", appliedCorrectionId, tenantId))
+                .isInstanceOf(UncategorizedSQLException.class)
+                .hasMessageContaining("SHIFT_CORRECTION_AUDIT_IMMUTABLE");
     }
 
     @Test
