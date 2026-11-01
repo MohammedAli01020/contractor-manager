@@ -1,7 +1,7 @@
 # Phase 02 — Financial foundation and monthly close
 
 **Roadmap:** [PRODUCT_ROADMAP.md](../PRODUCT_ROADMAP.md#phase-2--financial-foundation-driver-ledger-equipment-expenses-and-monthly-closing)  
-**Status:** In progress — accounting/inventory architecture documented; implementation and tests not yet verified.
+**Status:** In progress — V17–V27 accounting and operational immutability foundations are present on the financial/driver branch. Default chart, system-account resolution and operational journal-link reconciliation are in progress on `feature/default-chart-reconciliation`; fresh CI is pending.
 
 ## Goal
 Build auditable financial ledgers and monthly closing without double-counting shift wages, expenses, payments, or inventory consumption.
