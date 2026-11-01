@@ -307,6 +307,22 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
                 .andExpect(status().isBadRequest());
     }
 
+    @Test
+    void zeroEquipmentOperatingCostDoesNotPreventShiftCompletion() throws Exception {
+        long zeroCostEquipmentId = createEquipment(token, "EX-ZERO", typeId, "0", "1200");
+        JsonNode running = startShift(token,
+                shiftBody(siteId, driverId, zeroCostEquipmentId, day(1), "MORNING"));
+
+        assertThat(running.path("equipmentOperatingCost").decimalValue()).isEqualByComparingTo("0.00");
+        assertThat(running.path("driverWage").decimalValue()).isGreaterThan(BigDecimal.ZERO);
+
+        JsonNode completed = finishShift(token, running);
+
+        assertThat(completed.path("status").asText()).isEqualTo("COMPLETED");
+        assertThat(completed.path("equipmentOperatingCost").decimalValue()).isEqualByComparingTo("0.00");
+        assertThat(completed.path("driverWageJournalEntryId").isNull()).isFalse();
+    }
+
     // ---------------------------------------------------------------- snapshots
 
     @Test
