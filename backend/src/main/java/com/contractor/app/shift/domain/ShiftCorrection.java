@@ -71,6 +71,24 @@ public class ShiftCorrection extends BaseTenantEntity {
     @Column(name = "new_equipment_operating_cost", nullable = false, precision = 15, scale = 2, updatable = false)
     private BigDecimal newEquipmentOperatingCost;
 
+    @Column(name = "old_notes", length = 500, updatable = false)
+    private String oldNotes;
+    @Column(name = "new_notes", length = 500, updatable = false)
+    private String newNotes;
+
+    @Column(name = "old_wage_journal_entry_id", updatable = false)
+    private Long oldWageJournalEntryId;
+    @Column(name = "wage_reversal_journal_entry_id")
+    private Long wageReversalJournalEntryId;
+    @Column(name = "replacement_wage_journal_entry_id")
+    private Long replacementWageJournalEntryId;
+    @Column(name = "old_earning_ledger_entry_id", updatable = false)
+    private Long oldEarningLedgerEntryId;
+    @Column(name = "reversed_earning_ledger_entry_id")
+    private Long reversedEarningLedgerEntryId;
+    @Column(name = "replacement_earning_ledger_entry_id")
+    private Long replacementEarningLedgerEntryId;
+
     @Column(name = "applied_at")
     private LocalDateTime appliedAt;
 
@@ -80,7 +98,7 @@ public class ShiftCorrection extends BaseTenantEntity {
     public ShiftCorrection(Long tenantId, Long shiftId, String idempotencyKey, String reason, Long actorUserId,
                            Long expectedShiftVersion, Shift shift, LocalDate newShiftDate, ShiftType newShiftType,
                            Long newSiteId, Long newDriverId, Long newEquipmentId, BigDecimal newDriverWage,
-                           BigDecimal newPrice, BigDecimal newEquipmentOperatingCost) {
+                           BigDecimal newPrice, BigDecimal newEquipmentOperatingCost, String newNotes) {
         super(tenantId);
         this.shiftId = shiftId;
         this.idempotencyKey = idempotencyKey;
@@ -104,6 +122,9 @@ public class ShiftCorrection extends BaseTenantEntity {
         this.newPrice = newPrice;
         this.oldEquipmentOperatingCost = shift.getEquipmentOperatingCost();
         this.newEquipmentOperatingCost = newEquipmentOperatingCost;
+        this.oldNotes = shift.getNotes();
+        this.newNotes = newNotes;
+        this.oldWageJournalEntryId = shift.getDriverWageJournalEntryId();
     }
 
     public Long getShiftId() { return shiftId; }
@@ -128,5 +149,17 @@ public class ShiftCorrection extends BaseTenantEntity {
     public BigDecimal getNewPrice() { return newPrice; }
     public BigDecimal getOldEquipmentOperatingCost() { return oldEquipmentOperatingCost; }
     public BigDecimal getNewEquipmentOperatingCost() { return newEquipmentOperatingCost; }
+    public String getOldNotes() { return oldNotes; }
+    public String getNewNotes() { return newNotes; }
+    public Long getOldWageJournalEntryId() { return oldWageJournalEntryId; }
+    public Long getWageReversalJournalEntryId() { return wageReversalJournalEntryId; }
+    public Long getReplacementWageJournalEntryId() { return replacementWageJournalEntryId; }
+    public Long getOldEarningLedgerEntryId() { return oldEarningLedgerEntryId; }
+    public Long getReversedEarningLedgerEntryId() { return reversedEarningLedgerEntryId; }
+    public Long getReplacementEarningLedgerEntryId() { return replacementEarningLedgerEntryId; }
+    public void setWageReversalJournalEntryId(Long value) { this.wageReversalJournalEntryId = value; }
+    public void setReplacementWageJournalEntryId(Long value) { this.replacementWageJournalEntryId = value; }
+    public void setReversedEarningLedgerEntryId(Long value) { this.reversedEarningLedgerEntryId = value; }
+    public void setReplacementEarningLedgerEntryId(Long value) { this.replacementEarningLedgerEntryId = value; }
     public LocalDateTime getAppliedAt() { return appliedAt; }
 }
