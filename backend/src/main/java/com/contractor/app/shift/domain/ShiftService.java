@@ -246,6 +246,8 @@ public class ShiftService {
     }
 
     /** إنهاء الوردية وترحيل أجرها مرة واحدة داخل نفس المعاملة. */
+    // The driver row serializes shift earnings with payments; READ_COMMITTED ensures
+    // recoverable-advance balances are read after that lock, not from a pre-lock snapshot.
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public ShiftResponse finish(Long tenantId, Long id, Long version, Long actorUserId) {
         Shift shift = findForUpdate(tenantId, id);

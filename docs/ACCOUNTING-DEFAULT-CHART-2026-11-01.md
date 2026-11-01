@@ -40,3 +40,7 @@ All account lookups are tenant-scoped and the server supplies the resolved tenan
 - No historical expense or shift is automatically backfilled or reposted.
 - Existing posted journals remain immutable; corrections must use the established reversal/correction workflow.
 - This branch is a reviewable reconciliation branch. PR #18 remains open and unmerged until the resulting code and CI evidence are reviewed. PR #19 remains dependent on the final PR #18 base/head relationship.
+
+## Concurrent balance-read isolation
+
+Balance-sensitive driver operations use the driver row as the serialization lock. They explicitly run at MySQL `READ COMMITTED` isolation because lazy default-chart initialization can execute a consistent read before the driver lock is acquired. Under the default `REPEATABLE READ` isolation, a later aggregate balance query could reuse that older snapshot after waiting for the lock and miss the previous transaction's committed payment or recovery. `READ COMMITTED` gives each post-lock balance query a fresh committed view without loading and locking the driver's entire ledger history. The same isolation is used by shift completion when it calculates recoverable-advance recovery after locking the driver.

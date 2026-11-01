@@ -66,6 +66,8 @@ public class DriverLedgerService {
         return result;
     }
 
+    // READ_COMMITTED is intentional: lazy chart reads may precede the driver lock;
+    // balance aggregates after that lock must see commits made by the previous lock holder.
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public DriverLedgerEntryResponse pay(Long driverId, DriverLedgerPaymentRequest request) {
         AuthenticatedUser user=CurrentUser.get();
@@ -111,6 +113,7 @@ public class DriverLedgerService {
     }
 
 
+    // Keep advance availability checks on a fresh committed snapshot after locking the driver.
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public DriverLedgerEntryResponse advance(Long driverId, DriverLedgerAdvanceRequest request) {
         AuthenticatedUser user=CurrentUser.get();
