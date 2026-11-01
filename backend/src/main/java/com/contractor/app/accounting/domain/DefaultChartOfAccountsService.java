@@ -56,8 +56,8 @@ public class DefaultChartOfAccountsService {
 
         // Serialize baseline initialization for this tenant across application instances.
         // The unique (tenant_id, account_code) index remains the final database invariant.
-        Integer lockedTenantId = jdbc.queryForObject(
-                "SELECT id FROM tenants WHERE id = ? FOR UPDATE", Integer.class, tenantId);
+        Long lockedTenantId = jdbc.queryForObject(
+                "SELECT id FROM tenants WHERE id = ? FOR UPDATE", Long.class, tenantId);
         if (lockedTenantId == null) {
             throw new IllegalArgumentException("A persisted tenant is required to initialize accounts.");
         }
