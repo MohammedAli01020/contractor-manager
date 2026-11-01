@@ -1,11 +1,13 @@
 package com.contractor.app.accounting.api;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.contractor.app.accounting.domain.AccountType;
 import com.contractor.app.accounting.domain.ChartAccount;
+import com.contractor.app.accounting.domain.DefaultChartOfAccountsService;
 import com.contractor.app.accounting.domain.JournalEntry;
 import com.contractor.app.accounting.domain.JournalLine;
 import com.contractor.app.accounting.domain.JournalPostingRequest;
@@ -21,6 +23,8 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.Arrays;
 import java.util.Collections;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -31,6 +35,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 class AccountingControllerTest {
 
     private ChartAccountRepository accounts;
+    private DefaultChartOfAccountsService defaultAccounts;
     private JournalPostingService journals;
     private JournalEntryRepository entries;
     private JournalLineRepository lines;
@@ -39,10 +44,11 @@ class AccountingControllerTest {
     @BeforeEach
     void setUp() {
         accounts = org.mockito.Mockito.mock(ChartAccountRepository.class);
+        defaultAccounts = org.mockito.Mockito.mock(DefaultChartOfAccountsService.class);
         journals = org.mockito.Mockito.mock(JournalPostingService.class);
         entries = org.mockito.Mockito.mock(JournalEntryRepository.class);
         lines = org.mockito.Mockito.mock(JournalLineRepository.class);
-        controller = new AccountingController(accounts, journals, entries, lines);
+        controller = new AccountingController(accounts, defaultAccounts, journals, entries, lines);
         AuthenticatedUser principal = new AuthenticatedUser(7L, 42L, "tenant-admin", Role.ADMIN);
         SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
                 principal, "n/a", Collections.singleton(new SimpleGrantedAuthority("ROLE_ADMIN"))));
@@ -62,6 +68,58 @@ class AccountingControllerTest {
         assertEquals(1, response.size());
         assertEquals("1000", response.get(0).getAccountCode());
         verify(accounts).findByTenantIdOrderByAccountCodeAsc(42L);
+    }
+
+    @Test
+    void initializesDefaultAccountsForAuthenticatedTenantOnly() {
+        ChartAccount account = new ChartAccount(42L, "1000", "الخزينة", AccountType.ASSET, null, true);
+        when(accounts.findByTenantIdOrderByAccountCodeAsc(42L))
+                .thenReturn(Collections.singletonList(account));
+
+        java.util.List<AccountingController.AccountResponse> response = controller.initializeDefaultAccounts();
+
+        verify(defaultAccounts).initializeForTenant(42L);
+        verify(accounts).findByTenantIdOrderByAccountCodeAsc(42L);
+        assertEquals(1, response.size());
+        assertEquals("1000", response.get(0).getAccountCode());
+    }
+
+    @Test
+    void journalListIsPagedAndScopedToAuthenticatedTenantWithStableOrdering() {
+        JournalEntry entry = org.mockito.Mockito.mock(JournalEntry.class);
+        when(entry.getId()).thenReturn(91L);
+        when(entry.getPostingKey()).thenReturn("page-key");
+        when(entry.getSourceType()).thenReturn("MANUAL");
+        when(entry.getAccountingDate()).thenReturn(LocalDate.of(2026, 10, 31));
+        when(entry.getDescription()).thenReturn("Paged journal");
+        when(entry.getStatus()).thenReturn(com.contractor.app.accounting.domain.JournalEntryStatus.POSTED);
+        when(entry.getPostedAt()).thenReturn(LocalDateTime.of(2026, 10, 31, 9, 0));
+        when(entries.findByTenantIdOrderByAccountingDateDescPostedAtDescIdDesc(
+                42L, PageRequest.of(0, 20)))
+                .thenReturn(new PageImpl<>(Collections.singletonList(entry), PageRequest.of(0, 20), 41));
+
+        AccountingController.JournalPageResponse response = controller.listJournals(0, 20);
+
+        verify(entries).findByTenantIdOrderByAccountingDateDescPostedAtDescIdDesc(
+                42L, PageRequest.of(0, 20));
+        assertEquals(1, response.getItems().size());
+        assertEquals(0, response.getPage());
+        assertEquals(20, response.getSize());
+        assertEquals(41L, response.getTotalElements());
+        assertEquals(3, response.getTotalPages());
+        assertEquals(true, response.isHasNext());
+        assertEquals(false, response.isHasPrevious());
+    }
+
+    @Test
+    void rejectsInvalidJournalPaginationParameters() {
+        assertThrows(com.contractor.app.common.error.ApiException.class,
+                () -> controller.listJournals(-1, 20));
+        assertThrows(com.contractor.app.common.error.ApiException.class,
+                () -> controller.listJournals(0, 101));
+        assertThrows(com.contractor.app.common.error.ApiException.class,
+                () -> controller.listJournals(0, 0));
+        org.mockito.Mockito.verifyNoInteractions(entries);
     }
 
     @Test

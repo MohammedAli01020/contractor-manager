@@ -1,6 +1,7 @@
 package com.contractor.app.accounting.api;
 
 import com.contractor.app.accounting.domain.ChartAccount;
+import com.contractor.app.accounting.domain.DefaultChartOfAccountsService;
 import com.contractor.app.accounting.domain.JournalEntry;
 import com.contractor.app.accounting.domain.JournalLine;
 import com.contractor.app.accounting.domain.JournalPostingRequest;
@@ -17,6 +18,9 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -36,16 +40,30 @@ import org.springframework.web.bind.annotation.RestController;
 public class AccountingController {
 
     private final ChartAccountRepository accounts;
+    private final DefaultChartOfAccountsService defaultAccounts;
     private final JournalPostingService journals;
     private final JournalEntryRepository entries;
     private final JournalLineRepository lines;
 
-    public AccountingController(ChartAccountRepository accounts, JournalPostingService journals,
-                                JournalEntryRepository entries, JournalLineRepository lines) {
+    public AccountingController(ChartAccountRepository accounts, DefaultChartOfAccountsService defaultAccounts,
+                                JournalPostingService journals, JournalEntryRepository entries,
+                                JournalLineRepository lines) {
         this.accounts = accounts;
+        this.defaultAccounts = defaultAccounts;
         this.journals = journals;
         this.entries = entries;
         this.lines = lines;
+    }
+
+    @PostMapping("/accounts/initialize-defaults")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "تهيئة دليل الحسابات الافتراضي للشركة الحالية")
+    public List<AccountResponse> initializeDefaultAccounts() {
+        Long tenantId = CurrentUser.tenantId();
+        defaultAccounts.initializeForTenant(tenantId);
+        return accounts.findByTenantIdOrderByAccountCodeAsc(tenantId).stream()
+                .map(AccountResponse::new)
+                .collect(Collectors.toList());
     }
 
     @GetMapping("/accounts")
@@ -58,10 +76,20 @@ public class AccountingController {
 
     @GetMapping("/journals")
     @Operation(summary = "عرض القيود المحاسبية للشركة الحالية")
-    public List<JournalSummaryResponse> listJournals() {
-        return entries.findByTenantIdOrderByAccountingDateDescPostedAtDesc(CurrentUser.tenantId()).stream()
+    public JournalPageResponse listJournals(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        if (page < 0 || size < 1 || size > 100) {
+            throw com.contractor.app.common.error.ApiException.badRequest(
+                    "رقم الصفحة يجب ألا يقل عن صفر، وحجم الصفحة يجب أن يكون بين 1 و100.");
+        }
+        Page<JournalEntry> result = entries.findByTenantIdOrderByAccountingDateDescPostedAtDescIdDesc(
+                CurrentUser.tenantId(), PageRequest.of(page, size));
+        List<JournalSummaryResponse> items = result.getContent().stream()
                 .map(JournalSummaryResponse::new)
                 .collect(Collectors.toList());
+        return new JournalPageResponse(items, result.getNumber(), result.getSize(),
+                result.getTotalElements(), result.getTotalPages(), result.hasNext(), result.hasPrevious());
     }
 
     @GetMapping("/journals/{journalId}")
@@ -110,6 +138,35 @@ public class AccountingController {
         public Long getParentAccountId() { return parentAccountId; }
         public boolean isSystemManaged() { return systemManaged; }
         public boolean isActive() { return active; }
+    }
+
+    public static final class JournalPageResponse {
+        private final List<JournalSummaryResponse> items;
+        private final int page;
+        private final int size;
+        private final long totalElements;
+        private final int totalPages;
+        private final boolean hasNext;
+        private final boolean hasPrevious;
+
+        JournalPageResponse(List<JournalSummaryResponse> items, int page, int size,
+                            long totalElements, int totalPages, boolean hasNext, boolean hasPrevious) {
+            this.items = items;
+            this.page = page;
+            this.size = size;
+            this.totalElements = totalElements;
+            this.totalPages = totalPages;
+            this.hasNext = hasNext;
+            this.hasPrevious = hasPrevious;
+        }
+
+        public List<JournalSummaryResponse> getItems() { return items; }
+        public int getPage() { return page; }
+        public int getSize() { return size; }
+        public long getTotalElements() { return totalElements; }
+        public int getTotalPages() { return totalPages; }
+        public boolean isHasNext() { return hasNext; }
+        public boolean isHasPrevious() { return hasPrevious; }
     }
 
     public static final class JournalSummaryResponse {
