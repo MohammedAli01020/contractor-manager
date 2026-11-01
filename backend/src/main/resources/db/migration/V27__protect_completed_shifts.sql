@@ -6,6 +6,14 @@ CREATE TRIGGER trg_shifts_protect_completed
 BEFORE UPDATE ON shifts
 FOR EACH ROW
 BEGIN
+    IF OLD.status = 'IN_PROGRESS'
+       AND NEW.status = 'COMPLETED'
+       AND NEW.driver_wage > 0
+       AND NEW.driver_wage_journal_entry_id IS NULL THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'COMPLETED_SHIFT_WAGE_JOURNAL_REQUIRED';
+    END IF;
+
     IF OLD.status = 'COMPLETED'
        AND (
            NOT (NEW.status <=> OLD.status)
