@@ -128,3 +128,33 @@ This section supersedes the earlier planned sequence where branch state or PR st
 4. Reconcile #14 → #15 against the resulting foundation; preserve #12's tenant-isolation test in the canonical #14 API and rerun Flutter CI.
 5. Revalidate #13, then complete Android-device smoke tests and the production backup/migration/rollback plan.
 6. No PR is to be merged and `main` is not to be changed without explicit approval.
+
+
+## PR #20 synchronization checkpoint — 2026-10-31 (after PR #22)
+
+- PR #22 was squash-merged into `feature/driver-worker-ledger`, not into `main`.
+- PR #22 merge commit: `d7d420fa3ed7d7ad9516ab94c360d584abdf5a80`.
+- To synchronize PR #20 safely, the current base `feature/financial-foundation` (`fc82dfc2d17e574ad2c43b7f3eb805365dd046a1`) was merged into the PR head branch.
+- Synchronization merge commit: `e929d7e49776c52a9928f6ed909827ec7f84f99e` (first parent: PR head; second parent: current base).
+- The only overlapping changed path since the merge base was `.github/workflows/backend-ci.yml`. The synchronized tree retains the PR-head workflow, including the financial idempotency MySQL integration-test guard, and retains the base-branch V24 migration guard. The base-only accounting merge-plan documentation is also preserved.
+- Post-sync comparison: `feature/driver-worker-ledger` is 118 commits ahead and 0 behind `feature/financial-foundation`; GitHub reports PR #20 mergeable.
+- PR #20 remains Draft and unmerged. This synchronization does not authorize merging PR #20 or changing `main`.
+- Fresh PR merge-result CI run `41239857728` (run #333) is pending/in progress on exact head `e929d7e49776c52a9928f6ed909827ec7f84f99e`. The previous 175-test success on run #332 predates this synchronization and is not a substitute for run #333.
+- Issue #21 remains open. Existing MySQL tests now cover same-key concurrent expense creation with identical payloads, expense-payment key reuse across different expenses, driver-payment key reuse across different drivers, driver-advance key reuse across different drivers, and payment-account mismatch on driver retries. Add an explicit concurrent expense-create same-key/different-payload test and verify stable 409 behavior before treating the issue's full acceptance criteria as satisfied.
+- No production Flyway migration was run.
+
+
+## PR #20 idempotency validation checkpoint — 2026-10-31 (final)
+
+- PR #20 head: `8bb58b0784f7498b6653def80cbe4774b2aefcda`.
+- PR merge-result CI run #340: `41240482346` — success.
+- Head push CI run #339: `41240476942` — success.
+- Surefire report: **176 tests, 0 failures, 0 errors, 0 skipped**.
+- Expense integration: **13 passed**, including concurrent same-key/different-payload create returning stable HTTP 409, identical concurrent create replay, and payment-key collision across different expenses.
+- Driver-ledger idempotency integration: **7 passed**, including cross-driver payment/advance key reuse and cash/bank account mismatch conflict.
+- Journal posting concurrency: **8 passed**; V24 populated-data migration guard: **1 passed**.
+- All workflow execution guards passed, confirming MySQL accounting/idempotency integration tests and the V24 populated-data migration test executed.
+- Issue #21 was closed as completed after this validation: https://github.com/MohammedAli01020/contractor-manager/issues/21.
+- Current branch comparison: `feature/driver-worker-ledger` is **122 commits ahead / 0 behind** `feature/financial-foundation`; GitHub reports PR #20 mergeable.
+- PR #20 remains **Draft and unmerged** pending final review and explicit owner approval. This checkpoint does not authorize merging it or changing `main`.
+- No production Flyway migration was run.

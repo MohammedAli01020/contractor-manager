@@ -13,6 +13,8 @@ on:
       - feature/default-chart-of-accounts
       - feature/equipment-expenses-accounting
       - feature/driver-worker-ledger
+      - feature/default-chart-reconciliation
+      - feature/trial-balance-reconciliation
       - feature/accounting-api-foundation
       - fix/treasury-concurrency-hardening
     paths:
@@ -20,6 +22,10 @@ on:
       - ".github/workflows/backend-ci.yml"
       - "docs/ACCOUNTING-TREASURY-CONCURRENCY-2026-10-31.md"
       - "docs/ACCOUNTING-PR-MERGE-PLAN-2026-10-31.md"
+      - "docs/DRIVER_WORKER_LEDGER_DESIGN.md"
+      - "docs/ACCOUNTING-DEFAULT-CHART-2026-10-31.md"
+      - "docs/ACCOUNTING-DEFAULT-CHART-2026-11-01.md"
+      - "docs/ACCOUNTING-TRIAL-BALANCE-2026-10-31.md"
   pull_request:
     branches:
       - feature/platform-owner-activation
@@ -28,11 +34,15 @@ on:
       - feature/request-tracking
       - feature/driver-worker-ledger
       - feature/financial-foundation
-      - feature/accounting-api-foundation
     paths:
       - "backend/**"
       - ".github/workflows/backend-ci.yml"
       - "docs/ACCOUNTING-TREASURY-CONCURRENCY-2026-10-31.md"
+      - "docs/ACCOUNTING-PR-MERGE-PLAN-2026-10-31.md"
+      - "docs/DRIVER_WORKER_LEDGER_DESIGN.md"
+      - "docs/ACCOUNTING-DEFAULT-CHART-2026-10-31.md"
+      - "docs/ACCOUNTING-DEFAULT-CHART-2026-11-01.md"
+      - "docs/ACCOUNTING-TRIAL-BALANCE-2026-10-31.md"
   workflow_dispatch:
 
 permissions:
@@ -122,6 +132,95 @@ jobs:
               sys.exit("V24 migration test reported failures or errors.")
           PY
 
+      - name: Require financial idempotency MySQL integration tests to execute
+        run: |
+          python3 - <<'PY'
+          import glob
+          import sys
+          import xml.etree.ElementTree as ET
+
+          required = {
+              "DriverLedgerIdempotencyIntegrationTest": 4,
+              "ExpenseIntegrationTest": 12,
+          }
+          for name, expected in required.items():
+              pattern = f"target/surefire-reports/TEST-com.contractor.app.{'driver' if name.startswith('Driver') else 'expense'}.{name}.xml"
+              reports = glob.glob(pattern)
+              if not reports:
+                  sys.exit(f"Required financial idempotency report missing: {pattern}")
+              root = ET.parse(reports[0]).getroot()
+              totals = {key: int(root.attrib.get(key, 0))
+                        for key in ("tests", "failures", "errors", "skipped")}
+              print(f"{name}: {totals}")
+              if totals["tests"] < expected:
+                  sys.exit(f"{name} must execute at least {expected} tests.")
+              if totals["skipped"] != 0:
+                  sys.exit(f"{name} was skipped; Docker/MySQL must be available in CI.")
+              if totals["failures"] != 0 or totals["errors"] != 0:
+                  sys.exit(f"{name} reported failures or errors.")
+          PY
+
+      - name: Require default chart and journal-linkage tests to execute
+        run: |
+          python3 - <<'PY'
+          import glob
+          import sys
+          import xml.etree.ElementTree as ET
+
+          required = {
+              "DefaultChartOfAccountsServiceTest": 8,
+              "DefaultChartOfAccountsConcurrencyIntegrationTest": 1,
+              "ShiftIntegrationTest": 1,
+              "ExpenseIntegrationTest": 1,
+          }
+          for suite, minimum in required.items():
+              pattern = f"target/surefire-reports/TEST-*{suite}.xml"
+              reports = glob.glob(pattern)
+              if not reports:
+                  sys.exit(f"Required accounting report missing: {pattern}")
+              root = ET.parse(reports[0]).getroot()
+              totals = {key: int(root.attrib.get(key, 0))
+                        for key in ("tests", "failures", "errors", "skipped")}
+              print(f"{suite}: {totals}")
+              if totals["tests"] < minimum:
+                  sys.exit(f"{suite} did not execute the required number of tests.")
+              if totals["skipped"] != 0 or totals["failures"] != 0 or totals["errors"] != 0:
+                  sys.exit(f"{suite} has skipped tests, failures, or errors.")
+          PY
+
+      - name: Require completed zero-wage shift integration tests to execute
+        run: |
+          python3 - <<'PY'
+          import glob
+          import sys
+          import xml.etree.ElementTree as ET
+
+          pattern = "target/surefire-reports/TEST-com.contractor.app.shift.ShiftIntegrationTest.xml"
+          reports = glob.glob(pattern)
+          if not reports:
+              sys.exit(f"Required shift integration-test report missing: {pattern}")
+
+          root = ET.parse(reports[0]).getroot()
+          totals = {key: int(root.attrib.get(key, 0))
+                    for key in ("tests", "failures", "errors", "skipped")}
+          names = [case.attrib.get("name") for case in root.findall(".//testcase")]
+          required = {
+              "completedZeroWageShiftIsFinalizedAndCannotBeChangedOrCancelled",
+              "databaseProtectsCompletedZeroWageShiftFromDirectMutationAndDeletion",
+              "databaseRejectsCompletingPositiveWageShiftWithoutJournal",
+          }
+          print(f"ShiftIntegrationTest: {totals}")
+          missing = required.difference(names)
+          if missing:
+              sys.exit(f"Required completed zero-wage shift tests did not execute: {sorted(missing)}")
+          if any(names.count(name) != 1 for name in required):
+              sys.exit("Completed zero-wage shift integration tests must each execute exactly once.")
+          if totals["skipped"] != 0:
+              sys.exit("Shift integration tests were skipped; Docker/MySQL must be available in CI.")
+          if totals["failures"] != 0 or totals["errors"] != 0:
+              sys.exit("Shift integration tests reported failures or errors.")
+          PY
+
       - name: Require chart-of-accounts tenant-isolation integration tests to execute
         run: |
           python3 - <<'PY'
@@ -145,6 +244,28 @@ jobs:
               sys.exit("Chart-of-accounts tenant-isolation tests were skipped.")
           if totals["failures"] != 0 or totals["errors"] != 0:
               sys.exit("Chart-of-accounts tenant-isolation tests reported failures or errors.")
+          PY
+
+      - name: Require trial-balance MySQL integration tests to execute
+        run: |
+          python3 - <<'PY'
+          import glob
+          import sys
+          import xml.etree.ElementTree as ET
+
+          pattern = "target/surefire-reports/TEST-com.contractor.app.accounting.TrialBalanceIntegrationTest.xml"
+          reports = glob.glob(pattern)
+          if not reports:
+              sys.exit(f"Required trial-balance integration-test report missing: {pattern}")
+
+          root = ET.parse(reports[0]).getroot()
+          totals = {key: int(root.attrib.get(key, 0))
+                    for key in ("tests", "failures", "errors", "skipped")}
+          print(f"TrialBalanceIntegrationTest: {totals}")
+          if totals["tests"] < 7:
+              sys.exit("Trial-balance integration tests did not all execute.")
+          if totals["skipped"] != 0 or totals["failures"] != 0 or totals["errors"] != 0:
+              sys.exit("Trial-balance integration tests were skipped or reported failures/errors.")
           PY
 
       - name: Write test summary

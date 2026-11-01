@@ -41,10 +41,11 @@ class ChartOfAccountsTenantIsolationIntegrationTest extends AbstractIntegrationT
         JsonNode accountsA = body(getJson(ACCOUNTS_ENDPOINT, tokenA).andExpect(status().isOk()));
         JsonNode accountsB = body(getJson(ACCOUNTS_ENDPOINT, tokenB).andExpect(status().isOk()));
 
-        assertThat(accountsA.size()).isEqualTo(14);
-        assertThat(accountsB.size()).isEqualTo(13);
+        // The tenant-specific chart may gain new system accounts over time.
+        // Assert isolation and ordering without coupling this test to catalog size.
+        assertThat(accountsA.size()).isEqualTo(accountsB.size() + 1);
         assertThat(accountsA.get(0).path("accountCode").asText()).isEqualTo("1000");
-        assertThat(accountsA.get(13).path("accountCode").asText()).isEqualTo("9900");
+        assertThat(accountsA.get(accountsA.size() - 1).path("accountCode").asText()).isEqualTo("9900");
         assertThat(accountsA.toString()).contains("Tenant A private account");
         assertThat(accountsB.toString()).doesNotContain("Tenant A private account");
     }
