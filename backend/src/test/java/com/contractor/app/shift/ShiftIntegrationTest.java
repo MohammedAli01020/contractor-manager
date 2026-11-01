@@ -941,4 +941,36 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
         assertThat(unchanged.getDriverWageJournalEntryId()).isNull();
     }
 
+    @Test
+    void databaseRejectsUnrelatedJournalLinkEvenWhenShiftWageIsZero() throws Exception {
+        Map<String, Object> startBody = shiftBody(siteId, driverId, equipmentId, day(1), "MORNING");
+        startBody.put("driverWage", BigDecimal.ZERO);
+        JsonNode running = startShift(token, startBody);
+        long shiftId = running.path("id").asLong();
+
+        ChartAccount wageExpense = chartAccounts.findByTenantIdAndAccountCodeIgnoreCase(tenantId, "5000")
+                .orElseThrow(() -> new AssertionError("Wage expense account missing"));
+        ChartAccount driverPayable = chartAccounts.findByTenantIdAndAccountCodeIgnoreCase(tenantId, "2100")
+                .orElseThrow(() -> new AssertionError("Driver payable account missing"));
+        com.contractor.app.accounting.domain.JournalEntry unrelatedJournal = journalPostingService.post(
+                tenantId, actorUserId, new JournalPostingRequest(
+                        "unrelated-zero-shift-test-" + shiftId, "TEST_UNRELATED_WAGE", null,
+                        today(), "Unrelated balanced journal", null, java.util.Arrays.asList(
+                        new JournalLineRequest(wageExpense.getId(), "Test debit",
+                                BigDecimal.ONE, BigDecimal.ZERO, null, null),
+                        new JournalLineRequest(driverPayable.getId(), "Test credit",
+                                BigDecimal.ZERO, BigDecimal.ONE, null, null))));
+
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "UPDATE shifts SET driver_wage_journal_entry_id = ?, status = 'COMPLETED', "
+                        + "finished_at = UTC_TIMESTAMP(6) WHERE id = ?",
+                unrelatedJournal.getId(), shiftId))
+                .hasMessageContaining("COMPLETED_SHIFT_WAGE_JOURNAL_MISMATCH");
+
+        Shift unchanged = shiftRepository.findById(shiftId).orElseThrow(AssertionError::new);
+        assertThat(unchanged.getStatus()).isEqualTo(com.contractor.app.shift.domain.ShiftStatus.IN_PROGRESS);
+        assertThat(unchanged.getDriverWage()).isEqualByComparingTo("0.00");
+        assertThat(unchanged.getDriverWageJournalEntryId()).isNull();
+    }
+
 }
