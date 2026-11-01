@@ -191,6 +191,7 @@ jobs:
           required = {
               "completedZeroWageShiftIsFinalizedAndCannotBeChangedOrCancelled",
               "databaseProtectsCompletedZeroWageShiftFromDirectMutationAndDeletion",
+              "databaseRejectsCompletingPositiveWageShiftWithoutJournal",
           }
           print(f"ShiftIntegrationTest: {totals}")
           missing = required.difference(names)
