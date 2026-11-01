@@ -180,16 +180,26 @@ public class ShiftCorrectionService {
         }
         JournalEntry original = journals.findByIdAndTenantId(shift.getDriverWageJournalEntryId(), tenantId)
                 .orElseThrow(() -> ApiException.conflict("قيد أجر الوردية الأصلي غير موجود."));
-        if (!"SHIFT_WAGE".equals(original.getSourceType())
-                || !Objects.equals(original.getSourceId(), shiftId)
-                || !"POSTED".equals(original.getStatus().name())
-                || !Objects.equals(original.getPostingKey(), "shift-wage-" + shiftId)
-                || original.getReversalOfEntryId() != null) {
-            throw ApiException.conflict("قيد أجر الوردية الأصلي غير مطابق ولا يمكن تصحيحه بأمان.");
+        boolean initialWageJournal = "SHIFT_WAGE".equals(original.getSourceType())
+                && Objects.equals(original.getSourceId(), shiftId)
+                && Objects.equals(original.getPostingKey(), "shift-wage-" + shiftId);
+        boolean priorCorrectionJournal = false;
+        if ("SHIFT_WAGE_CORRECTION".equals(original.getSourceType())
+                && original.getSourceId() != null
+                && Objects.equals(original.getPostingKey(), "shift-wage-correction-" + original.getSourceId())) {
+            priorCorrectionJournal = corrections.findByTenantIdAndShiftIdAndReplacementWageJournalEntryId(
+                    tenantId, shiftId, original.getId())
+                    .map(previous -> "APPLIED".equals(previous.getStatus())
+                            && Objects.equals(previous.getId(), original.getSourceId()))
+                    .orElse(false);
         }
-        DriverLedgerEntry oldEarning = ledger.findByTenantIdAndClientRequestKey(
-                tenantId, "shift-wage-" + shiftId)
-                .orElseThrow(() -> ApiException.conflict("حركة استحقاق السائق الأصلية غير موجودة."));
+        if ((!initialWageJournal && !priorCorrectionJournal)
+                || !"POSTED".equals(original.getStatus().name())
+                || original.getReversalOfEntryId() != null) {
+            throw ApiException.conflict("قيد أجر الوردية الحالي غير مطابق ولا يمكن تصحيحه بأمان.");
+        }
+        DriverLedgerEntry oldEarning = ledger.findByTenantIdAndJournalEntryId(tenantId, original.getId())
+                .orElseThrow(() -> ApiException.conflict("حركة استحقاق السائق الحالية غير موجودة."));
         if (!"EARNING".equals(oldEarning.getTransactionType())
                 || !Objects.equals(oldEarning.getShiftId(), shiftId)
                 || !Objects.equals(oldEarning.getJournalEntryId(), original.getId())
