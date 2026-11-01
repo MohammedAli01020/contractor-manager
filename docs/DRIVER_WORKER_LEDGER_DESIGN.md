@@ -1,7 +1,7 @@
 # Driver and Worker Ledger – Design Notes
 
-Status: incremental implementation on `feature/driver-worker-ledger`; initial ledger/advance tests and the first posted-shift API guard tests passed. MySQL database-guard migration and direct-SQL integration tests are now added; CI verification is pending.
-Base: `feature/equipment-expenses-accounting`.
+Status: implementation and MySQL integration verification checkpoint completed on `feature/driver-worker-ledger`. PR20 remains open and unmerged.
+PR20 base: `feature/financial-foundation`.
 This document does not change `main` and does not merge any pull request.
 
 ## Existing behavior verified
@@ -154,3 +154,20 @@ Implemented on `feature/driver-worker-ledger`:
 - A MySQL integration test was added for two independent concurrent cash outflows of 80.00 against an opening balance of 100.00; expected outcome is exactly one successful posting and a final balance of 20.00.
 - The implementation and test are committed, but are **not yet verified by Maven/CI**. Run the focused integration test and full backend suite before treating this protection as production-ready.
 - Current scope is the baseline accounts 1000 and 1010 only. It does not yet introduce multiple cashboxes/bank accounts or overdraft configuration.
+
+
+## Verification checkpoint (2026-11-01)
+
+- Backend CI passed on HEAD `f95786f104aa7f3eef5eaca3e6b89660014797b2` in both push run 438 and pull-request run 439.
+- Maven reported 191 tests, 0 failures, 0 errors and 0 skipped; BUILD SUCCESS.
+- The MySQL/Testcontainers integration suite included:
+  - `ExpenseIntegrationTest`: 14 tests passed, including concurrent overpayment protection and same-key concurrent expense creation.
+  - `DriverLedgerIdempotencyIntegrationTest`: 7 tests passed, including concurrent key collision, recoverable advance, retry and cash/bank account mismatch cases.
+  - `JournalPostingConcurrencyIntegrationTest`: 8 tests passed, including journal posting/reversal and cash/bank concurrency coverage.
+  - `ChartOfAccountsTenantIsolationIntegrationTest`: 3 tests passed, including concurrent default-chart initialization.
+  - `ShiftIntegrationTest`: 33 tests passed, including positive driver wage requirement, zero equipment operating cost acceptance, recoverable-advance recovery, journal-link integrity and direct-SQL protections.
+- The zero-cost equipment case is explicitly tested: a shift with a positive driver wage and `equipment_operating_cost = 0.00` completes and receives its wage journal. A zero or missing driver wage is rejected by both the service and the MySQL completion trigger.
+- Source review confirmed expense payments lock the expense row before summing payments, worker-ledger balance-changing operations lock the driver row, and all reviewed business journal writes route through `JournalPostingService`.
+- Default chart initialization now locks the tenant row in its transaction; V17 enforces unique `(tenant_id, account_code)`.
+- No Android real-device test has been performed as part of PR20; mobile validation remains scheduled for the Flutter PR15 stage.
+- This checkpoint does not authorize or perform a merge. PR20 remains open against `feature/financial-foundation`; `main` is unchanged.
