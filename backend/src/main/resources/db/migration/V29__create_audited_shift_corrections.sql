@@ -27,6 +27,16 @@ CREATE TABLE shift_corrections (
     new_price DECIMAL(15,2) NOT NULL,
     old_equipment_operating_cost DECIMAL(15,2) NOT NULL,
     new_equipment_operating_cost DECIMAL(15,2) NOT NULL,
+    old_notes VARCHAR(500) NULL,
+    new_notes VARCHAR(500) NULL,
+
+    -- Financial references are populated before the shift snapshot is changed.
+    old_wage_journal_entry_id BIGINT NULL,
+    wage_reversal_journal_entry_id BIGINT NULL,
+    replacement_wage_journal_entry_id BIGINT NULL,
+    old_earning_ledger_entry_id BIGINT NULL,
+    reversed_earning_ledger_entry_id BIGINT NULL,
+    replacement_earning_ledger_entry_id BIGINT NULL,
 
     created_at DATETIME(6) NOT NULL,
     updated_at DATETIME(6) NOT NULL,
@@ -48,19 +58,56 @@ BEGIN
     DECLARE matching_corrections INT DEFAULT 0;
 
     IF NEW.driver_wage_journal_entry_id IS NOT NULL THEN
-        SELECT COUNT(*)
-          INTO matching_corrections
-          FROM journal_entries
-         WHERE id = NEW.driver_wage_journal_entry_id
-           AND tenant_id = NEW.tenant_id
-           AND source_type = 'SHIFT_WAGE'
-           AND source_id = NEW.id
-           AND posting_key = CONCAT('shift-wage-', NEW.id)
-           AND status = 'POSTED';
+        IF OLD.status = 'COMPLETED'
+           AND NOT (NEW.driver_wage_journal_entry_id <=> OLD.driver_wage_journal_entry_id) THEN
+            -- A completed shift may point to a replacement wage journal only when
+            -- the APPLYING correction row records that exact posted journal.
+            SELECT COUNT(*)
+              INTO matching_corrections
+              FROM shift_corrections c
+              JOIN journal_entries j
+                ON j.id = c.replacement_wage_journal_entry_id
+               AND j.tenant_id = c.tenant_id
+               AND j.source_type = 'SHIFT_WAGE_CORRECTION'
+               AND j.source_id = c.id
+               AND j.posting_key = CONCAT('shift-wage-correction-', c.id)
+               AND j.status = 'POSTED'
+             WHERE c.tenant_id = NEW.tenant_id
+               AND c.shift_id = NEW.id
+               AND c.status = 'APPLYING'
+               AND c.old_wage_journal_entry_id = OLD.driver_wage_journal_entry_id
+               AND c.replacement_wage_journal_entry_id = NEW.driver_wage_journal_entry_id;
 
-        IF matching_corrections <> 1 THEN
-            SIGNAL SQLSTATE '45000'
-                SET MESSAGE_TEXT = 'COMPLETED_SHIFT_WAGE_JOURNAL_MISMATCH';
+            IF matching_corrections <> 1 THEN
+                SIGNAL SQLSTATE '45000'
+                    SET MESSAGE_TEXT = 'COMPLETED_SHIFT_WAGE_CORRECTION_JOURNAL_MISMATCH';
+            END IF;
+        ELSE
+            SELECT COUNT(*)
+              INTO matching_corrections
+              FROM journal_entries
+             WHERE id = NEW.driver_wage_journal_entry_id
+               AND tenant_id = NEW.tenant_id
+               AND status = 'POSTED'
+               AND (
+                   (source_type = 'SHIFT_WAGE'
+                    AND source_id = NEW.id
+                    AND posting_key = CONCAT('shift-wage-', NEW.id))
+                   OR EXISTS (
+                       SELECT 1
+                         FROM shift_corrections c
+                        WHERE c.tenant_id = NEW.tenant_id
+                          AND c.shift_id = NEW.id
+                          AND c.status = 'APPLIED'
+                          AND c.replacement_wage_journal_entry_id = NEW.driver_wage_journal_entry_id
+                          AND c.id = CAST(SUBSTRING_INDEX(NEW.driver_wage_journal_entry_id, '-', -1) AS UNSIGNED)
+                   )
+               );
+
+            IF matching_corrections <> 1 THEN
+                SIGNAL SQLSTATE '45000'
+                    SET MESSAGE_TEXT = 'COMPLETED_SHIFT_WAGE_JOURNAL_MISMATCH';
+            END IF;
         END IF;
     END IF;
 
@@ -116,13 +163,20 @@ BEGIN
            AND c.new_price = NEW.price
            AND c.old_equipment_operating_cost = OLD.equipment_operating_cost
            AND c.new_equipment_operating_cost = NEW.equipment_operating_cost
+           AND (c.old_notes <=> OLD.notes)
+           AND (c.new_notes <=> NEW.notes)
+           AND c.old_wage_journal_entry_id = OLD.driver_wage_journal_entry_id
+           AND c.replacement_wage_journal_entry_id = NEW.driver_wage_journal_entry_id
+           AND c.wage_reversal_journal_entry_id IS NOT NULL
+           AND c.old_earning_ledger_entry_id IS NOT NULL
+           AND c.reversed_earning_ledger_entry_id IS NOT NULL
+           AND c.replacement_earning_ledger_entry_id IS NOT NULL
            -- A correction changes only the captured business/financial fields.
            -- Lifecycle timestamps, cancellation state and original journal linkage stay immutable.
            AND NEW.status = 'COMPLETED'
            AND NEW.driver_wage > 0
            AND (NEW.started_at <=> OLD.started_at)
            AND (NEW.finished_at <=> OLD.finished_at)
-           AND (NEW.driver_wage_journal_entry_id <=> OLD.driver_wage_journal_entry_id)
            AND (NEW.cancel_reason <=> OLD.cancel_reason);
 
         IF matching_corrections <> 1 THEN
