@@ -69,6 +69,11 @@ class ShiftCorrectionIntegrationTest extends AbstractShiftIntegrationTest {
                 "SELECT COUNT(*) FROM shift_corrections WHERE tenant_id=? AND shift_id=? AND status='APPLIED'",
                 Integer.class, tenantId, shiftId)).isEqualTo(1);
         assertThat(ledger.sumBalance(tenantId, driverId)).isEqualByComparingTo("180.00");
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM driver_ledger_entries WHERE tenant_id=? AND shift_id=? "
+                        + "AND transaction_type='CORRECTION_REVERSAL' AND amount=180.00 "
+                        + "AND balance_effect=-180.00",
+                Integer.class, tenantId, shiftId)).isEqualTo(1);
 
         // A network retry with the same key and payload must replay the completed correction.
         JsonNode replay = body(postJson("/api/v1/shifts/" + shiftId + "/corrections", request, token)
