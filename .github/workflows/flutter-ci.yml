@@ -10,6 +10,7 @@ on:
   pull_request:
     branches:
       - feature/financial-foundation
+      - feature/accounting-mobile-rebased
     paths:
       - "mobile/**"
       - ".github/workflows/flutter-ci.yml"
