@@ -371,4 +371,71 @@ class ShiftCorrectionIntegrationTest extends AbstractShiftIntegrationTest {
         request.put("notes", "تم التصحيح بعد مراجعة المستندات");
         return request;
     }
+
+
+    @Test
+    void correctionRollsBackAllFinancialAndOperationalWritesWhenLedgerPostingFails() throws Exception {
+        JsonNode completed = finishShift(token,
+                startShift(token, shiftBody(siteId, driverId, equipmentId, today().minusDays(1), "MORNING")));
+        long shiftId = completed.path("id").asLong();
+        Long originalJournalId = completed.path("driverWageJournalEntryId").asLong();
+        BigDecimal originalBalance = ledger.sumBalance(tenantId, driverId);
+        String trigger = "trg_test_fail_shift_correction_ledger";
+
+        jdbc.execute("DROP TRIGGER IF EXISTS " + trigger);
+        jdbc.execute("CREATE TRIGGER " + trigger + " BEFORE INSERT ON driver_ledger_entries "
+                + "FOR EACH ROW BEGIN "
+                + "IF NEW.transaction_type = 'CORRECTION_REVERSAL' THEN "
+                + "SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'TEST_FORCED_CORRECTION_FAILURE'; "
+                + "END IF; END");
+
+        try {
+            Map<String, Object> request = correctionBody(completed, "rollback-" + UUID.randomUUID());
+            postJson("/api/v1/shifts/" + shiftId + "/corrections", request, token)
+                    .andExpect(status().is5xxServerError());
+
+            assertThat(jdbc.queryForObject(
+                    "SELECT driver_wage_journal_entry_id FROM shifts WHERE tenant_id=? AND id=?",
+                    Long.class, tenantId, shiftId)).isEqualTo(originalJournalId);
+            assertThat(jdbc.queryForObject(
+                    "SELECT COUNT(*) FROM shift_corrections WHERE tenant_id=? AND shift_id=?",
+                    Integer.class, tenantId, shiftId)).isZero();
+            assertThat(jdbc.queryForObject(
+                    "SELECT COUNT(*) FROM journal_entries WHERE tenant_id=? AND source_type IN "
+                            + "('SHIFT_WAGE_CORRECTION_REVERSAL','SHIFT_WAGE_CORRECTION')",
+                    Integer.class, tenantId)).isZero();
+            assertThat(jdbc.queryForObject(
+                    "SELECT COUNT(*) FROM driver_ledger_entries WHERE tenant_id=? AND shift_id=? "
+                            + "AND transaction_type='CORRECTION_REVERSAL'",
+                    Integer.class, tenantId, shiftId)).isZero();
+            assertThat(ledger.sumBalance(tenantId, driverId)).isEqualByComparingTo(originalBalance);
+        } finally {
+            jdbc.execute("DROP TRIGGER IF EXISTS " + trigger);
+        }
+    }
+
+    @Test
+    void reusingCorrectionKeyWithDifferentPayloadReturnsConflict() throws Exception {
+        JsonNode completed = finishShift(token,
+                startShift(token, shiftBody(siteId, driverId, equipmentId, today().minusDays(1), "MORNING")));
+        long shiftId = completed.path("id").asLong();
+        Map<String, Object> request = correctionBody(completed, "payload-" + UUID.randomUUID());
+
+        postJson("/api/v1/shifts/" + shiftId + "/corrections", request, token)
+                .andExpect(status().isOk());
+
+        Map<String, Object> changedPayload = new HashMap<>(request);
+        changedPayload.put("driverWage", new BigDecimal("999.00"));
+        postJson("/api/v1/shifts/" + shiftId + "/corrections", changedPayload, token)
+                .andExpect(status().isConflict());
+
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM shift_corrections WHERE tenant_id=? AND shift_id=? AND status='APPLIED'",
+                Integer.class, tenantId, shiftId)).isEqualTo(1);
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM journal_entries WHERE tenant_id=? AND source_type='SHIFT_WAGE_CORRECTION'",
+                Integer.class, tenantId)).isEqualTo(1);
+        assertThat(ledger.sumBalance(tenantId, driverId)).isEqualByComparingTo("180.00");
+    }
+
 }
