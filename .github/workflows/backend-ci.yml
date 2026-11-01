@@ -22,7 +22,6 @@ on:
       - "docs/ACCOUNTING-TREASURY-CONCURRENCY-2026-10-31.md"
       - "docs/ACCOUNTING-PR-MERGE-PLAN-2026-10-31.md"
       - "docs/DRIVER_WORKER_LEDGER_DESIGN.md"
-  pull_request:      - "docs/DRIVER_WORKER_LEDGER_DESIGN.md"
       - "docs/ACCOUNTING-DEFAULT-CHART-2026-10-31.md"
       - "docs/ACCOUNTING-DEFAULT-CHART-2026-11-01.md"
   pull_request:
@@ -39,7 +38,6 @@ on:
       - "docs/ACCOUNTING-TREASURY-CONCURRENCY-2026-10-31.md"
       - "docs/ACCOUNTING-PR-MERGE-PLAN-2026-10-31.md"
       - "docs/DRIVER_WORKER_LEDGER_DESIGN.md"
-  workflow_dispatch:      - "docs/DRIVER_WORKER_LEDGER_DESIGN.md"
       - "docs/ACCOUNTING-DEFAULT-CHART-2026-10-31.md"
       - "docs/ACCOUNTING-DEFAULT-CHART-2026-11-01.md"
   workflow_dispatch:
