@@ -30,8 +30,10 @@ public class ShiftCorrectionRequest {
     private ShiftType shiftType;
 
     @NotNull
+    @NotNull
     private Long siteId;
 
+    @NotNull
     @NotNull
     private Long equipmentId;
 
