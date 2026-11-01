@@ -92,7 +92,7 @@ class ShiftCorrectionIntegrationTest extends AbstractShiftIntegrationTest {
 
         postJson("/api/v1/shifts/" + completed.path("id").asLong() + "/corrections", request, token)
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("BAD_REQUEST"));
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
         assertThat(jdbc.queryForObject(
                 "SELECT COUNT(*) FROM shift_corrections WHERE tenant_id=?",
                 Integer.class, tenantId)).isZero();
