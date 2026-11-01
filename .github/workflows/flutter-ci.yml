@@ -9,7 +9,7 @@ on:
       - '.github/workflows/flutter-ci.yml'
   pull_request:
     branches:
-      - feature/accounting-api-foundation
+      - feature/trial-balance-reconciliation
     paths:
       - 'mobile/**'
       - '.github/workflows/flutter-ci.yml'
