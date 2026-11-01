@@ -103,6 +103,47 @@ class ShiftCorrectionIntegrationTest extends AbstractShiftIntegrationTest {
                 Integer.class, tenantId)).isZero();
     }
 
+
+    @Test
+    void onlyAdminOfOwningTenantCanCorrectCompletedShift() throws Exception {
+        JsonNode started = startShift(token,
+                shiftBody(siteId, driverId, equipmentId, today().minusDays(1), "MORNING"));
+        JsonNode completed = finishShift(token, started);
+        long shiftId = completed.path("id").asLong();
+        Map<String, Object> request = correctionBody(completed, "auth-" + UUID.randomUUID());
+
+        String operatorName = uniqueName("correctionoperator");
+        postJson("/api/v1/users", userBody(operatorName), token).andExpect(status().isCreated());
+        String operatorToken = login(operatorName);
+        postJson("/api/v1/shifts/" + shiftId + "/corrections", request, operatorToken)
+                .andExpect(status().isForbidden());
+
+        String viewerName = uniqueName("correctionviewer");
+        Map<String, Object> viewerRequest = userBody(viewerName);
+        viewerRequest.put("role", "VIEWER");
+        postJson("/api/v1/users", viewerRequest, token).andExpect(status().isCreated());
+        String viewerToken = login(viewerName);
+        postJson("/api/v1/shifts/" + shiftId + "/corrections", request, viewerToken)
+                .andExpect(status().isForbidden());
+
+        String otherTenantToken = registerTenant("Other Correction Co", uniqueName("othercorrection"))
+                .path("accessToken").asText();
+        postJson("/api/v1/shifts/" + shiftId + "/corrections", request, otherTenantToken)
+                .andExpect(status().isNotFound());
+
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM shift_corrections WHERE tenant_id=? AND shift_id=?",
+                Integer.class, tenantId, shiftId)).isZero();
+    }
+
+    private String login(String username) throws Exception {
+        Map<String, Object> request = new HashMap<>();
+        request.put("username", username);
+        request.put("password", PASSWORD);
+        return body(postJson("/api/v1/auth/login", request, null)
+                .andExpect(status().isOk())).path("accessToken").asText();
+    }
+
     private Map<String, Object> correctionBody(JsonNode shift, String key) {
         Map<String, Object> request = new HashMap<>();
         request.put("idempotencyKey", key);
