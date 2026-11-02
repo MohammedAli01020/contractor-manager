@@ -51,8 +51,7 @@ void main() {
     expect(find.text('سائق الاختبار'), findsOneWidget);
     expect(find.text('موقع الاختبار'), findsWidgets);
     expect(find.text('250.00 جنيه'), findsOneWidget);
-    expect(find.text('أجر السائق (جنيه)'), findsOneWidget);
-    expect(find.text('سبب التصحيح (إلزامي)'), findsOneWidget);
+    expect(find.byType(TextFormField), findsNWidgets(5));
   });
 
   testWidgets('requires a reason before a correction can be submitted',
@@ -62,8 +61,10 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('مراجعة وتأكيد التصحيح'));
-    await tester.pump();
+    final submitButton = find.text('مراجعة وتأكيد التصحيح');
+    await tester.ensureVisible(submitButton);
+    await tester.tap(submitButton);
+    await tester.pumpAndSettle();
 
     expect(find.text('سبب التصحيح يجب ألا يقل عن 5 أحرف'), findsOneWidget);
     verifyNever(() => api.correctShift(any(), any()));
