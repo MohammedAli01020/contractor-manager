@@ -252,7 +252,7 @@ class HomeScreen extends StatelessWidget {
               trailing: const Icon(Icons.chevron_left),
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute<void>(
-                  builder: (_) => const ShiftsScreen(),
+                  builder: (_) => ShiftsScreen(canCorrectCompletedShifts: user.role == 'ADMIN'),
                 ),
               ),
             ),
