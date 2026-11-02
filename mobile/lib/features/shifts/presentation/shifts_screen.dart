@@ -245,10 +245,14 @@ class _ShiftsView extends StatelessWidget {
       actions['reinstate'] = 'إعادة تفعيل الوردية';
       actions['history'] = 'عرض سجل التعديلات';
     } else {
-      if (canCorrectCompletedShifts && shift.status == 'COMPLETED') {
-        actions['correct'] = 'تصحيح الوردية المكتملة';
+      if (shift.status == 'COMPLETED') {
+        if (canCorrectCompletedShifts) {
+          actions['correct'] = 'تصحيح الوردية المكتملة';
+        }
+        actions['edit'] = 'تعديل ملاحظات الوردية فقط';
+      } else {
+        actions['edit'] = 'عرض / تعديل البيانات';
       }
-      actions['edit'] = 'عرض / تعديل البيانات';
       actions['history'] = 'عرض سجل التعديلات';
     }
     final choice = await showModalBottomSheet<String>(
