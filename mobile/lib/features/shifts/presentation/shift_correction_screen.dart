@@ -31,7 +31,9 @@ class _ShiftCorrectionScreenState extends State<ShiftCorrectionScreen> {
   int? _equipmentId;
   String _shiftDate = '';
   String _shiftType = 'MORNING';
-  bool _loading = true;
+  // Keep the correction form usable from the saved shift snapshot while
+  // refreshing selectable sites/equipment in the background.
+  bool _loading = false;
   bool _saving = false;
   String? _error;
 
@@ -221,9 +223,7 @@ class _ShiftCorrectionScreenState extends State<ShiftCorrectionScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text('تصحيح الوردية #${widget.shift.id}')),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : Form(
+      body: Form(
               key: _formKey,
               child: ListView(
                 padding: const EdgeInsets.all(16),
