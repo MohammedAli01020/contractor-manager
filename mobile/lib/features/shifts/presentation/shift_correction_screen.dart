@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -36,6 +37,8 @@ class _ShiftCorrectionScreenState extends State<ShiftCorrectionScreen> {
   bool _loading = false;
   bool _saving = false;
   String? _error;
+  String? _pendingIdempotencyKey;
+  String? _pendingPayloadFingerprint;
 
   @override
   void initState() {
@@ -186,8 +189,7 @@ class _ShiftCorrectionScreenState extends State<ShiftCorrectionScreen> {
       _error = null;
     });
     try {
-      final corrected = await widget.api.correctShift(widget.shift.id, {
-        'idempotencyKey': _newIdempotencyKey(),
+      final payload = <String, dynamic>{
         'reason': _reason.text.trim(),
         'expectedVersion': version,
         'shiftDate': _shiftDate,
@@ -198,8 +200,19 @@ class _ShiftCorrectionScreenState extends State<ShiftCorrectionScreen> {
         'price': double.parse(_price.text.trim()),
         'equipmentOperatingCost': double.parse(_operatingCost.text.trim()),
         'notes': _notes.text.trim(),
-      });
+      };
+      final fingerprint = jsonEncode(payload);
+      if (_pendingIdempotencyKey == null ||
+          _pendingPayloadFingerprint != fingerprint) {
+        _pendingIdempotencyKey = _newIdempotencyKey();
+        _pendingPayloadFingerprint = fingerprint;
+      }
+      payload['idempotencyKey'] = _pendingIdempotencyKey;
+
+      final corrected = await widget.api.correctShift(widget.shift.id, payload);
       if (!mounted) return;
+      _pendingIdempotencyKey = null;
+      _pendingPayloadFingerprint = null;
       Navigator.of(context).pop(corrected);
     } catch (error) {
       if (!mounted) return;
