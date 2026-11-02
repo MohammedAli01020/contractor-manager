@@ -5,6 +5,7 @@ on:
     branches:
       - feature/accounting-mobile-rebased
       - feature/completed-shift-correction-backend
+      - feature/mobile-shift-correction
     paths:
       - "mobile/**"
       - ".github/workflows/flutter-ci.yml"
