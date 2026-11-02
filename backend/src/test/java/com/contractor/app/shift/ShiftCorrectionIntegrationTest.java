@@ -145,6 +145,42 @@ class ShiftCorrectionIntegrationTest extends AbstractShiftIntegrationTest {
     }
 
     @Test
+    void databaseRejectsForgedCorrectionLedgerRowsWithoutApplyingCorrection() throws Exception {
+        JsonNode completed = finishShift(token,
+                startShift(token, shiftBody(siteId, driverId, equipmentId, today().minusDays(1), "MORNING")));
+        long shiftId = completed.path("id").asLong();
+        Long originalJournalId = jdbc.queryForObject(
+                "SELECT driver_wage_journal_entry_id FROM shifts WHERE tenant_id=? AND id=?",
+                Long.class, tenantId, shiftId);
+        LocalDate shiftDate = LocalDate.parse(completed.path("shiftDate").asText());
+
+        assertThatThrownBy(() -> jdbc.update(
+                "INSERT INTO driver_ledger_entries (tenant_id, driver_id, transaction_type, transaction_date, "
+                        + "amount, balance_effect, description, client_request_key, shift_id, journal_entry_id, "
+                        + "created_by_user_id, created_at) VALUES (?, ?, 'EARNING', ?, 1.00, 1.00, "
+                        + "'forged correction earning', ?, ?, ?, ?, UTC_TIMESTAMP(6))",
+                tenantId, driverId, shiftDate, "shift-wage-correction-forged-" + UUID.randomUUID(),
+                shiftId, originalJournalId, actorUserId))
+                .isInstanceOf(UncategorizedSQLException.class)
+                .hasMessageContaining("UNAUTHORIZED_SHIFT_CORRECTION_LEDGER_EARNING");
+
+        assertThatThrownBy(() -> jdbc.update(
+                "INSERT INTO driver_ledger_entries (tenant_id, driver_id, transaction_type, transaction_date, "
+                        + "amount, balance_effect, description, client_request_key, shift_id, journal_entry_id, "
+                        + "created_by_user_id, created_at) VALUES (?, ?, 'CORRECTION_REVERSAL', ?, 1.00, -1.00, "
+                        + "'forged correction reversal', ?, ?, ?, ?, UTC_TIMESTAMP(6))",
+                tenantId, driverId, shiftDate, "shift-wage-correction-reversal-forged-" + UUID.randomUUID(),
+                shiftId, originalJournalId, actorUserId))
+                .isInstanceOf(UncategorizedSQLException.class)
+                .hasMessageContaining("UNAUTHORIZED_SHIFT_CORRECTION_LEDGER_REVERSAL");
+
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM driver_ledger_entries WHERE tenant_id=? AND shift_id=? "
+                        + "AND client_request_key LIKE 'shift-wage-correction-%'",
+                Integer.class, tenantId, shiftId)).isZero();
+    }
+
+    @Test
     void correctionRejectsZeroWageAtRequestBoundary() throws Exception {
         JsonNode started = startShift(token,
                 shiftBody(siteId, driverId, equipmentId, today().minusDays(1), "MORNING"));
