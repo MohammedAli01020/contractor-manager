@@ -596,10 +596,10 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
 
         assertThatThrownBy(() -> jdbcTemplate.update(
                 "UPDATE shifts SET driver_wage = ? WHERE id = ?", new BigDecimal("999.00"), id))
-                .hasMessageContaining("POSTED_SHIFT_WAGE_IMMUTABLE");
+                .hasMessageContaining("COMPLETED_SHIFT_IMMUTABLE");
         assertThatThrownBy(() -> jdbcTemplate.update(
                 "UPDATE shifts SET status = 'CANCELLED' WHERE id = ?", id))
-                .hasMessageContaining("POSTED_SHIFT_WAGE_IMMUTABLE");
+                .hasMessageContaining("COMPLETED_SHIFT_IMMUTABLE");
         assertThatThrownBy(() -> jdbcTemplate.update(
                 "DELETE FROM shifts WHERE id = ?", id))
                 .hasMessageContaining("POSTED_SHIFT_WAGE_CANNOT_BE_DELETED");
@@ -997,6 +997,77 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
         assertThat(unchanged.getStatus()).isEqualTo(com.contractor.app.shift.domain.ShiftStatus.IN_PROGRESS);
         assertThat(unchanged.getDriverWage()).isEqualByComparingTo("0.00");
         assertThat(unchanged.getDriverWageJournalEntryId()).isNull();
+    }
+
+
+    @Test
+    void completedShiftCorrectionReversesOriginalWageAndIsIdempotent() throws Exception {
+        JsonNode completed = finishShift(token,
+                startShift(token, shiftBody(siteId, driverId, equipmentId, day(2), "MORNING")));
+        long shiftId = completed.path("id").asLong();
+        long originalJournalId = completed.path("driverWageJournalEntryId").asLong();
+
+        Map<String, Object> correction = new HashMap<>();
+        correction.put("idempotencyKey", "shift-correction-test-" + java.util.UUID.randomUUID());
+        correction.put("reason", "تصحيح أجر الوردية بعد مراجعة المستندات");
+        correction.put("expectedVersion", completed.path("version").asLong());
+        correction.put("shiftDate", completed.path("shiftDate").asText());
+        correction.put("shiftType", completed.path("shiftType").asText());
+        correction.put("siteId", siteId);
+        correction.put("equipmentId", equipmentId);
+        correction.put("driverWage", new BigDecimal("210.00"));
+        correction.put("price", new BigDecimal("1400.00"));
+        correction.put("equipmentOperatingCost", BigDecimal.ZERO);
+        correction.put("notes", completed.path("notes").isNull() ? null : completed.path("notes").asText());
+
+        JsonNode corrected = body(postJson("/api/v1/shifts/" + shiftId + "/corrections",
+                correction, token).andExpect(status().isOk()));
+
+        assertThat(corrected.path("status").asText()).isEqualTo("COMPLETED");
+        assertThat(corrected.path("driverWage").decimalValue()).isEqualByComparingTo("210.00");
+        assertThat(corrected.path("price").decimalValue()).isEqualByComparingTo("1400.00");
+        long replacementJournalId = corrected.path("driverWageJournalEntryId").asLong();
+        assertThat(replacementJournalId).isNotEqualTo(originalJournalId);
+
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM journal_entries WHERE id = ? AND status = 'POSTED'",
+                Integer.class, originalJournalId)).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM journal_entries WHERE reversal_of_entry_id = ?",
+                Integer.class, originalJournalId)).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM journal_entries WHERE id = ? AND source_type = 'SHIFT_WAGE_CORRECTION' AND source_id = ?",
+                Integer.class, replacementJournalId,
+                jdbcTemplate.queryForObject("SELECT id FROM shift_corrections WHERE shift_id = ?",
+                        Long.class, shiftId))).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM driver_ledger_entries WHERE shift_id = ? AND transaction_type = 'CORRECTION_REVERSAL'",
+                Integer.class, shiftId)).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM driver_ledger_entries WHERE shift_id = ? AND transaction_type = 'EARNING' AND journal_entry_id = ?",
+                Integer.class, shiftId, replacementJournalId)).isEqualTo(1);
+
+        // A retry with the same key and payload returns the completed result, without
+        // posting another reversal or another replacement earning.
+        JsonNode replay = body(postJson("/api/v1/shifts/" + shiftId + "/corrections",
+                correction, token).andExpect(status().isOk()));
+        assertThat(replay.path("driverWageJournalEntryId").asLong()).isEqualTo(replacementJournalId);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM journal_entries WHERE reversal_of_entry_id = ?",
+                Integer.class, originalJournalId)).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM driver_ledger_entries WHERE shift_id = ? AND transaction_type = 'CORRECTION_REVERSAL'",
+                Integer.class, shiftId)).isEqualTo(1);
+
+        JsonNode history = body(getJson("/api/v1/shifts/" + shiftId + "/history", token));
+        boolean correctionAudited = false;
+        for (JsonNode row : history) {
+            if ("CORRECTED".equals(row.path("action").asText())) {
+                correctionAudited = true;
+                break;
+            }
+        }
+        assertThat(correctionAudited).isTrue();
     }
 
 }
