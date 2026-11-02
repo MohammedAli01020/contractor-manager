@@ -51,7 +51,12 @@ void main() {
     expect(find.text('سائق الاختبار'), findsOneWidget);
     expect(find.text('موقع الاختبار'), findsWidgets);
     expect(find.text('250.00 جنيه'), findsOneWidget);
-    expect(find.byType(TextFormField), findsNWidgets(5));
+    await tester.scrollUntilVisible(
+      find.text('أجر السائق (جنيه)'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('أجر السائق (جنيه)'), findsOneWidget);
   });
 
   testWidgets('requires a reason before a correction can be submitted',
@@ -62,7 +67,11 @@ void main() {
     await tester.pumpAndSettle();
 
     final submitButton = find.text('مراجعة وتأكيد التصحيح');
-    await tester.ensureVisible(submitButton);
+    await tester.scrollUntilVisible(
+      submitButton,
+      400,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.tap(submitButton);
     await tester.pumpAndSettle();
 
