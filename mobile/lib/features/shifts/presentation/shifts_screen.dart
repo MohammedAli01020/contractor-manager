@@ -283,11 +283,9 @@ class _ShiftsView extends StatelessWidget {
       );
       if (corrected != null) {
         bloc.add(const ShiftsRequested());
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('تم تصحيح الوردية وتحديث القيد المحاسبي ودفتر السائق.')),
-          );
-        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('تم تصحيح الوردية وتحديث القيد المحاسبي ودفتر السائق.')),
+        );
       }
       return;
     }
