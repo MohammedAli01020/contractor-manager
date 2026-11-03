@@ -205,3 +205,83 @@ These are deliberately not hard-coded as final policy in this draft:
 6. Whether daily cash review is enabled by default or optional per tenant.
 
 These decisions must be confirmed with the accounting policy and existing backend behavior before implementation.
+
+
+## 12. Close outputs, documents, and archive
+
+A successful monthly close should produce a **financial close package** for the tenant. This is a reporting and audit deliverable, not a tax invoice and not a new accounting transaction.
+
+### 12.1 Reports included in the close package
+
+The recommended default is a complete package, with individual reports also available on demand:
+
+- Period Profit and Loss.
+- Trial Balance and relevant General Ledger detail.
+- Cashbox and bank movement/closing-balance reports.
+- Driver statements showing earned wages, advances, payments, and remaining balances.
+- Equipment activity and actual-cost summaries, with source drill-down.
+- Expense summary and supporting expense-document references.
+- Inventory movement and valuation reports only where the costing policy/data support a reliable valuation.
+- Customer and supplier statements/balances where those modules are enabled.
+- A period-close report/minutes containing the period, status, approval details, reconciliation outcome, acknowledged warnings, and snapshot identifier.
+
+Each report must state its date basis and scope. A report is not presented as complete if required source data or accounting mappings are missing.
+
+### 12.2 Immutable PDF and archive
+
+At successful close, generate or make reproducibly available a versioned PDF package and keep it in a tenant-scoped monthly archive.
+
+- Preserve the exact report parameters, period boundaries, generated-at timestamp, close event/version, and relevant source/version identifiers.
+- The archived close package must remain unchanged after later-period corrections.
+- If an authorized reopen and re-close occurs, retain the prior package as superseded history; never silently replace the evidence of the earlier close.
+- Allow authorized users to preview, download/save, print, and share the reports.
+- Access to archived documents follows tenant permissions and is audited.
+- A generated PDF is a report copy; the underlying ledger and source records remain the accounting source of truth.
+
+### 12.3 Operational documents versus reports and tax invoices
+
+Keep these document classes distinct in navigation and terminology:
+
+1. **Transaction documents:** expense receipts/invoices, collection receipts, payment vouchers, advance documents, supplier/customer supporting documents.
+2. **Statements:** driver, customer, supplier, cashbox, and bank statements.
+3. **Management/accounting reports:** Profit and Loss, Trial Balance, General Ledger, inventory reports, equipment summaries, and the close package.
+
+A close report, payment voucher, or ordinary expense attachment must not be labeled or represented as a legally compliant tax invoice. Tax invoicing is a separate capability with its own legal, tax, numbering, and integration requirements, to be designed and validated independently for the applicable jurisdiction.
+
+### 12.4 Email notifications and accountant delivery
+
+Recommended default: **email notifications are optional and configurable per tenant**, not mandatory.
+
+Potential notification events:
+- configurable reminder before a period ends;
+- period-end review reminder;
+- blocking exceptions requiring attention;
+- successful close;
+- authorized reopen or re-close.
+
+The tenant owner chooses the recipient address(es), notification types, and whether the close package is emailed to the accountant. The workflow must verify/manage recipient addresses and record delivery attempts/results without treating email delivery as proof that the recipient reviewed or approved the reports.
+
+For sensitive reports, provide a secure, permission-checked download route; if attachments are enabled, make that an explicit tenant choice and apply appropriate access/security controls. Email failure must not undo a valid close or block access to the in-app archive. Never send to an assumed or invented accountant address.
+
+### 12.5 Mobile archive experience
+
+From the mobile app, an authorized user can:
+- open the archive and select a year/month;
+- see whether the period is open, closed, or reopened;
+- preview the close summary and included reports;
+- download/save or print a PDF;
+- share it or request email delivery to configured recipients;
+- inspect prior/superseded close packages and their audit history.
+
+The archive should clearly distinguish a current approved package from a superseded package after a restatement.
+
+## 13. Product direction recorded for close deliverables
+
+The recommended product direction is accepted for design planning:
+
+- Email notifications: optional and configurable; off/on choices belong to tenant settings.
+- Close reports: full report package by default, with individual report access on demand.
+- Accountant delivery: support in-app archive, PDF save/download, printing, and email delivery to a tenant-configured recipient.
+- Tax invoices: separate feature and legal workflow; never imply that close reports are tax invoices.
+
+These are product/design decisions, not evidence that PDF generation, email delivery, archive storage, or tax invoicing is already implemented. Technical implementation and legal/accounting validation remain separate work.
