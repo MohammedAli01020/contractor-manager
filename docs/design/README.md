@@ -22,6 +22,7 @@ This directory is the **official design reference** for Contractor Manager.
 - [Inventory and warehouses](inventory/inventory.md) — multiple warehouses, item movements, stocktake, and direct purchase/use.
 - [Reports](reports/reports.md) — management dashboard, profitability, cash flow, balances, and accounting reports.
 - [Accounting period close](accounting/period-close.md) — monthly/annual close, review checklist, corrections, approvals, and integrity controls.
+- [Document Center](documents/document-center.md) — transaction documents, statements, attachments, PDFs, sharing, permissions, and audit.
 - [Progress tracker](DESIGN_PROGRESS.md) — screen status, decisions, and approvals.
 
 ## Status vocabulary
