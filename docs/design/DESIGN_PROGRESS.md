@@ -38,6 +38,7 @@ Current design baseline: [Design System v1.0](design-system/v1.0.md)
 | Custom categories | [~] | Tenant-specific labels/categories; protected accounting transaction types |
 | Treasury and banks | [~] | Separate accounts, receipts, payments, transfers, and statements |
 | Inventory and warehouses | [~] | Multiple warehouses, receipts, issues, transfers, stocktake, and direct purchase/use |
+| Monthly and annual close | [~] | Review close states, checklist, reconciliation, corrections, approvals, and year-end policy |
 | Platform Owner Web | [ ] | Separate responsive web design scope |
 
 ## Decisions recorded on 2026-11-03
@@ -63,6 +64,9 @@ Current design baseline: [Design System v1.0](design-system/v1.0.md)
 - Report totals must drill down to source transactions; repeated references to one source transaction must not double-count it.
 - Equipment profitability is not claimed unless revenue attribution and actual cost allocation are explicit and sufficiently complete.
 - Inventory valuation is displayed only after the costing method and cost completeness are verified.
+- Monthly close is a controlled review/approval workflow with explicit period boundaries, blocking exceptions, reproducible close evidence, and an auditable reopen path.
+- Closed periods reject ordinary edits, deletion, and backdated posting. The default correction path posts in the first open period while preserving both effective and posting dates; authorized restatement requires a reasoned reopen.
+- Annual close reuses monthly controls; year-end profit/equity transfer accounts and local tax treatment remain subject to accounting-policy confirmation.
 
 ## Product and accounting guardrails
 
@@ -76,6 +80,8 @@ Current design baseline: [Design System v1.0](design-system/v1.0.md)
 - Records shown in multiple screens must never be duplicated in the ledger or stock movement history.
 - Historical posted transactions and stock movements must not be silently rewritten.
 - Report totals must be derived from the accounting/operational source of truth and must indicate incomplete data.
+- Period close/reopen and year-end posting must be enforced by backend/database controls, not only by Flutter.
+- Close operations must be transactional, tenant-scoped, idempotent, and safe under concurrent requests and multiple application instances.
 - Prototype sample values are never presented as real customer data.
 
 ## Approval and implementation workflow
@@ -94,3 +100,4 @@ Current design baseline: [Design System v1.0](design-system/v1.0.md)
 - 2026-11-03 — Added treasury and bank account specification.
 - 2026-11-03 — Added multiple-warehouse inventory specification, including stock receipts/issues/transfers, stocktake, direct purchase-and-use, and costing-policy guardrails.
 - 2026-11-03 — Added management dashboard and reports specification with source drill-down and accounting reconciliation guardrails.
+- 2026-11-03 — Added monthly/annual period-close draft covering review workflow, reconciliation, close exceptions, corrections, reopen controls, annual close, mobile UX, and concurrency/tenant-integrity requirements.
