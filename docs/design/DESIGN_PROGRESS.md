@@ -94,6 +94,8 @@ Current design baseline: [Design System v1.0](design-system/v1.0.md)
 6. Test on the target Android device and update status only after verification.
 
 ## Change log
+- 2026-11-03 — Confirmed close deliverables direction: optional tenant-configured email notifications, a full monthly close report package, immutable/versioned PDF archive, print/save/share and accountant email delivery; tax invoices remain a separate legally validated workflow.
+
 
 - 2026-11-03 — Initial design tracking created; ERP-inspired, Arabic-first mobile direction and Design System v1.0 established.
 - 2026-11-03 — Added driver account, configurable categories, expense linking, equipment profile, and inventory workflow decisions.
