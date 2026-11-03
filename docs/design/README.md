@@ -23,6 +23,7 @@ This directory is the **official design reference** for Contractor Manager.
 - [Reports](reports/reports.md) — management dashboard, profitability, cash flow, balances, and accounting reports.
 - [Accounting period close](accounting/period-close.md) — monthly/annual close, review checklist, corrections, approvals, and integrity controls.
 - [Document Center](documents/document-center.md) — transaction documents, statements, attachments, PDFs, sharing, permissions, and audit.
+- [Collection receipt and payment voucher](documents/collection-receipt-payment-voucher.md) — mobile preview and generation rules for confirmed receipts and payments.
 - [Progress tracker](DESIGN_PROGRESS.md) — screen status, decisions, and approvals.
 
 ## Status vocabulary
