@@ -20,6 +20,7 @@ This directory is the **official design reference** for Contractor Manager.
 - [Expenses and categories](expenses/expenses.md) — expense linking and configurable categories.
 - [Treasury and banks](treasury/treasury.md) — cashboxes, bank accounts, receipts, payments, and transfers.
 - [Inventory and warehouses](inventory/inventory.md) — multiple warehouses, item movements, stocktake, and direct purchase/use.
+- [Reports](reports/reports.md) — management dashboard, profitability, cash flow, balances, and accounting reports.
 - [Progress tracker](DESIGN_PROGRESS.md) — screen status, decisions, and approvals.
 
 ## Status vocabulary
