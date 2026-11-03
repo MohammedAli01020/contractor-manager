@@ -15,7 +15,10 @@ This directory is the **official design reference** for Contractor Manager.
 
 - [Design System](design-system/v1.0.md) — shared visual and interaction rules.
 - [Dashboard](dashboard/dashboard.md) — dashboard information architecture and behavior.
-- [Progress tracker](DESIGN_PROGRESS.md) — screen-by-screen status and approvals.
+- [Equipment profile](equipment/equipment.md) — equipment activity, costs, and shift aggregation.
+- [Driver account](drivers/driver-account.md) — wages, advances, payments, and balance statement.
+- [Expenses and categories](expenses/expenses.md) — expense linking and user-configurable categories.
+- [Progress tracker](DESIGN_PROGRESS.md) — screen-by-screen status, decisions, and approvals.
 
 ## Status vocabulary
 
