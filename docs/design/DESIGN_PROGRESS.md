@@ -39,6 +39,7 @@ Current design baseline: [Design System v1.0](design-system/v1.0.md)
 | Treasury and banks | [~] | Separate accounts, receipts, payments, transfers, and statements |
 | Inventory and warehouses | [~] | Multiple warehouses, receipts, issues, transfers, stocktake, and direct purchase/use |
 | Monthly and annual close | [~] | Review close states, checklist, reconciliation, corrections, approvals, and year-end policy |
+| Document Center | [~] | Review transaction documents, statements, attachments, PDF output, permissions, and archive links |
 | Platform Owner Web | [ ] | Separate responsive web design scope |
 
 ## Decisions recorded on 2026-11-03
@@ -94,6 +95,7 @@ Current design baseline: [Design System v1.0](design-system/v1.0.md)
 6. Test on the target Android device and update status only after verification.
 
 ## Change log
+- 2026-11-03 — Added Document Center draft: source-linked receipts/vouchers/statements, evidence attachments, private file access, versioning, Arabic PDF/print/share, numbering safeguards, and separation from tax invoicing.
 - 2026-11-03 — Confirmed close deliverables direction: optional tenant-configured email notifications, a full monthly close report package, immutable/versioned PDF archive, print/save/share and accountant email delivery; tax invoices remain a separate legally validated workflow.
 
 
