@@ -20,6 +20,8 @@ Current design baseline: [Design System v1.0](design-system/v1.0.md)
 | Typography | [~] | Cairo preferred; validate actual Flutter rendering |
 | Navigation architecture | [~] | Proposed five primary destinations; needs screen-level review |
 | Design System v1.0 documentation | [x] | Initial shared baseline |
+| Offline-first architecture direction | [x] | Product owner approved Offline-first Architecture + Offline-aware UX |
+| Role-aware single Flutter app | [~] | Proposed; permission matrix and role journeys require review |
 
 ## Screens and workflows
 
@@ -33,6 +35,7 @@ Current design baseline: [Design System v1.0](design-system/v1.0.md)
 | Completed shift correction | [~] | Dedicated correction flow; ordinary edit remains distinct |
 | Equipment list/details | [~] | Aggregate shifts, actual expenses, stock issues, drivers, and results |
 | Driver account | [~] | Aggregate shift wages, advances, and payments into a statement |
+| Optional driver login | [~] | Link login to existing driver profile; define invitation and recovery |
 | Advances | [~] | Separate driver receivable/advance workflow |
 | Expenses | [~] | One transaction can be linked to equipment and shift simultaneously |
 | Custom categories | [~] | Tenant-specific labels/categories; protected accounting transaction types |
@@ -41,6 +44,9 @@ Current design baseline: [Design System v1.0](design-system/v1.0.md)
 | Monthly and annual close | [~] | Review close states, checklist, reconciliation, corrections, approvals, and year-end policy |
 | Document Center | [~] | Review transaction documents, statements, attachments, PDF output, permissions, and archive links |
 | Collection receipt / payment voucher | [~] | Review eligibility, source-linked previews, Arabic PDF, permissions, and document history |
+| Notification center | [~] | Define event catalog, role routing, channels, privacy, and deduplication |
+| Global search | [~] | Define searchable entities, filters, ranking, and permission enforcement |
+| Offline/synchronization center | [~] | Define first-release offline action matrix, local persistence, retries, and conflicts |
 | Platform Owner Web | [ ] | Separate responsive web design scope |
 
 ## Decisions recorded on 2026-11-03
@@ -69,6 +75,17 @@ Current design baseline: [Design System v1.0](design-system/v1.0.md)
 - Monthly close is a controlled review/approval workflow with explicit period boundaries, blocking exceptions, reproducible close evidence, and an auditable reopen path.
 - Closed periods reject ordinary edits, deletion, and backdated posting. The default correction path posts in the first open period while preserving both effective and posting dates; authorized restatement requires a reasoned reopen.
 - Annual close reuses monthly controls; year-end profit/equity transfer accounts and local tax treatment remain subject to accounting-policy confirmation.
+- The mobile product direction is one Flutter app with role-aware navigation; backend authorization remains authoritative.
+- Driver login is optional and linked to the existing driver profile; it does not create a second driver identity or financial account.
+- Driver self-service is limited to the driver's own permitted shifts and account statement; drivers cannot edit posted wages/financial movements or view company-wide sensitive accounts.
+- Notifications should be generated from authoritative server-side events, deep-link to authorized source records, and avoid duplicate delivery on retries.
+- Global search is permission-aware and opens source records; it must not reveal inaccessible or cross-tenant records.
+- **Offline-first Architecture + Offline-aware User Experience** is the approved architectural direction. Offline-first includes offline support; Offline Support is not a separate competing architecture goal.
+- Offline UX distinguishes local Draft, Pending Sync, Syncing, server-confirmed Synced, Sync Failed, and Conflict/Needs Review states.
+- Local drafts/eligible queued operations should survive app restarts; retries use stable idempotency identifiers to prevent duplicate operations.
+- The server remains authoritative for permissions, shared business state, posted financial records, balances, stock, and period status.
+- Cash/bank receipts and payments, advances, journal posting/corrections, and period close/reopen must not be shown as completed before server confirmation.
+- Offline operations are enabled progressively by risk. The exact first-release offline action matrix and conflict policy remain open for backend/security review.
 
 ## Product and accounting guardrails
 
@@ -84,6 +101,7 @@ Current design baseline: [Design System v1.0](design-system/v1.0.md)
 - Report totals must be derived from the accounting/operational source of truth and must indicate incomplete data.
 - Period close/reopen and year-end posting must be enforced by backend/database controls, not only by Flutter.
 - Close operations must be transactional, tenant-scoped, idempotent, and safe under concurrent requests and multiple application instances.
+- Offline retries must be idempotent; stale local data must not silently overwrite server or financial history.
 - Prototype sample values are never presented as real customer data.
 
 ## Approval and implementation workflow
@@ -96,11 +114,12 @@ Current design baseline: [Design System v1.0](design-system/v1.0.md)
 6. Test on the target Android device and update status only after verification.
 
 ## Change log
+
+- 2026-11-03 — Added mobile operating-experience specification for role-aware access, optional driver login, notification center, global search, and offline-first architecture/synchronization.
+- 2026-11-03 — Product owner approved Offline-first Architecture + Offline-aware User Experience; Offline Support is treated as included within Offline-first rather than a separate architecture target.
 - 2026-11-03 — Added mobile design draft for collection receipts and payment vouchers, emphasizing confirmed source transactions, no duplicate posting, Arabic/RTL PDF, document history, and permission-aware actions.
 - 2026-11-03 — Added Document Center draft: source-linked receipts/vouchers/statements, evidence attachments, private file access, versioning, Arabic PDF/print/share, numbering safeguards, and separation from tax invoicing.
 - 2026-11-03 — Confirmed close deliverables direction: optional tenant-configured email notifications, a full monthly close report package, immutable/versioned PDF archive, print/save/share and accountant email delivery; tax invoices remain a separate legally validated workflow.
-
-
 - 2026-11-03 — Initial design tracking created; ERP-inspired, Arabic-first mobile direction and Design System v1.0 established.
 - 2026-11-03 — Added driver account, configurable categories, expense linking, equipment profile, and inventory workflow decisions.
 - 2026-11-03 — Added treasury and bank account specification.
