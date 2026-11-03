@@ -18,6 +18,7 @@ This directory is the **official design reference** for Contractor Manager.
 - [Equipment profile](equipment/equipment.md) — equipment activity, costs, and shift aggregation.
 - [Driver account](drivers/driver-account.md) — wages, advances, payments, and balance statement.
 - [Expenses and categories](expenses/expenses.md) — expense linking and user-configurable categories.
+- [Treasury and banks](treasury/treasury.md) — cashboxes, bank accounts, receipts, payments, transfers, and statements.
 - [Progress tracker](DESIGN_PROGRESS.md) — screen-by-screen status, decisions, and approvals.
 
 ## Status vocabulary
