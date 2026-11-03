@@ -25,7 +25,7 @@ Current design baseline: [Design System v1.0](design-system/v1.0.md)
 
 | Screen / flow | Status | Next action |
 |---|---|---|
-| Dashboard | [~] | Refine and approve layout, metrics, and quick actions |
+| Dashboard and reports | [~] | Review definitions, period filters, metrics, and drill-down |
 | Main navigation / More | [~] | Validate destination grouping and reachability |
 | Shifts list | [~] | Finish filters, statuses, and layouts |
 | Create shift | [~] | Driver wage is variable per shift; define full form against backend |
@@ -38,7 +38,6 @@ Current design baseline: [Design System v1.0](design-system/v1.0.md)
 | Custom categories | [~] | Tenant-specific labels/categories; protected accounting transaction types |
 | Treasury and banks | [~] | Separate accounts, receipts, payments, transfers, and statements |
 | Inventory and warehouses | [~] | Multiple warehouses, receipts, issues, transfers, stocktake, and direct purchase/use |
-| Reports | [ ] | Confirm report definitions against accounting backend |
 | Platform Owner Web | [ ] | Separate responsive web design scope |
 
 ## Decisions recorded on 2026-11-03
@@ -59,6 +58,11 @@ Current design baseline: [Design System v1.0](design-system/v1.0.md)
 - Estimated equipment costs are not actual posted expenses.
 - Treasury accounts have separate derived balances. Receipts/payments link to source obligations; internal cash/bank transfers are not income or expense.
 - Opening balances and posted financial corrections use controlled, auditable workflows.
+- Management reports must distinguish period profitability, actual cash flow, point-in-time cash/bank balances, receivables, payables, and inventory value.
+- Profit-and-loss, cash-flow, receivable/payable, driver, equipment, inventory, trial-balance, and general-ledger reports must reconcile to their source records.
+- Report totals must drill down to source transactions; repeated references to one source transaction must not double-count it.
+- Equipment profitability is not claimed unless revenue attribution and actual cost allocation are explicit and sufficiently complete.
+- Inventory valuation is displayed only after the costing method and cost completeness are verified.
 
 ## Product and accounting guardrails
 
@@ -71,6 +75,7 @@ Current design baseline: [Design System v1.0](design-system/v1.0.md)
 - Internal account/warehouse transfers do not change profit.
 - Records shown in multiple screens must never be duplicated in the ledger or stock movement history.
 - Historical posted transactions and stock movements must not be silently rewritten.
+- Report totals must be derived from the accounting/operational source of truth and must indicate incomplete data.
 - Prototype sample values are never presented as real customer data.
 
 ## Approval and implementation workflow
@@ -88,3 +93,4 @@ Current design baseline: [Design System v1.0](design-system/v1.0.md)
 - 2026-11-03 — Added driver account, configurable categories, expense linking, equipment profile, and inventory workflow decisions.
 - 2026-11-03 — Added treasury and bank account specification.
 - 2026-11-03 — Added multiple-warehouse inventory specification, including stock receipts/issues/transfers, stocktake, direct purchase-and-use, and costing-policy guardrails.
+- 2026-11-03 — Added management dashboard and reports specification with source drill-down and accounting reconciliation guardrails.
