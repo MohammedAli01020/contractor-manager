@@ -309,5 +309,19 @@ Do not drop `driver_id` from journal lines or `driver_ledger_entries`, or remove
 
 - **Recommended architecture:** one logical workforce payable subledger, one general workforce identity, optional operational profiles, and payroll as a calculation/approval/reconciliation process.
 - **Explicitly not recommended:** a separate independent payroll balance ledger; direct table rename/drop; posting shift wages again during payroll; treating attendance as automatic expense recognition.
-- **Pending user approval:** the target model and migration direction before any code or database changes.
-- **No implementation performed:** this section records design analysis only.
+- **Approved by product owner:** adopt the target model and additive migration direction as the project architecture baseline. This approval authorizes detailed technical planning, not automatic schema/code changes or PR merges.
+- **No implementation performed:** this section records the approved design only; application code, database migrations, PRs, and `main` remain unchanged.
+### 12.9 Approved product-owner decisions (2026-11-04)
+
+The product owner approved the following architecture baseline:
+
+1. One general workforce identity per person, independent of job classification and system login.
+2. A person may hold multiple effective-dated roles/assignments and operational profiles.
+3. One logical append-only worker-payables subledger per person, with typed and traceable source movements; no parallel authoritative payroll balance ledger.
+4. Compensation must support shift, hourly, daily, quantity/piecework, fixed salary, and mixed components through effective-dated agreements.
+5. Payroll calculates, reviews, approves, and reconciles compensation. Existing shift earnings are included as already recognized and must never be posted twice.
+6. Advances remain separate from generic expenses; earned-payable advances and recoverable advances retain distinct accounting behavior.
+7. Actual payment is separate from earning recognition and is posted through cash/bank controls.
+8. Existing driver, shift, journal, and ledger history must be preserved through an additive, backward-compatible migration. No destructive rename/drop in the first migration.
+9. HR delivery is phased; workforce core and compatibility come before full attendance, leave, payroll, and settlement capabilities.
+10. This approval authorizes the next detailed technical design and migration plan only. Implementation, schema changes, and PR merges remain subject to review and the user's explicit authorization.
