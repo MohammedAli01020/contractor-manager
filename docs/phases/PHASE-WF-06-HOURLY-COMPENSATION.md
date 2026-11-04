@@ -24,10 +24,10 @@ WF-06 adds the `HOUR` compensation basis to the existing shift lifecycle:
 ## Hourly calculation
 
 - `compensationRate` is the frozen rate per hour.
-- `actualHours` is an explicit decimal measurement, not derived from `startedAt` and `finishedAt`.
+- `actualHours` is a required positive decimal measurement at finish, not derived from `startedAt` and `finishedAt`.
 - The accepted input precision is two decimal places (examples: 7.50, 8.25).
 - `calculatedWage = Money.scale(compensationRate × actualHours)`, using the existing HALF_UP money policy and two decimal places.
-- Missing hours are invalid. Zero hours are an explicit value, not a missing value; finishing with zero hours requires a reason and results in zero wage, no wage journal, no earning, and no advance recovery. Negative hours are invalid.
+- Missing, zero, and negative hours are invalid for HOUR completion. If no work occurred, cancel the shift with a reason; a zero hourly rate with positive hours remains supported by WF-05.
 - A zero hourly rate with positive hours follows the already-approved WF-05 zero-wage behavior: the shift completes without zero-value financial entries or advance recovery.
 
 ## Compatibility
@@ -40,7 +40,7 @@ WF-06 adds the `HOUR` compensation basis to the existing shift lifecycle:
 
 ## API and mobile behavior
 
-- Add an explicit finish request carrying `version`, `actualHours`, and a reason when hours are zero.
+- Add an explicit finish request carrying `version` and positive `actualHours` for HOUR shifts.
 - Server-side validation is mandatory even if the mobile client validates first.
 - The mobile finish flow for an hourly shift asks for actual hours, displays the frozen hourly rate and calculated total, and requires confirmation before submission.
 - The existing bulk-finish flow must not send an hourly shift through the legacy finish request. Until it supports per-shift hour entry, hourly shifts are excluded from bulk completion and directed to individual completion.
@@ -48,12 +48,12 @@ WF-06 adds the `HOUR` compensation basis to the existing shift lifecycle:
 
 ## Implementation and verification checklist
 
-1. Inspect and update the shift entity, finish DTO/controller, resolver, service, response, schema constraints, and completion trigger.
-2. Preserve the distinction between an unresolved hourly total and a real zero wage; do not display a pending hourly shift as a completed zero-wage shift.
-3. Extend correction behavior so completed hourly snapshots and accounting reversals remain consistent.
-4. Add backend integration coverage for agreement resolution, rate snapshotting, missing/negative/zero/decimal hours, HALF_UP rounding, idempotent journal/ledger posting, advance recovery, concurrency, and SHIFT regression.
-5. Add Flutter coverage for hourly finish input, preview/confirmation, request payload, and bulk-finish exclusion.
-6. Run the relevant backend and Flutter suites once after implementation, then open a reviewable PR targeting `feature/financial-foundation`.
+1. [x] Update the shift entity, finish DTO/controller, resolver, service, response, and schema constraints for explicit hourly hours.
+2. [x] Preserve the distinction between a pending hourly total and a completed zero-wage shift; pending hourly margin is returned as null and the mobile editor shows the hourly rate.
+3. [x] Block the legacy completed-shift correction path for hourly shifts until an hourly-aware reversal/reposting workflow exists.
+4. [x] Add backend integration coverage for HOUR agreement resolution, rate snapshotting, required hours, decimal calculation/rounding, journal and earning creation. [ ] Extend with negative-input, advance-recovery, concurrency, and SHIFT regression cases.
+5. [x] Add mobile hourly-rate display, actual-hours finish input with preview/confirmation, request payload, and bulk-finish exclusion. [ ] Add dedicated Flutter widget tests.
+6. [ ] Run the relevant backend and Flutter suites once after implementation, then open a reviewable PR targeting `feature/financial-foundation`.
 
 ## Explicit boundaries
 
