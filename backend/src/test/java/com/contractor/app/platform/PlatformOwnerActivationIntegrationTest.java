@@ -25,6 +25,7 @@ import com.contractor.app.tenant.infra.TenantRepository;
 import com.contractor.app.user.domain.Role;
 import com.contractor.app.user.domain.User;
 import com.contractor.app.user.infra.UserRepository;
+import com.contractor.app.workforce.infra.WorkforceRoleRepository;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import com.contractor.app.platform.infra.PlatformOwnerRepository;
@@ -49,6 +50,7 @@ class PlatformOwnerActivationIntegrationTest extends AbstractIntegrationTest {
     @Autowired private PlatformTotpService totp;
     @Autowired private TenantRepository tenants;
     @Autowired private ChartAccountRepository chartAccounts;
+    @Autowired private WorkforceRoleRepository workforceRoles;
     @Autowired private UserRepository users;
     @Autowired private TenantAdminActivationTokenRepository activationTokens;
     @Autowired private RefreshTokenRepository refreshTokens;
@@ -83,6 +85,12 @@ class PlatformOwnerActivationIntegrationTest extends AbstractIntegrationTest {
         assertTrue(createdTenantId > 0);
         assertEquals(15, chartAccounts.findByTenantIdOrderByAccountCodeAsc(createdTenantId).size(),
                 "Platform-created companies should receive the default chart of accounts");
+        java.util.Set<String> seededRoleCodes = workforceRoles.findAllByTenantIdOrderByNameAsc(createdTenantId)
+                .stream().map(role -> role.getCode()).collect(java.util.stream.Collectors.toSet());
+        assertEquals(7, seededRoleCodes.size(), "Platform-created companies should receive all seven default workforce roles");
+        assertTrue(seededRoleCodes.containsAll(java.util.Arrays.asList("DRIVER", "EQUIPMENT_OPERATOR", "WORKER",
+                "TECHNICIAN", "SUPERVISOR", "ENGINEER", "ADMINISTRATIVE")),
+                "Platform-created companies should receive the complete default workforce role catalogue");
         String activationUrl = createdBody.path("activationUrl").asText();
         String activationToken = activationUrl.substring(activationUrl.indexOf("token=") + 6);
 
