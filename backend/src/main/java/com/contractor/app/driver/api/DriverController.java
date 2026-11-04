@@ -2,6 +2,7 @@ package com.contractor.app.driver.api;
 
 import com.contractor.app.common.api.PageResponse;
 import com.contractor.app.common.security.CurrentUser;
+import com.contractor.app.user.domain.Role;
 import com.contractor.app.driver.api.dto.DriverRequest;
 import com.contractor.app.driver.api.dto.DriverResponse;
 import com.contractor.app.driver.domain.DriverService;
@@ -41,12 +42,12 @@ public class DriverController {
                                              @RequestParam(defaultValue = "false") boolean includeInactive,
                                              @RequestParam(defaultValue = "0") int page,
                                              @RequestParam(defaultValue = "20") int size) {
-        return service.list(CurrentUser.tenantId(), q, type, includeInactive, page, size);
+        return service.list(CurrentUser.tenantId(), q, type, includeInactive, page, size, CurrentUser.get().getRole());
     }
 
     @GetMapping("/{id}")
     public DriverResponse get(@PathVariable Long id) {
-        return service.get(CurrentUser.tenantId(), id);
+        return service.get(CurrentUser.tenantId(), id, CurrentUser.get().getRole());
     }
 
     @PreAuthorize("hasRole('ADMIN')")
