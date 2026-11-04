@@ -21,7 +21,7 @@ Current design baseline: [Design System v1.0](design-system/v1.0.md)
 | Navigation architecture | [~] | Proposed five primary destinations; needs screen-level review |
 | Design System v1.0 documentation | [x] | Initial shared baseline |
 | Offline-first architecture direction | [x] | Product owner approved Offline-first Architecture + Offline-aware UX |
-| Role-aware single Flutter app | [~] | Proposed; permission matrix and role journeys require review |
+| Role-aware single Flutter app | [~] | One Flutter app with role-aware navigation; permission model approved, detailed role journeys still require review |
 
 ## Screens and workflows
 
@@ -87,6 +87,23 @@ Current design baseline: [Design System v1.0](design-system/v1.0.md)
 - Cash/bank receipts and payments, advances, journal posting/corrections, and period close/reopen must not be shown as completed before server confirmation.
 - Offline operations are enabled progressively by risk. The exact first-release offline action matrix and conflict policy remain open for backend/security review.
 
+## Approved permissions and approval workflow — 2026-11-04
+
+- Product owner approved the role-based permission and approval-workflow design direction.
+- Separate **role permissions** (what a user may do) from **approval policies** (when an otherwise permitted action requires another person's approval).
+- Keep routine low-risk actions direct when the user's permissions allow them; do not force every operation through approval.
+- Start with role templates for company owner, company manager, accountant, operations supervisor, cashier/treasury custodian, storekeeper, and driver. Templates are configurable, not rigid hard-coded grants.
+- Permissions are granular by action (view/create/edit draft/submit/approve/reject/execute/post/correct/export/configure) and may be scoped to company, branch, project, work site, warehouse, equipment, or the driver's own profile.
+- Approval policies are tenant-scoped and configurable by operation type, amount threshold, resource scope, approver authority, and number of approval levels. The example EGP thresholds shown in the specification are illustrative only, not system defaults.
+- Maker-checker separation is the default for selected sensitive workflows: the requester cannot approve their own request unless a specifically authorized policy permits it. Users cannot grant themselves higher privileges.
+- Approval state is distinct from business transaction state and accounting posting state. Approval alone does not mean payment execution, stock movement, or journal posting has occurred.
+- Initial request lifecycle: Draft → Pending Approval → Approved/Rejected → Executed/Posted where applicable, with Cancelled where allowed. Rejection requires a reason; history is retained.
+- Initial delivery direction: granular role permissions, tenant-scoped assignment, audit trail, selected configurable thresholds, a single-level approval inbox, requester tracking, and explicit separation of approval from execution/posting.
+- Later phases may add multi-level conditional chains, delegation/escalation, and advanced policy builders.
+- Backend authorization is authoritative at submission, decision, execution, and posting. Inbox, search, notifications, and deep links must enforce tenant and resource scope.
+- Sensitive decisions and permission changes require append-only audit evidence, including actor, timestamps, policy version, reason, source reference, and execution/posting reference where applicable.
+- The approved specification is product design only. It does not authorize immediate application-code changes or prescribe a final backend schema; implementation must first be reconciled with existing authorization and accounting mechanisms.
+
 ## Product and accounting guardrails
 
 - Completed zero-wage/zero-fee shifts follow explicit backend rules; UI must not invent journal entries.
@@ -114,6 +131,8 @@ Current design baseline: [Design System v1.0](design-system/v1.0.md)
 6. Test on the target Android device and update status only after verification.
 
 ## Change log
+
+- 2026-11-04 — Product owner approved the permissions and approval workflow direction; added role/action/resource-scoped permissions, tenant-configurable policies, maker-checker controls, approval lifecycle/inbox, audit requirements, and phased delivery to `security/approval-workflow.md`.
 
 - 2026-11-03 — Added mobile operating-experience specification for role-aware access, optional driver login, notification center, global search, and offline-first architecture/synchronization.
 - 2026-11-03 — Product owner approved Offline-first Architecture + Offline-aware User Experience; Offline Support is treated as included within Offline-first rather than a separate architecture target.
