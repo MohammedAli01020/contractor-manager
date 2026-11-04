@@ -16,7 +16,7 @@ public class CompensationAgreement extends BaseTenantEntity {
     @Column(name = "workforce_member_id", nullable = false, updatable = false)
     private Long workforceMemberId;
 
-    @Column(name = "workforce_assignment_id", nullable = false, updatable = false)
+    @Column(name = "workforce_assignment_id", updatable = false)
     private Long workforceAssignmentId;
 
     @Column(name = "agreement_reference", length = 80)
@@ -58,7 +58,7 @@ public class CompensationAgreement extends BaseTenantEntity {
                                   String reference, LocalDate effectiveFrom, LocalDate effectiveTo,
                                   String currencyCode, CompensationSource source, Long actorUserId) {
         super(tenantId);
-        if (memberId == null || assignmentId == null || effectiveFrom == null
+        if (memberId == null || effectiveFrom == null
                 || currencyCode == null || currencyCode.trim().length() != 3
                 || source == null || actorUserId == null) {
             throw new IllegalArgumentException("Invalid compensation agreement attributes");
