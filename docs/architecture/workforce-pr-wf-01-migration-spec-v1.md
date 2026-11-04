@@ -1,6 +1,6 @@
 # PR-WF-01 — WorkforceMember migration specification
 
-**Status:** Implemented on feature branch `feature/workforce-core-pr-wf-01`; draft PR #34 open, CI pending  
+**Status:** Merged through PR #34 into `feature/financial-foundation` as squash commit `dc181ebb8de55edf866943cf7b69e173b0dd90b6`; required Backend CI passed on head `cfab4e4c24b5ccc2c3a081509ef1c7505c0b2109`  
 **Date:** 2026-11-04  
 **Target implementation base:** `feature/financial-foundation` (revalidate branch head immediately before implementation)  
 **Reviewed source baseline:** `e03e49b1fbe882e08dde702acb7a9ff3fcd05c84`  
@@ -202,8 +202,8 @@ In the later workforce-payable phase:
 
 ## 11. Acceptance gate and approval
 
-The product owner authorized PR-WF-01 on 2026-11-04. This authorization covers only the scoped additive identity table, driver mapping, and transactional compatibility behavior described here. It does not approve PR-WF-02, ledger changes, payroll, a table rename, merging PR #34, or changes to `main`.
+The product owner authorized PR-WF-01 on 2026-11-04. This authorization covered only the scoped additive identity table, driver mapping, and transactional compatibility behavior described here. PR-WF-01 was merged into `feature/financial-foundation` only; it does not approve PR-WF-02, ledger changes, payroll, a table rename, or changes to `main`.
 
 Before implementation, revalidate the financial branch head and repeat the source inventory for all touched migrations, entities, tests, and tenant constraints. If the source has materially changed, update this specification and request approval again.
 
-**Implementation status:** Code and migration are prepared on `feature/workforce-core-pr-wf-01` and proposed in draft PR #34. Backend CI is pending. The migration has not been applied to production, PR #34 has not been merged, and `main` is unchanged.
+**Implementation status:** Code and migration were merged via PR #34 into `feature/financial-foundation` (squash commit `dc181ebb8de55edf866943cf7b69e173b0dd90b6`). Required Backend CI passed on the PR head. The migration has not been applied to production, and `main` is unchanged.
