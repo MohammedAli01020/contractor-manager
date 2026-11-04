@@ -337,8 +337,6 @@ class _ShiftsView extends StatelessWidget {
   ) async {
     final isHourly = shift.compensationBasis == 'HOUR';
     final controller = TextEditingController();
-    double? selectedHours;
-
     final result = await showDialog<double?>(
       context: context,
       barrierDismissible: false,
@@ -381,6 +379,12 @@ class _ShiftsView extends StatelessWidget {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
+                  if (preview == 0) ...[
+                    const SizedBox(height: 8),
+                    const Text(
+                      'تنبيه: الإجمالي صفر؛ لن يُنشأ قيد أجر أو استحقاق، ولن تُسترد سلفة من هذه الوردية.',
+                    ),
+                  ],
                   const SizedBox(height: 8),
                   const Text('لن يتم حساب الساعات من وقت بداية الوردية ونهايتها.'),
                 ] else
