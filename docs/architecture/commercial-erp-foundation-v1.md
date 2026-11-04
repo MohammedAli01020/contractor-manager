@@ -77,15 +77,37 @@ These are examples, not a closed or mandatory list. Companies should be able to 
 - Compensation basis and rates should be configurable separately from the person's classification.
 - The actual agreed compensation/rate used for a completed operational transaction must be snapshotted on that transaction so later rate changes do not rewrite history.
 
-### Current-code observation
+### Current-code observations — `feature/financial-foundation`
 
-The current driver model includes a `WorkerType` distinction (`DRIVER` / `WORKER`) and shift-specific morning/evening/night rates. This is a useful starting point but is not yet a complete general workforce model for a multi-activity ERP.
+The following observations were verified from the backend and Flutter source on the reviewed branch:
+
+- The current JPA entity is `Driver`, stored in the `drivers` table and tenant-scoped through `BaseTenantEntity`.
+- `WorkerType` currently has only `DRIVER` and `WORKER`.
+- The profile stores name, phone, national ID, availability, active state, notes, and three shift rates (morning/evening/night). It does not yet represent general job titles, departments, employment contracts, or HR lifecycle.
+- The API request requires all three shift rates, and the mobile edit dialog exposes only driver/worker classification and those shift rates.
+- `Shift` currently has a required `driverId` and stores a driver wage snapshot. The shift workflow therefore depends directly on the existing driver identity.
+- On shift completion, `ShiftService` posts the wage expense/payable journal, writes an `EARNING` entry to the driver ledger, and can recover a recoverable advance. This is an existing financial workflow that must be preserved during any workforce evolution.
+- `driver_ledger_entries` is keyed by `driver_id` and references the existing `drivers` table. Its transaction types currently include earning, payment, advance, and adjustment (with later migrations adding related advance/reversal behavior).
+- The mobile screen and labels still describe the directory as drivers and workers, rather than a general employee/workforce directory.
+
+### Preliminary architectural recommendation — not yet approved for implementation
+
+Do not simply rename `Driver` to `Employee`, and do not immediately replace the `drivers` table. Existing shifts, financial ledger entries, migrations, APIs, and Flutter screens depend on it.
+
+Before choosing a migration, compare at least these paths:
+
+1. **Incremental generalization:** evolve the current driver/worker profile and add general workforce capabilities while preserving existing identifiers and shift/ledger relationships.
+2. **Separate person master:** introduce a tenant-scoped person/employee master, link the existing driver operational profile to it, and migrate references gradually.
+3. **Full replacement:** migrate shifts and ledger foreign keys to a new workforce identity only if the benefits justify the larger migration and compatibility risk.
+
+The preferred option should minimize disruption to completed shifts and posted financial history, preserve tenant isolation, and allow one person to have multiple classifications/assignments without granting system permissions automatically.
 
 ### Maturity
 
 - **Agreed direction:** Contractor Manager must support people beyond drivers.
+- **Agreed product scope:** HR capabilities belong in the product roadmap.
 - **Proposed design:** a general workforce member profile with configurable classifications and separate system-user identity.
-- **Still to decide:** whether the first implementation should generalize the current driver/worker model in place or introduce a separate person/workforce aggregate.
+- **Still to decide:** the aggregate/table strategy, whether one person can have multiple concurrent employment relationships, and the migration path from `drivers`.
 
 ## 6. HR scope
 
@@ -155,6 +177,7 @@ The exact template mechanism and subscription packaging are future design work.
 - Compare operational-record data-model options and migration risk.
 - Design customer, project/contract, site, and progress-claim relationships.
 - Define workforce profile, classifications, assignments, compensation rules, and separation from system users.
+- Decide the workforce aggregate/table strategy and safe migration path from the existing driver/worker model.
 - Design HR phases and boundaries, including attendance, leave, payroll, deductions, settlements, and access controls.
 - Define measurement units and precision/rounding rules for quantity and time.
 - Map each proposed workflow to journal events, approvals, audit, and period-close behavior.
