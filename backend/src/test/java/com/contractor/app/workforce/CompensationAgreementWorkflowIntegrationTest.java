@@ -36,7 +36,7 @@ class CompensationAgreementWorkflowIntegrationTest extends AbstractIntegrationTe
         long driverRole = roleId(roles, "DRIVER");
         long workerRole = roleId(roles, "WORKER");
 
-        JsonNode site = body(postJson("/api/v1/sites", Map.of("name", uniqueName("Comp WF Site")), token)
+        JsonNode site = body(postJson("/api/v1/sites", Map.of("name", uniqueName("Comp WF Site"), "address", "Cairo"), token)
                 .andExpect(status().isCreated()));
         siteId = site.path("id").asLong();
 
