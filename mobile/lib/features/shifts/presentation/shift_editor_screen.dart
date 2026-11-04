@@ -86,6 +86,8 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
       final data = await _api.fetchDefaults(
         driverId: _driverId,
         equipmentId: _equipmentId,
+        siteId: _siteId,
+        shiftDate: _date,
         shiftType: _type,
       );
       if (!mounted) return;
@@ -245,7 +247,10 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
                           child: Text((s['name'] ?? 'موقع').toString()),
                         )).toList(),
                         validator: (v) => v == null ? 'اختار الموقع' : null,
-                        onChanged: (v) => setState(() => _siteId = v),
+                        onChanged: (v) {
+                          setState(() { _siteId = v; _defaultsLoaded = false; });
+                          _loadDefaults();
+                        },
                       ),
                       const SizedBox(height: 12),
                       _resourcePicker(
@@ -337,7 +342,9 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
     if (picked == null || !mounted) return;
     setState(() {
       _date = '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
+      _defaultsLoaded = false;
     });
+    _loadDefaults();
   }
 
   Widget _resourcePicker({
