@@ -1054,11 +1054,18 @@ class _ShiftCardState extends State<_ShiftCard> {
               Text(_money(shift.price), style: theme.textTheme.bodyMedium),
             ]),
             const SizedBox(height: 4),
-            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              const Text('بعد أجر السائق'),
-              Text(_money(shift.priceAfterWage),
-                style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-            ]),
+            if (shift.compensationBasis == 'HOUR' && shift.status == 'IN_PROGRESS')
+              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                const Text('سعر الساعة'),
+                Text(_money(shift.compensationRate),
+                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+              ])
+            else
+              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                const Text('بعد أجر السائق'),
+                Text(_money(shift.priceAfterWage),
+                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+              ]),
             if (shift.notes.isNotEmpty) ...[
               const SizedBox(height: 8),
               Text('ملاحظات: ${shift.notes}'),
@@ -1253,13 +1260,22 @@ class _ShiftDetailsScreenState extends State<_ShiftDetailsScreen> {
                   _InfoLine(icon: Icons.construction_outlined, text: equipment),
                   const Divider(height: 24),
                   _DetailMoneyLine(label: 'قيمة الوردية', value: shift.price),
-                  _DetailMoneyLine(label: 'أجر السائق', value: shift.driverWage),
-                  const Divider(),
-                  _DetailMoneyLine(
-                    label: 'الصافي بعد أجر السائق',
-                    value: shift.priceAfterWage,
-                    emphasize: true,
-                  ),
+                  if (shift.compensationBasis == 'HOUR') ...[
+                    _DetailMoneyLine(label: 'سعر الساعة', value: shift.compensationRate),
+                    if (shift.actualHours != null)
+                      _DetailMoneyLine(label: 'الساعات الفعلية', value: shift.actualHours!),
+                    if (shift.status == 'COMPLETED')
+                      _DetailMoneyLine(label: 'إجمالي أجر السائق', value: shift.driverWage),
+                  ] else
+                    _DetailMoneyLine(label: 'أجر السائق', value: shift.driverWage),
+                  if (shift.status == 'COMPLETED') ...[
+                    const Divider(),
+                    _DetailMoneyLine(
+                      label: 'الصافي بعد أجر السائق',
+                      value: shift.priceAfterWage,
+                      emphasize: true,
+                    ),
+                  ],
                   if (shift.cancelReason.isNotEmpty) ...[
                     const SizedBox(height: 12),
                     Text('سبب الإلغاء', style: theme.textTheme.titleSmall),
