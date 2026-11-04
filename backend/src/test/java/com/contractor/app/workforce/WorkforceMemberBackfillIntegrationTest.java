@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.contractor.app.AbstractIntegrationTest;
+import com.fasterxml.jackson.databind.JsonNode;
 import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.Map;
@@ -43,7 +44,7 @@ class WorkforceMemberBackfillIntegrationTest extends AbstractIntegrationTest {
         assertThat(row.get("phone")).isEqualTo("01000000001");
         assertThat(row.get("national_id")).isEqualTo("NID-001");
         assertThat(row.get("notes")).isEqualTo("profile note");
-        assertThat(((Number) row.get("active")).intValue()).isEqualTo(1);
+        assertThat(row.get("active")).isEqualTo(true);
         assertThat(((Number) row.get("version")).longValue()).isZero();
 
         Integer driverCount = jdbc.queryForObject(
@@ -53,6 +54,43 @@ class WorkforceMemberBackfillIntegrationTest extends AbstractIntegrationTest {
                 Integer.class, row.get("member_id"));
         assertThat(driverCount).isEqualTo(1);
         assertThat(mappingCount).isEqualTo(1);
+    }
+
+    @Test
+    void legacyDriverUpdatesKeepTheWorkforceIdentitySynchronized() throws Exception {
+        String token = registerTenant("Workforce Sync", uniqueName("wfsync"))
+                .path("accessToken").asText();
+        long driverId = createDriver(token, "Before Update", "01000000002", "NID-002", "before");
+
+        JsonNode current = body(getJson("/api/v1/drivers/" + driverId, token)
+                .andExpect(status().isOk()));
+        Map<String, Object> update = new HashMap<>();
+        update.put("name", "After Update");
+        update.put("workerType", current.path("workerType").asText());
+        update.put("phone", "01000000003");
+        update.put("nationalId", "NID-003");
+        update.put("notes", "after");
+        update.put("morningRate", current.path("morningRate").decimalValue());
+        update.put("eveningRate", current.path("eveningRate").decimalValue());
+        update.put("nightRate", current.path("nightRate").decimalValue());
+        update.put("active", false);
+        update.put("version", current.path("version").asLong());
+
+        putJson("/api/v1/drivers/" + driverId, update, token)
+                .andExpect(status().isOk());
+
+        Map<String, Object> row = jdbc.queryForMap(
+                "SELECT wm.full_name, wm.phone, wm.national_id, wm.notes, wm.active, "
+                        + "d.workforce_member_id "
+                        + "FROM drivers d JOIN workforce_members wm "
+                        + "ON wm.id = d.workforce_member_id AND wm.tenant_id = d.tenant_id "
+                        + "WHERE d.id = ?",
+                driverId);
+        assertThat(row.get("full_name")).isEqualTo("After Update");
+        assertThat(row.get("phone")).isEqualTo("01000000003");
+        assertThat(row.get("national_id")).isEqualTo("NID-003");
+        assertThat(row.get("notes")).isEqualTo("after");
+        assertThat(row.get("active")).isEqualTo(false);
     }
 
     @Test
