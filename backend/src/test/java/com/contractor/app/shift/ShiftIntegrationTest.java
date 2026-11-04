@@ -1090,6 +1090,11 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
                 + "VALUES (?, ?, 'MORNING_BASE', 'أجر الوردية الصباحية', 'SHIFT', 275.00, 'MORNING', 0)",
                 tenantId, agreementId);
 
+        getJson("/api/v1/shifts/defaults?driverId=" + driverId + "&equipmentId=" + equipmentId
+                + "&shiftType=MORNING&siteId=" + siteId + "&shiftDate=" + day(1), token)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.driverWage").value(275.0));
+
         JsonNode shift = startShift(token, shiftBody(siteId, driverId, equipmentId, day(1), "MORNING"));
 
         assertThat(shift.path("driverWage").decimalValue()).isEqualByComparingTo("275.00");
