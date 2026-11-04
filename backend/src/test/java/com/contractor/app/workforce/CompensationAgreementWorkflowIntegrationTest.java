@@ -98,6 +98,7 @@ class CompensationAgreementWorkflowIntegrationTest extends AbstractIntegrationTe
         JsonNode oldApproved = approve(oldId);
 
         long newId = createAgreement(null, "2026-12-01", null, oldId, "تعديل الأجر باتفاق الطرفين");
+        postJson(path(newId, "approve"), Map.of(), token).andExpect(status().isConflict());
         JsonNode replacement = body(postJson(path(newId, "approve-replacement"), Map.of(), token)
                 .andExpect(status().isOk()));
 
