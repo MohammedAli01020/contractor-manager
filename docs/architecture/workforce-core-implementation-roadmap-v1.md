@@ -26,9 +26,11 @@ Scope:
 - Add tenant-scoped `workforce_members`.
 - Add nullable `drivers.workforce_member_id` with composite tenant FK and uniqueness.
 - Backfill one member per existing driver, preserving driver IDs.
-- Add repository/domain/service tests for tenant isolation, mapping uniqueness and missing mapping detection.
+- Add the WorkforceMember entity/repository and a Driver-to-member mapping.
+- Keep DriverService as the only write entry point; create/update/deactivate synchronizes the linked member in the same transaction.
+- Add MySQL migration, tenant-isolation, uniqueness, and synchronization tests.
 - No public API contract changes and no mobile changes.
-- Keep `Driver` as the sole identity write owner in this PR; canonical WorkforceMember writes begin only in PR-WF-02.
+- WorkforceMember becomes the canonical identity write owner only in PR-WF-02.
 
 Gate:
 - Every legacy driver maps to exactly one member.
