@@ -3,7 +3,7 @@
 **Status:** PR-WF-01 was merged into `feature/financial-foundation` on 2026-11-04 as squash commit `dc181ebb8de55edf866943cf7b69e173b0dd90b6`. PR-WF-02 implementation is complete on `feature/workforce-core-pr-wf-02` and PR #35 is ready for review; Backend CI runs 524 and 536 passed. PR-WF-03 implementation is complete on `feature/workforce-core-pr-wf-03` and stacked PR #36 is ready for review; Backend CI run 535 passed (229 tests, no failures/errors/skips). PR-WF-02 and PR-WF-03 remain unmerged. No production migration or `main` change was made.  
 **Date:** 2026-11-04  
 **Parent branch for future work:** `feature/financial-foundation` (revalidate before starting)  
-**Design package:** commercial ERP foundation, legacy dependency inventory, additive migration proposal, compensation/HR design, [PR-WF-01 migration specification](workforce-pr-wf-01-migration-spec-v1.md).
+**Design package:** commercial ERP foundation, legacy dependency inventory, additive migration proposal, compensation/HR design, [PR-WF-01 migration specification](workforce-pr-wf-01-migration-spec-v1.md), and [PR-WF-04 compensation agreements specification](workforce-pr-wf-04-compensation-agreements-spec-v1.md).
 
 ## 1. Delivery rules
 
@@ -68,19 +68,24 @@ Gate:
 - Invalid date ranges and unauthorized tenant references rejected.
 - Existing driver eligibility and active-shift constraints unchanged.
 
-### PR-WF-04 — compensation agreement schema and legacy-rate conversion
+### PR-WF-04 — compensation agreements and legacy-rate conversion
+
+Detailed implementation specification: [workforce-pr-wf-04-compensation-agreements-spec-v1.md](workforce-pr-wf-04-compensation-agreements-spec-v1.md). This is design only; no implementation has started. The design splits delivery into schema/domain (04A), agreement APIs (04B), and report-first legacy conversion tooling (04C). A per-tenant cutover business date must be explicitly approved before conversion.
 
 Scope:
-- Add effective-dated compensation agreement header and typed components.
-- Convert current morning/evening/night driver rates into three SHIFT components at cutover.
-- Keep legacy columns as monitored fallback.
-- Add agreement overlap validation and rate resolution tests.
+- Add effective-dated agreement header and typed components, bound to a workforce assignment.
+- Represent SHIFT, HOUR, DAY, QUANTITY and FIXED; MIXED is multiple components. First rollout enables SHIFT only.
+- Map legacy DRIVER/WORKER operational profiles to matching role assignments and three SHIFT components at an explicitly approved per-tenant cutover date.
+- Keep legacy columns unchanged as monitored compatibility values; do not rewrite historical shifts.
+- Add overlap validation, immutable approved agreements, idempotent conversion and pre/post reconciliation.
+- Approval of an agreement has no journal/payable effect.
 
 Gate:
-- Correct component selected by shift type and business date.
-- Zero-rate behavior matches explicit product rules.
-- No historic shift amount, journal, or ledger row is changed.
-- No overlapping ambiguous approved agreement for the same scope.
+- Correct component and assignment selected by shift type and business date.
+- Zero-rate values are preserved; current zero-wage completion behavior is not changed in this PR.
+- Preflight and postflight prove exact rate equality and no historic shift/journal/ledger changes.
+- Conversion is idempotent; no overlapping ambiguous approved agreement for the same assignment/component scope.
+- No production conversion without a separately approved per-tenant cutover date and reviewed report.
 
 ### PR-WF-05 — shift integration with agreement snapshots
 
