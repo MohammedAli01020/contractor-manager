@@ -1,6 +1,6 @@
 # Workforce Core implementation work breakdown
 
-**Status:** PR-WF-01 was merged into `feature/financial-foundation` on 2026-11-04 as squash commit `dc181ebb8de55edf866943cf7b69e173b0dd90b6`. Required Backend CI passed for head `cfab4e4c24b5ccc2c3a081509ef1c7505c0b2109`. No production migration or `main` change was made. PR-WF-02 remains planning only.  
+**Status:** PR-WF-01 was merged into `feature/financial-foundation` on 2026-11-04 as squash commit `dc181ebb8de55edf866943cf7b69e173b0dd90b6`. PR-WF-02 implementation is complete on `feature/workforce-core-pr-wf-02` and PR #35 is ready for review; Backend CI runs 524 and 536 passed. PR-WF-03 implementation is complete on `feature/workforce-core-pr-wf-03` and stacked PR #36 is ready for review; Backend CI run 535 passed (229 tests, no failures/errors/skips). PR-WF-02 and PR-WF-03 remain unmerged. No production migration or `main` change was made.  
 **Date:** 2026-11-04  
 **Parent branch for future work:** `feature/financial-foundation` (revalidate before starting)  
 **Design package:** commercial ERP foundation, legacy dependency inventory, additive migration proposal, compensation/HR design, [PR-WF-01 migration specification](workforce-pr-wf-01-migration-spec-v1.md).
@@ -40,7 +40,7 @@ Gate:
 
 ### PR-WF-02 — canonical identity compatibility
 
-Specification: [workforce-pr-wf-02-canonical-identity-spec-v1.md](workforce-pr-wf-02-canonical-identity-spec-v1.md). Implementation branch: `feature/workforce-core-pr-wf-02` (created from `feature/financial-foundation` at `dc181ebb8de55edf866943cf7b69e173b0dd90b6`).
+Specification: [workforce-pr-wf-02-canonical-identity-spec-v1.md](workforce-pr-wf-02-canonical-identity-spec-v1.md). Implementation branch: `feature/workforce-core-pr-wf-02` (created from `feature/financial-foundation` at `dc181ebb8de55edf866943cf7b69e173b0dd90b6`); [PR #35](https://github.com/MohammedAli01020/contractor-manager/pull/35) is ready for review and remains unmerged.
 
 Scope:
 - Make workforce identity the write owner for person-level name/contact/national ID/notes.
@@ -54,6 +54,8 @@ Gate:
 - Audit and optimistic locking remain correct.
 
 ### PR-WF-03 — roles and assignments
+
+Implementation branch: `feature/workforce-core-pr-wf-03`; [stacked PR #36](https://github.com/MohammedAli01020/contractor-manager/pull/36) is ready for review and remains unmerged. Backend CI run 535 passed: 229 tests, 0 failures, 0 errors, 0 skipped. The PR targets the PR-WF-02 branch and must be revalidated after PR-WF-02 is merged.
 
 Scope:
 - Add tenant role catalog with seeded common roles and tenant-defined roles.
