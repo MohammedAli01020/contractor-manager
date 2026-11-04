@@ -11,6 +11,10 @@ class ShiftModel {
     required this.price,
     required this.driverWage,
     this.wageSource = '',
+    this.compensationBasis = 'SHIFT',
+    this.compensationRate = 0.0,
+    this.compensationCalculatedAmount = 0.0,
+    this.actualHours,
     required this.priceAfterWage,
     required this.notes,
     this.siteId,
@@ -36,6 +40,10 @@ class ShiftModel {
       price: _numberValue(json['price']),
       driverWage: _numberValue(json['driverWage']),
       wageSource: _stringValue(json['wageSource'], ''),
+      compensationBasis: _stringValue(json['compensationBasis'], 'SHIFT'),
+      compensationRate: _numberValue(json['compensationRate']),
+      compensationCalculatedAmount: _numberValue(json['compensationCalculatedAmount']),
+      actualHours: json['actualHours'] == null ? null : _numberValue(json['actualHours']),
       equipmentOperatingCost: _numberValue(json['equipmentOperatingCost']),
       priceAfterWage: _numberValue(json['priceAfterWage']),
       notes: _stringValue(json['notes'], ''),
@@ -60,6 +68,10 @@ class ShiftModel {
   final double price;
   final double driverWage;
   final String wageSource;
+  final String compensationBasis;
+  final double compensationRate;
+  final double compensationCalculatedAmount;
+  final double? actualHours;
   final double equipmentOperatingCost;
   final double priceAfterWage;
   final String notes;
