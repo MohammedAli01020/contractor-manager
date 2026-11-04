@@ -32,7 +32,11 @@ class CompensationAgreementWorkflowIntegrationTest extends AbstractIntegrationTe
         long driverRole = roleId(roles, "DRIVER");
         long workerRole = roleId(roles, "WORKER");
 
-        JsonNode site = body(postJson("/api/v1/sites", Map.of("name", uniqueName("Comp WF Site")), token)\n                .andExpect(status().isCreated()));\n        siteId = site.path("id").asLong();\n\n        JsonNode driver = body(postJson("/api/v1/drivers", Map.of(
+        JsonNode site = body(postJson("/api/v1/sites", Map.of("name", uniqueName("Comp WF Site")), token)
+                .andExpect(status().isCreated()));
+        siteId = site.path("id").asLong();
+
+        JsonNode driver = body(postJson("/api/v1/drivers", Map.of(
                 "name", "Compensation Workflow Person", "workerType", "DRIVER",
                 "morningRate", 0, "eveningRate", 0, "nightRate", 0), token)
                 .andExpect(status().isCreated()));
@@ -105,6 +109,7 @@ class CompensationAgreementWorkflowIntegrationTest extends AbstractIntegrationTe
     private long createAssignment(long roleId) throws Exception {
         Map<String, Object> request = new HashMap<>();
         request.put("roleId", roleId);
+        request.put("siteId", siteId);
         request.put("effectiveFrom", "2026-01-01");
         JsonNode result = body(postJson("/api/v1/workforce/members/" + memberId + "/assignments",
                 request, token).andExpect(status().isCreated()));
