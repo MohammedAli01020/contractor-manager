@@ -9,9 +9,14 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.junit.jupiter.api.Test;
 
 class CompensationAgreementWorkflowIntegrationTest extends AbstractIntegrationTest {
+
+    @Autowired
+    private JdbcTemplate jdbc;
 
     private String token;
     private long memberId;
