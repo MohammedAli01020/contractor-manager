@@ -34,6 +34,7 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
   bool _saving = false;
   bool _defaultsLoaded = false;
   bool _contractualWage = false;
+  int _defaultsRequestId = 0;
   String? _error;
 
   @override
@@ -83,6 +84,7 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
   }
 
   Future<void> _loadDefaults() async {
+    final requestId = ++_defaultsRequestId;
     if (_driverId == null && _equipmentId == null) return;
     try {
       final data = await _api.fetchDefaults(
@@ -92,7 +94,7 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
         shiftDate: _date,
         shiftType: _type,
       );
-      if (!mounted) return;
+      if (!mounted || requestId != _defaultsRequestId) return;
       setState(() {
         _contractualWage = data['wageSource'] == 'AGREEMENT';
         if (_driverId != null) {
