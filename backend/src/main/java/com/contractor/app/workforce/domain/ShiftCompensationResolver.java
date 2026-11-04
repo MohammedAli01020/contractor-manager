@@ -111,6 +111,10 @@ public class ShiftCompensationResolver {
             throw ApiException.conflict("لا توجد اتفاقية أجر سارية تنطبق على تكليف العامل في تاريخ الوردية.");
         }
 
+        if (!"EGP".equalsIgnoreCase(selected.getCurrencyCode())) {
+            throw ApiException.conflict("الدفتر المحاسبي الحالي يعمل بالجنيه المصري فقط؛ لا يمكن ترحيل اتفاقية بعملة مختلفة قبل دعم تعدد العملات.");
+        }
+
         List<CompensationComponent> matching = components
                 .findAllForWageResolution(tenantId, selected.getId()).stream()
                 .filter(c -> c.getBasis() == CompensationBasis.SHIFT)
