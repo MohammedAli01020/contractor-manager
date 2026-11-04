@@ -1,6 +1,6 @@
 # Workforce Core implementation work breakdown
 
-**Status:** PR-WF-01 implementation prepared in draft PR #34; CI pending. Later PRs remain planning only.  
+**Status:** PR-WF-01 implementation is in draft PR #34; required Backend CI passed on 2026-11-04. PR remains open, draft, and unmerged. Later PRs remain planning only.  
 **Date:** 2026-11-04  
 **Parent branch for future work:** `feature/financial-foundation` (revalidate before starting)  
 **Design package:** commercial ERP foundation, legacy dependency inventory, additive migration proposal, compensation/HR design, [PR-WF-01 migration specification](workforce-pr-wf-01-migration-spec-v1.md).
@@ -92,6 +92,8 @@ Gate:
 - Finish/payment concurrency and idempotency tests pass.
 
 ### PR-WF-06 — workforce payable and journal dimensions
+
+**Approved design decision (2026-11-04):** preserve the physical table name `driver_ledger_entries` during the compatibility transition. Add `workforce_member_id` and backfill it through the existing `drivers.workforce_member_id` mapping. Keep `driver_id` and all historical references. The preferred eventual name is `workforce_ledger_entries`, but a physical rename is deferred until dependency removal is proven; retaining the old name permanently is acceptable if the rename has no material benefit.
 
 Scope:
 - Add `workforce_member_id` to existing `driver_ledger_entries` and journal lines in a controlled, separately reviewed compatibility migration.
