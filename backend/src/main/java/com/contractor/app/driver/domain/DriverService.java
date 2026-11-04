@@ -11,6 +11,8 @@ import com.contractor.app.common.util.Texts;
 import com.contractor.app.driver.api.dto.DriverRequest;
 import com.contractor.app.driver.api.dto.DriverResponse;
 import com.contractor.app.driver.infra.DriverRepository;
+import com.contractor.app.workforce.domain.WorkforceMember;
+import com.contractor.app.workforce.infra.WorkforceMemberRepository;
 import com.contractor.app.shift.domain.ShiftStatus;
 import com.contractor.app.shift.infra.ShiftRepository;
 import java.util.ArrayList;
@@ -31,11 +33,14 @@ public class DriverService {
     private final DriverRepository drivers;
     private final ShiftRepository shifts;
     private final AuditService audit;
+    private final WorkforceMemberRepository workforceMembers;
 
-    public DriverService(DriverRepository drivers, ShiftRepository shifts, AuditService audit) {
+    public DriverService(DriverRepository drivers, ShiftRepository shifts, AuditService audit,
+                         WorkforceMemberRepository workforceMembers) {
         this.drivers = drivers;
         this.shifts = shifts;
         this.audit = audit;
+        this.workforceMembers = workforceMembers;
     }
 
     @Transactional(readOnly = true)
@@ -59,6 +64,10 @@ public class DriverService {
         if (request.getActive() != null) {
             driver.setActive(request.getActive());
         }
+        WorkforceMember member = new WorkforceMember(tenantId, driver.getName());
+        copyIdentity(driver, member);
+        workforceMembers.saveAndFlush(member);
+        driver.setWorkforceMemberId(member.getId());
         drivers.saveAndFlush(driver);
         audit.record(tenantId, AuditEntityType.DRIVER, driver.getId(), AuditAction.CREATED, null, null,
                 "name=" + driver.getName() + ", morning=" + driver.getMorningRate().toPlainString()
@@ -97,6 +106,7 @@ public class DriverService {
         if (request.getActive() != null) {
             driver.setActive(request.getActive());
         }
+        syncWorkforceIdentity(tenantId, driver);
         drivers.saveAndFlush(driver);
 
         changes.track("name", oldName, driver.getName())
@@ -120,8 +130,25 @@ public class DriverService {
         }
         assertNoRunningShift(tenantId, id);
         driver.setActive(false);
+        syncWorkforceIdentity(tenantId, driver);
         drivers.saveAndFlush(driver);
         audit.record(tenantId, AuditEntityType.DRIVER, id, AuditAction.DEACTIVATED, "active", "true", "false");
+    }
+
+    private void syncWorkforceIdentity(Long tenantId, Driver driver) {
+        WorkforceMember member = workforceMembers.findByIdAndTenantId(driver.getWorkforceMemberId(), tenantId)
+                .orElseThrow(() -> ApiException.conflict(
+                        "تعذر العثور على الهوية العامة المرتبطة بالسائق. أوقف العملية وراجع ربط بيانات العامل."));
+        copyIdentity(driver, member);
+        workforceMembers.saveAndFlush(member);
+    }
+
+    private static void copyIdentity(Driver driver, WorkforceMember member) {
+        member.setFullName(driver.getName());
+        member.setPhone(driver.getPhone());
+        member.setNationalId(driver.getNationalId());
+        member.setNotes(driver.getNotes());
+        member.setActive(driver.isActive());
     }
 
     private void assertNoRunningShift(Long tenantId, Long driverId) {
