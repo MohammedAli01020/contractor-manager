@@ -15,7 +15,6 @@ import java.util.Set;
 import java.math.BigDecimal;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Resolves a shift's contractual wage by its business date and freezes the result on the shift.
@@ -35,7 +34,6 @@ public class ShiftCompensationResolver {
         this.assignments = assignments;
     }
 
-    @Transactional(readOnly = true)
     public void resolveAndApply(Long tenantId, Driver driver, LocalDate shiftDate,
             Long siteId, ShiftType shiftType, BigDecimal requestedWage, Shift shift) {
         if (driver == null || driver.getWorkforceMemberId() == null || shiftDate == null
@@ -114,9 +112,6 @@ public class ShiftCompensationResolver {
         }
 
         CompensationComponent component = matching.get(0);
-        if (requestedWage != null && requestedWage.compareTo(component.getRate()) != 0) {
-            throw ApiException.conflict("لا يمكن تجاوز أجر الاتفاقية من شاشة الوردية. أنشئ اتفاقية معدّلة أو استخدم إجراء تصحيح معتمدًا.");
-        }
         if (component.getRate() == null || component.getRate().signum() < 0) {
             throw ApiException.conflict("قيمة أجر الوردية في الاتفاقية غير صالحة.");
         }
