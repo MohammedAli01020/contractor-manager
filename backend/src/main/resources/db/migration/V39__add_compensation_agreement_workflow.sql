@@ -4,7 +4,7 @@ ALTER TABLE compensation_agreements
     ADD COLUMN change_reason VARCHAR(500) NULL AFTER supersedes_agreement_id;
 
 ALTER TABLE compensation_agreements
-    ADD KEY ix_compensation_agreements_supersedes (tenant_id, supersedes_agreement_id),
+    ADD KEY ix_compensation_agreements_supersedes (supersedes_agreement_id, tenant_id),
     ADD CONSTRAINT fk_compensation_agreements_supersedes
         FOREIGN KEY (supersedes_agreement_id, tenant_id)
         REFERENCES compensation_agreements (id, tenant_id),
