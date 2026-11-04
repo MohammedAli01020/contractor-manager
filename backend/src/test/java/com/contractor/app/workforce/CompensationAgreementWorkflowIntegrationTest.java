@@ -61,7 +61,7 @@ class CompensationAgreementWorkflowIntegrationTest extends AbstractIntegrationTe
 
     @Test
     void replacementClosesOldAgreementAndApprovesNewAgreementWithAudit() throws Exception {
-        long oldId = createAgreement(null, "2026-01-01", null, null, null);
+        long oldId = createAgreement(null, "2026-01-01", "2026-11-30", null, null);
         JsonNode oldApproved = approve(oldId);
 
         long newId = createAgreement(null, "2026-12-01", null, oldId, "تعديل الأجر باتفاق الطرفين");
