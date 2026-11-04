@@ -20,7 +20,7 @@ This phase supports `SHIFT` compensation components only. Hour, day, quantity, a
 1. Resolve using the shift's business date (`shift_date`), tenant, worker member, and shift site.
 2. Consider only approved agreements whose effective date range includes the shift date. A superseded agreement remains eligible only through its recorded `effective_to` date.
 3. An assignment-specific agreement is eligible only when its assignment belongs to the same member and tenant, is effective on the shift date, and its site is either the shift site or site-independent.
-4. A single eligible assignment-specific agreement takes precedence over the general agreement.
+4. General and assignment-specific agreements must never overlap. If corrupt or legacy data produces both as effective for the same shift, reject the resolution instead of silently preferring one.
 5. More than one eligible assignment-specific agreement is an ambiguity error; never choose one arbitrarily.
 6. If there is no eligible assignment-specific agreement, use the eligible general agreement.
 7. Within the selected agreement, select exactly one `SHIFT` component matching the shift type. Missing or duplicate matches are errors.
@@ -46,6 +46,15 @@ This compatibility path is temporary and observable; it does not create a synthe
 - On finish: require a valid frozen wage snapshot and use its calculated amount for the existing idempotent journal and driver-ledger postings.
 - On completed or financially posted shifts: preserve existing correction workflow; do not recompute from current agreements.
 - On reinstate: preserve the original snapshot for an already-started shift; do not resolve a new agreement retroactively.
+
+## Implemented foundation
+
+- Created branch `feature/shift-compensation-resolution-05` from `feature/financial-foundation`.
+- Added V40 snapshot columns and backfilled existing shifts from their already-stored `driver_wage` values.
+- Added a resolver for general and assignment-specific agreements, with a member-row lock and locking reads to serialize wage resolution against agreement approval across application instances.
+- Wired shift start and editable source changes to resolve and freeze the wage. The existing finish flow continues to post the frozen `driver_wage` amount.
+- Exposed source and frozen agreement details in `ShiftResponse`.
+- Added integration coverage for agreement-based wages, immutable shift snapshots, and contractual date gaps. CI validation is still required.
 
 ## Data model direction
 
