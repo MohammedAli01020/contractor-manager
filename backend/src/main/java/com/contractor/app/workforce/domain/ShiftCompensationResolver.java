@@ -93,6 +93,9 @@ public class ShiftCompensationResolver {
         if (assignmentSpecific.size() > 1) {
             throw ApiException.conflict("يوجد أكثر من اتفاقية أجر خاصة بالتكليف تنطبق على الوردية. راجع التكليفات والاتفاقيات.");
         }
+        if (!assignmentSpecific.isEmpty() && effectiveAssignments.size() > 1) {
+            throw ApiException.conflict("للعامل أكثر من تكليف سارٍ في الموقع نفسه، ولا تحدد الوردية التكليف المقصود. لا يمكن اختيار اتفاقية خاصة بأمان.");
+        }
         if (general.size() > 1) {
             throw ApiException.conflict("يوجد أكثر من اتفاقية أجر عامة سارية للعامل في تاريخ الوردية.");
         }
