@@ -85,9 +85,41 @@ The current driver model includes a `WorkerType` distinction (`DRIVER` / `WORKER
 
 - **Agreed direction:** Contractor Manager must support people beyond drivers.
 - **Proposed design:** a general workforce member profile with configurable classifications and separate system-user identity.
-- **Still to decide:** whether the first implementation should generalize the current driver/worker model in place or introduce a separate person/workforce aggregate; contracts, attendance, payroll, and HR scope are not approved by this note.
+- **Still to decide:** whether the first implementation should generalize the current driver/worker model in place or introduce a separate person/workforce aggregate.
 
-## 6. Customer, project, contract, and site separation
+## 6. HR scope
+
+**Agreed product requirement:** the product is intended to support Human Resources capabilities, not only operational worker records.
+
+The HR domain is expected to cover, subject to detailed design and phased delivery:
+
+- employee/workforce profiles and employment status;
+- job titles, departments, classifications, and assignments;
+- employment terms and compensation agreements;
+- attendance, check-in/check-out, and attendance corrections;
+- leave types, balances, requests, and approvals;
+- deductions, penalties, and other adjustments, with clear reasons and audit history;
+- payroll calculations, payslips, and payroll-period processing;
+- employee settlements and payment tracking;
+- employee documents and relevant history, with controlled access.
+
+### Domain boundaries and safeguards
+
+- HR records, attendance, payroll calculations, and actual cash/bank payments are related but distinct processes.
+- Payroll calculation must not itself be treated as proof that money was paid.
+- Payroll posting/payment must integrate with the accounting and treasury foundations without double-counting wages or expenses.
+- Advances, loans, custody, penalties, and salary deductions must have explicit classifications and workflows; they must not be silently merged into generic expenses.
+- Changes to attendance, approved payroll, and closed payroll periods require authorization, traceability, and correction rules.
+- Sensitive employee and payroll information must be protected by granular role-based access and tenant isolation.
+- Not every workforce member must be a system user; application login and permissions remain separate from employment records.
+
+### Delivery maturity
+
+- **Agreed product scope:** HR capabilities belong in the product roadmap.
+- **Not yet specified:** detailed HR schema, labor-law/local compliance requirements, payroll formulas, tax/social-insurance treatment, overtime rules, attendance devices/geofencing, and approval matrices.
+- **Delivery recommendation:** establish the workforce/person foundation early, then deliver HR modules in phases. Do not delay the first contractor-focused release by attempting a complete HR suite at once.
+
+## 7. Customer, project, contract, and site separation
 
 The commercial model should distinguish:
 
@@ -99,7 +131,7 @@ The commercial model should distinguish:
 
 A project may include multiple sites; a site may be used by more than one project where appropriate. The exact relationship and billing lifecycle require a separate detailed design.
 
-## 7. Financial integrity
+## 8. Financial integrity
 
 1. A single real-world expense must remain one financial transaction even if linked to multiple operational references.
 2. Driver/worker advances must remain distinct from expenses and wages.
@@ -108,7 +140,7 @@ A project may include multiple sites; a site may be used by more than one projec
 5. Accounting entries must be generated from validated business events and follow the existing double-entry foundation.
 6. Corrections to completed/posted operations must preserve audit history and follow approval/period controls.
 
-## 8. Configuration and activity templates
+## 9. Configuration and activity templates
 
 The shared foundation should eventually support tenant-level settings and activity templates, for example equipment contracting, road/curbstone works, and finishing/construction works.
 
@@ -116,19 +148,20 @@ Templates may provide suggested terminology, units, classifications, and workflo
 
 The exact template mechanism and subscription packaging are future design work.
 
-## 9. Review work required before implementation
+## 10. Review work required before implementation
 
 - Map current shift, equipment, driver/worker, expense, journal, site, and inventory structures.
 - Identify what can remain unchanged and what requires extension.
 - Compare operational-record data-model options and migration risk.
 - Design customer, project/contract, site, and progress-claim relationships.
 - Define workforce profile, classifications, assignments, compensation rules, and separation from system users.
+- Design HR phases and boundaries, including attendance, leave, payroll, deductions, settlements, and access controls.
 - Define measurement units and precision/rounding rules for quantity and time.
 - Map each proposed workflow to journal events, approvals, audit, and period-close behavior.
 - Review Flutter navigation and forms for a simple mobile-first experience.
 - Keep a clear distinction between documented, approved, implemented, and tested capabilities.
 
-## 10. Change control
+## 11. Change control
 
 This document records product direction and proposed architecture. It does not authorize code changes, database migrations, PR merges, or changes to `main`.
 
