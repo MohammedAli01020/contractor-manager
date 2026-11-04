@@ -34,6 +34,7 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
   bool _saving = false;
   bool _defaultsLoaded = false;
   bool _contractualWage = false;
+  bool _hourlyCompensation = false;
   int _defaultsRequestId = 0;
   String? _error;
 
@@ -47,7 +48,12 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
     _equipmentId = shift?.equipmentId;
     _siteId = shift?.siteId;
     _price.text = shift?.price.toStringAsFixed(2) ?? '';
-    _wage.text = shift?.driverWage.toStringAsFixed(2) ?? '';
+    _hourlyCompensation = shift?.compensationBasis == 'HOUR';
+    _wage.text = shift == null
+        ? ''
+        : (_hourlyCompensation
+            ? shift.compensationRate.toStringAsFixed(2)
+            : shift.driverWage.toStringAsFixed(2));
     _contractualWage = shift?.wageSource == 'AGREEMENT';
     _equipmentCost.text = shift?.equipmentOperatingCost.toStringAsFixed(2) ?? '';
     _notes.text = shift?.notes ?? '';
@@ -97,9 +103,13 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
       if (!mounted || requestId != _defaultsRequestId) return;
       setState(() {
         _contractualWage = data['wageSource'] == 'AGREEMENT';
+        _hourlyCompensation = data['compensationBasis'] == 'HOUR';
         if (_driverId != null) {
-          if (data['driverWage'] != null) {
-            _wage.text = _value(data['driverWage']);
+          final suggestedWage = _hourlyCompensation
+              ? data['compensationRate']
+              : data['driverWage'];
+          if (suggestedWage != null) {
+            _wage.text = _value(suggestedWage);
           } else {
             _wage.clear();
           }
@@ -123,7 +133,7 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
     return value.toString();
   }
 
-  bool get _isZeroWage => double.tryParse(_wage.text.trim()) == 0;
+  bool get _isZeroWage => !_hourlyCompensation && double.tryParse(_wage.text.trim()) == 0;
 
   Future<bool> _confirmZeroWage(String action) async {
     final confirmed = await showDialog<bool>(
@@ -206,7 +216,8 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
         'driverId': _driverId,
         'equipmentId': _equipmentId,
         'price': _price.text.trim().isEmpty ? null : double.parse(_price.text.trim()),
-        'driverWage': _wage.text.trim().isEmpty ? null : double.parse(_wage.text.trim()),
+        if (!_hourlyCompensation)
+          'driverWage': _wage.text.trim().isEmpty ? null : double.parse(_wage.text.trim()),
         'notes': _notes.text.trim(),
       };
       if (widget.shift != null) payload['version'] = widget.shift!.version;
@@ -328,9 +339,11 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
                         keyboardType: const TextInputType.numberWithOptions(decimal: true),
                         readOnly: _contractualWage,
                         decoration: InputDecoration(
-                          labelText: 'أجر السائق بالجنيه',
-                          helperText: _contractualWage
-                              ? 'أجر الاتفاقية المعتمدة؛ لا يمكن تغييره من نموذج الوردية'
+                          labelText: _hourlyCompensation ? 'سعر الساعة بالجنيه' : 'أجر السائق بالجنيه',
+                          helperText: _hourlyCompensation
+                              ? 'سعر الساعة من الاتفاقية المعتمدة؛ أدخل الساعات الفعلية عند إنهاء الوردية'
+                              : _contractualWage
+                                  ? 'أجر الاتفاقية المعتمدة؛ لا يمكن تغييره من نموذج الوردية'
                               : 'يتحدد تلقائيًا عند اختيار الموقع والسائق ونوع الوردية، ويمكن تعديله للعامل بنظام الأجر القديم',
                         ),
                         validator: _moneyValidator,
