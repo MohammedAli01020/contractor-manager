@@ -1097,6 +1097,12 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
                 .andExpect(jsonPath("$.driverWage").value(275.0))
                 .andExpect(jsonPath("$.wageSource").value("AGREEMENT"));
 
+        Map<String, Object> manualOverride = shiftBody(siteId, driverId, equipmentId, day(1), "MORNING");
+        manualOverride.put("driverWage", 999.00);
+        postJson("/api/v1/shifts", manualOverride, token)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CONFLICT"));
+
         JsonNode shift = startShift(token, shiftBody(siteId, driverId, equipmentId, day(1), "MORNING"));
 
         assertThat(shift.path("driverWage").decimalValue()).isEqualByComparingTo("275.00");
