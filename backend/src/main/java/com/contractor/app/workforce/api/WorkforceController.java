@@ -1,0 +1,80 @@
+package com.contractor.app.workforce.api;
+
+import com.contractor.app.common.security.CurrentUser;
+import com.contractor.app.workforce.api.dto.EndWorkforceAssignmentRequest;
+import com.contractor.app.workforce.api.dto.WorkforceAssignmentRequest;
+import com.contractor.app.workforce.api.dto.WorkforceAssignmentResponse;
+import com.contractor.app.workforce.api.dto.WorkforceRoleRequest;
+import com.contractor.app.workforce.api.dto.WorkforceRoleResponse;
+import com.contractor.app.workforce.domain.WorkforceAssignmentService;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import java.util.List;
+import javax.validation.Valid;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@RequestMapping("/api/v1/workforce")
+@PreAuthorize("hasAnyRole('ADMIN','OPERATOR','VIEWER')")
+@Tag(name = "Workforce")
+public class WorkforceController {
+
+    private final WorkforceAssignmentService service;
+
+    public WorkforceController(WorkforceAssignmentService service) {
+        this.service = service;
+    }
+
+    @GetMapping("/roles")
+    public List<WorkforceRoleResponse> roles(
+            @RequestParam(defaultValue = "false") boolean includeInactive) {
+        return service.listRoles(CurrentUser.tenantId(), includeInactive);
+    }
+
+    @PreAuthorize("hasRole('ADMIN')")
+    @PostMapping("/roles")
+    @ResponseStatus(HttpStatus.CREATED)
+    public WorkforceRoleResponse createRole(@Valid @RequestBody WorkforceRoleRequest request) {
+        return service.createRole(CurrentUser.tenantId(), request);
+    }
+
+    @PreAuthorize("hasRole('ADMIN')")
+    @DeleteMapping("/roles/{roleId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deactivateRole(@PathVariable Long roleId) {
+        service.deactivateRole(CurrentUser.tenantId(), roleId);
+    }
+
+    @GetMapping("/members/{memberId}/assignments")
+    public List<WorkforceAssignmentResponse> assignments(@PathVariable Long memberId) {
+        return service.listAssignments(CurrentUser.tenantId(), memberId);
+    }
+
+    @PreAuthorize("hasRole('ADMIN')")
+    @PostMapping("/members/{memberId}/assignments")
+    @ResponseStatus(HttpStatus.CREATED)
+    public WorkforceAssignmentResponse createAssignment(
+            @PathVariable Long memberId,
+            @Valid @RequestBody WorkforceAssignmentRequest request) {
+        return service.createAssignment(CurrentUser.tenantId(), memberId, request);
+    }
+
+    @PreAuthorize("hasRole('ADMIN')")
+    @PutMapping("/members/{memberId}/assignments/{assignmentId}/end")
+    public WorkforceAssignmentResponse endAssignment(
+            @PathVariable Long memberId,
+            @PathVariable Long assignmentId,
+            @Valid @RequestBody EndWorkforceAssignmentRequest request) {
+        return service.endAssignment(CurrentUser.tenantId(), memberId, assignmentId, request);
+    }
+}

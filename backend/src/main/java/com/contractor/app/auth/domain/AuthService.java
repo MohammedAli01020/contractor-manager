@@ -21,6 +21,7 @@ import com.contractor.app.user.api.dto.UserResponse;
 import com.contractor.app.user.domain.Role;
 import com.contractor.app.user.domain.User;
 import com.contractor.app.user.infra.UserRepository;
+import com.contractor.app.workforce.domain.WorkforceRoleProvisioningService;
 import com.contractor.app.securityaudit.domain.LoginSecurityEventService;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -46,6 +47,7 @@ public class AuthService {
     private final AuditService audit;
     private final LoginSecurityEventService loginSecurityEvents;
     private final DefaultChartOfAccountsService defaultChartOfAccounts;
+    private final WorkforceRoleProvisioningService workforceRoleProvisioning;
     private final boolean registrationEnabled;
     private final long refreshTokenDays;
     /** يُستخدم عند غياب المستخدم كي يتساوى زمن الاستجابة ولا يمكن تخمين أسماء المستخدمين. */
@@ -56,7 +58,8 @@ public class AuthService {
                        @Value("${app.registration.enabled:false}") boolean registrationEnabled,
                        @Value("${app.jwt.refresh-token-days:30}") long refreshTokenDays,
                        Environment environment, LoginSecurityEventService loginSecurityEvents,
-                       DefaultChartOfAccountsService defaultChartOfAccounts) {
+                       DefaultChartOfAccountsService defaultChartOfAccounts,
+                       WorkforceRoleProvisioningService workforceRoleProvisioning) {
         this.tenants = tenants;
         this.users = users;
         this.refreshTokens = refreshTokens;
@@ -65,6 +68,7 @@ public class AuthService {
         this.audit = audit;
         this.loginSecurityEvents = loginSecurityEvents;
         this.defaultChartOfAccounts = defaultChartOfAccounts;
+        this.workforceRoleProvisioning = workforceRoleProvisioning;
         // Direct tenant creation is only permitted in the isolated test profile.
         // An environment variable alone must never reopen public production registration.
         this.registrationEnabled = registrationEnabled && environment.acceptsProfiles(Profiles.of("test"));
@@ -83,6 +87,7 @@ public class AuthService {
         }
         Tenant tenant = tenants.save(new Tenant(request.getTenantName().trim()));
         defaultChartOfAccounts.initializeForTenant(tenant.getId());
+        workforceRoleProvisioning.initializeForTenant(tenant.getId());
         User admin = users.save(new User(tenant.getId(), username, request.getFullName().trim(),
                 Texts.blankToNull(request.getPhone()), encoder.encode(request.getPassword()), Role.ADMIN));
         return issueTokens(admin);

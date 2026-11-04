@@ -16,6 +16,7 @@ import com.contractor.app.common.security.JwtService;
 import com.contractor.app.securityaudit.domain.LoginSecurityEventService;
 import com.contractor.app.tenant.infra.TenantRepository;
 import com.contractor.app.user.infra.UserRepository;
+import com.contractor.app.workforce.domain.WorkforceRoleProvisioningService;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -35,7 +36,7 @@ class RegistrationDisabledByDefaultTest {
         when(encoder.encode(anyString())).thenReturn("test-hash");
 
         AuthService service = new AuthService(
-                tenants, users, refreshTokens, encoder, jwt, audit, false, 30L, new StandardEnvironment(), loginSecurityEvents, mock(DefaultChartOfAccountsService.class));
+                tenants, users, refreshTokens, encoder, jwt, audit, false, 30L, new StandardEnvironment(), loginSecurityEvents, mock(DefaultChartOfAccountsService.class), mock(WorkforceRoleProvisioningService.class));
 
         assertThatThrownBy(() -> service.registerTenant(mock(RegisterTenantRequest.class)))
                 .isInstanceOf(ApiException.class)
@@ -54,7 +55,7 @@ class RegistrationDisabledByDefaultTest {
         when(encoder.encode(anyString())).thenReturn("test-hash");
 
         AuthService service = new AuthService(
-                tenants, users, refreshTokens, encoder, jwt, audit, true, 30L, new StandardEnvironment(), loginSecurityEvents, mock(DefaultChartOfAccountsService.class));
+                tenants, users, refreshTokens, encoder, jwt, audit, true, 30L, new StandardEnvironment(), loginSecurityEvents, mock(DefaultChartOfAccountsService.class), mock(WorkforceRoleProvisioningService.class));
 
         assertThatThrownBy(() -> service.registerTenant(mock(RegisterTenantRequest.class)))
                 .isInstanceOf(ApiException.class)

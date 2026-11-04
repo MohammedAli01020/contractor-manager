@@ -300,6 +300,28 @@ jobs:
                   sys.exit(f"{suite} was skipped or reported failures/errors.")
           PY
 
+      - name: Require Workforce role and assignment integration tests to execute
+        run: |
+          python3 - <<'PY'
+          import glob
+          import sys
+          import xml.etree.ElementTree as ET
+
+          pattern = "target/surefire-reports/TEST-com.contractor.app.workforce.WorkforceAssignmentIntegrationTest.xml"
+          reports = glob.glob(pattern)
+          if not reports:
+              sys.exit(f"Required workforce role/assignment report missing: {pattern}")
+
+          root = ET.parse(reports[0]).getroot()
+          totals = {key: int(root.attrib.get(key, 0))
+                    for key in ("tests", "failures", "errors", "skipped")}
+          print(f"WorkforceAssignmentIntegrationTest: {totals}")
+          if totals["tests"] != 6:
+              sys.exit("WorkforceAssignmentIntegrationTest must execute exactly six tests.")
+          if totals["skipped"] != 0 or totals["failures"] != 0 or totals["errors"] != 0:
+              sys.exit("Workforce role/assignment tests were skipped or reported failures/errors.")
+          PY
+
       - name: Write test summary
         if: always()
         env:
