@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.sql.PreparedStatement;
 import java.sql.Statement;
+import java.time.LocalDateTime;
 import java.util.Map;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationVersion;
@@ -78,10 +79,10 @@ class WorkforceMemberMigrationIntegrationTest {
         assertThat(row.get("notes")).isEqualTo("legacy notes");
         assertThat(row.get("active")).isEqualTo(false);
         assertThat(((Number) row.get("version")).longValue()).isEqualTo(7L);
-        assertThat(row.get("created_at").toString().replace('T', ' '))
-                .contains("2025-01-02 03:04:05.123456");
-        assertThat(row.get("updated_at").toString().replace('T', ' '))
-                .contains("2025-02-03 04:05:06.654321");
+        assertThat(row.get("created_at"))
+                .isEqualTo(LocalDateTime.of(2025, 1, 2, 3, 4, 5, 123456000));
+        assertThat(row.get("updated_at"))
+                .isEqualTo(LocalDateTime.of(2025, 2, 3, 4, 5, 6, 654321000));
         assertThat(jdbc.queryForObject(
                 "SELECT COUNT(*) FROM workforce_members WHERE tenant_id = ?",
                 Integer.class, tenantId)).isEqualTo(1);
