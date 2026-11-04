@@ -87,22 +87,25 @@ public class ShiftCompensationResolver {
                         && assignmentIds.contains(a.getWorkforceAssignmentId()))
                 .collect(Collectors.toList());
 
-        CompensationAgreement selected;
+        List<CompensationAgreement> general = effective.stream()
+                .filter(a -> a.getWorkforceAssignmentId() == null)
+                .collect(Collectors.toList());
         if (assignmentSpecific.size() > 1) {
             throw ApiException.conflict("يوجد أكثر من اتفاقية أجر خاصة بالتكليف تنطبق على الوردية. راجع التكليفات والاتفاقيات.");
-        } else if (assignmentSpecific.size() == 1) {
+        }
+        if (general.size() > 1) {
+            throw ApiException.conflict("يوجد أكثر من اتفاقية أجر عامة سارية للعامل في تاريخ الوردية.");
+        }
+        if (!assignmentSpecific.isEmpty() && !general.isEmpty()) {
+            throw ApiException.conflict("تتداخل اتفاقية عامة مع اتفاقية خاصة بالتكليف. صحّح فترات الاتفاقيات قبل بدء الوردية.");
+        }
+        CompensationAgreement selected;
+        if (!assignmentSpecific.isEmpty()) {
             selected = assignmentSpecific.get(0);
-        } else {
-            List<CompensationAgreement> general = effective.stream()
-                    .filter(a -> a.getWorkforceAssignmentId() == null)
-                    .collect(Collectors.toList());
-            if (general.size() > 1) {
-                throw ApiException.conflict("يوجد أكثر من اتفاقية أجر عامة سارية للعامل في تاريخ الوردية.");
-            }
-            if (general.isEmpty()) {
-                throw ApiException.conflict("لا توجد اتفاقية أجر سارية تنطبق على تكليف العامل في تاريخ الوردية.");
-            }
+        } else if (!general.isEmpty()) {
             selected = general.get(0);
+        } else {
+            throw ApiException.conflict("لا توجد اتفاقية أجر سارية تنطبق على تكليف العامل في تاريخ الوردية.");
         }
 
         List<CompensationComponent> matching = components
