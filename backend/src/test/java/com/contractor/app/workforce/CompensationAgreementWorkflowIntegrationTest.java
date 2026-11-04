@@ -94,11 +94,16 @@ class CompensationAgreementWorkflowIntegrationTest extends AbstractIntegrationTe
 
     @Test
     void replacementClosesOldAgreementAndApprovesNewAgreementWithAudit() throws Exception {
-        long oldId = createAgreement(null, "2026-01-01", "2026-11-30", null, null);
+        long oldId = createAgreement(null, "2026-01-01", null, null, null);
         JsonNode oldApproved = approve(oldId);
 
         long newId = createAgreement(null, "2026-12-01", null, oldId, "تعديل الأجر باتفاق الطرفين");
         postJson(path(newId, "approve"), Map.of(), token).andExpect(status().isConflict());
+        assertThat(jdbc.queryForObject("select status from compensation_agreements where id = ?",
+                String.class, oldId)).isEqualTo("APPROVED");
+        assertThat(jdbc.queryForObject("select effective_to from compensation_agreements where id = ?",
+                java.sql.Date.class, oldId)).isNull();
+
         JsonNode replacement = body(postJson(path(newId, "approve-replacement"), Map.of(), token)
                 .andExpect(status().isOk()));
 
