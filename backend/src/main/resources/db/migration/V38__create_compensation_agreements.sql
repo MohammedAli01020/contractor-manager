@@ -13,7 +13,7 @@ CREATE TABLE compensation_agreements (
     status                  VARCHAR(20)   NOT NULL DEFAULT 'DRAFT',
     effective_from          DATE          NOT NULL,
     effective_to            DATE          NULL,
-    currency_code           CHAR(3)       NOT NULL,
+    currency_code           VARCHAR(3)       NOT NULL,
     source                  VARCHAR(40)   NOT NULL DEFAULT 'MANUAL',
     approved_by_user_id     BIGINT        NULL,
     approved_at             DATETIME(6)   NULL,
