@@ -11,11 +11,15 @@ import com.contractor.app.common.util.Texts;
 import com.contractor.app.driver.api.dto.DriverRequest;
 import com.contractor.app.driver.api.dto.DriverResponse;
 import com.contractor.app.driver.infra.DriverRepository;
+import com.contractor.app.workforce.domain.WorkforceIdentityService;
 import com.contractor.app.workforce.domain.WorkforceMember;
-import com.contractor.app.workforce.infra.WorkforceMemberRepository;
+import com.contractor.app.user.domain.Role;
 import com.contractor.app.shift.domain.ShiftStatus;
 import com.contractor.app.shift.infra.ShiftRepository;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.stream.Collectors;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -34,27 +38,47 @@ public class DriverService {
     private final DriverRepository drivers;
     private final ShiftRepository shifts;
     private final AuditService audit;
-    private final WorkforceMemberRepository workforceMembers;
+    private final WorkforceIdentityService workforceIdentity;
 
     public DriverService(DriverRepository drivers, ShiftRepository shifts, AuditService audit,
-                         WorkforceMemberRepository workforceMembers) {
+                         WorkforceIdentityService workforceIdentity) {
         this.drivers = drivers;
         this.shifts = shifts;
         this.audit = audit;
-        this.workforceMembers = workforceMembers;
+        this.workforceIdentity = workforceIdentity;
     }
 
     @Transactional(readOnly = true)
     public PageResponse<DriverResponse> list(Long tenantId, String q, WorkerType type, boolean includeInactive,
-                                             int page, int size) {
+                                             int page, int size, Role role) {
         Page<Driver> result = drivers.findAll(filter(tenantId, q, type, includeInactive),
                 PageParams.of(page, size, Sort.by("name").ascending()));
-        return PageResponse.of(result, DriverResponse::from);
+        List<Driver> content = result.getContent();
+        List<Long> memberIds = content.stream().map(Driver::getWorkforceMemberId).collect(Collectors.toList());
+        Map<Long, WorkforceMember> identities = new HashMap<>();
+        if (!memberIds.isEmpty()) {
+            for (WorkforceMember member : workforceIdentity.findAllForTenant(tenantId, memberIds)) {
+                identities.put(member.getId(), member);
+            }
+        }
+        return PageResponse.of(result, driver -> DriverResponse.from(
+                driver, requireIdentity(identities, driver), false));
     }
 
     @Transactional(readOnly = true)
-    public DriverResponse get(Long tenantId, Long id) {
-        return DriverResponse.from(find(tenantId, id));
+    public DriverResponse get(Long tenantId, Long id, Role role) {
+        Driver driver = find(tenantId, id);
+        WorkforceMember member = workforceIdentity.requireForDriver(tenantId, driver.getWorkforceMemberId());
+        return DriverResponse.from(driver, member, role == Role.ADMIN);
+    }
+
+    private static WorkforceMember requireIdentity(Map<Long, WorkforceMember> identities, Driver driver) {
+        WorkforceMember member = identities.get(driver.getWorkforceMemberId());
+        if (member == null) {
+            throw ApiException.conflict(
+                    "تعذر العثور على الهوية العامة المرتبطة بالسجل التشغيلي. أوقف العملية وراجع ربط بيانات العامل.");
+        }
+        return member;
     }
 
     @Transactional
@@ -65,16 +89,14 @@ public class DriverService {
         if (request.getActive() != null) {
             driver.setActive(request.getActive());
         }
-        WorkforceMember member = new WorkforceMember(tenantId, driver.getName());
-        copyIdentity(driver, member);
-        workforceMembers.saveAndFlush(member);
+        WorkforceMember member = workforceIdentity.createForDriver(driver);
         driver.setWorkforceMemberId(member.getId());
         drivers.saveAndFlush(driver);
         audit.record(tenantId, AuditEntityType.DRIVER, driver.getId(), AuditAction.CREATED, null, null,
                 "name=" + driver.getName() + ", morning=" + driver.getMorningRate().toPlainString()
                         + ", evening=" + driver.getEveningRate().toPlainString()
                         + ", night=" + driver.getNightRate().toPlainString());
-        return DriverResponse.from(driver);
+        return DriverResponse.from(driver, member, true);
     }
 
     @Transactional
@@ -107,7 +129,7 @@ public class DriverService {
         if (request.getActive() != null) {
             driver.setActive(request.getActive());
         }
-        syncWorkforceIdentity(tenantId, driver);
+        WorkforceMember member = workforceIdentity.synchronizeFromDriver(driver);
         drivers.saveAndFlush(driver);
 
         changes.track("name", oldName, driver.getName())
@@ -119,7 +141,7 @@ public class DriverService {
                 .track("unavailableReason", oldReason, driver.getUnavailableReason())
                 .track("active", oldActive, driver.isActive());
         audit.recordChanges(tenantId, AuditEntityType.DRIVER, id, changes);
-        return DriverResponse.from(driver);
+        return DriverResponse.from(driver, member, true);
     }
 
     @Transactional
@@ -131,32 +153,9 @@ public class DriverService {
         }
         assertNoRunningShift(tenantId, id);
         driver.setActive(false);
-        syncWorkforceIdentity(tenantId, driver);
+        workforceIdentity.synchronizeFromDriver(driver);
         drivers.saveAndFlush(driver);
         audit.record(tenantId, AuditEntityType.DRIVER, id, AuditAction.DEACTIVATED, "active", "true", "false");
-    }
-
-    private void syncWorkforceIdentity(Long tenantId, Driver driver) {
-        WorkforceMember member = workforceMembers.findByIdAndTenantId(driver.getWorkforceMemberId(), tenantId)
-                .orElseThrow(() -> ApiException.conflict(
-                        "تعذر العثور على الهوية العامة المرتبطة بالسائق. أوقف العملية وراجع ربط بيانات العامل."));
-        boolean changed = !Objects.equals(member.getFullName(), driver.getName())
-                || !Objects.equals(member.getPhone(), driver.getPhone())
-                || !Objects.equals(member.getNationalId(), driver.getNationalId())
-                || !Objects.equals(member.getNotes(), driver.getNotes())
-                || member.isActive() != driver.isActive();
-        if (changed) {
-            copyIdentity(driver, member);
-            workforceMembers.saveAndFlush(member);
-        }
-    }
-
-    private static void copyIdentity(Driver driver, WorkforceMember member) {
-        member.setFullName(driver.getName());
-        member.setPhone(driver.getPhone());
-        member.setNationalId(driver.getNationalId());
-        member.setNotes(driver.getNotes());
-        member.setActive(driver.isActive());
     }
 
     private void assertNoRunningShift(Long tenantId, Long driverId) {
