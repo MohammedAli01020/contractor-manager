@@ -87,11 +87,8 @@ void main() {
     await tester.pumpAndSettle();
 
     final wageField = find.byType(TextFormField).first;
-    await tester.scrollUntilVisible(
-      wageField,
-      300,
-      scrollable: find.byType(Scrollable).first,
-    );
+    await tester.ensureVisible(wageField);
+    await tester.pumpAndSettle();
     await tester.enterText(wageField, '0');
 
     final submitButton = find.text('مراجعة وتأكيد التصحيح');
