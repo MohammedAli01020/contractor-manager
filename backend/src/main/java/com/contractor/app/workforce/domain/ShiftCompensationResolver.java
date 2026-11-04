@@ -9,10 +9,10 @@ import com.contractor.app.workforce.infra.CompensationAgreementRepository;
 import com.contractor.app.workforce.infra.CompensationComponentRepository;
 import com.contractor.app.workforce.infra.WorkforceAssignmentRepository;
 import java.time.LocalDate;
-import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.math.BigDecimal;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,7 +37,7 @@ public class ShiftCompensationResolver {
 
     @Transactional(readOnly = true)
     public void resolveAndApply(Long tenantId, Driver driver, LocalDate shiftDate,
-            Long siteId, ShiftType shiftType, Shift shift) {
+            Long siteId, ShiftType shiftType, BigDecimal requestedWage, Shift shift) {
         if (driver == null || driver.getWorkforceMemberId() == null || shiftDate == null
                 || siteId == null || shiftType == null || shift == null) {
             throw ApiException.badRequest("تعذر تحديد بيانات العامل والتكليف لحساب الأجر.");
@@ -61,7 +61,7 @@ public class ShiftCompensationResolver {
             if (!approved.isEmpty()) {
                 throw ApiException.conflict("لا توجد اتفاقية أجر معتمدة وسارية للعامل في تاريخ الوردية. راجع تواريخ الاتفاقيات.");
             }
-            applyLegacyRate(driver, shiftDate, shiftType, shift);
+            applyLegacyRate(driver, shiftDate, shiftType, requestedWage, shift);
             return;
         }
 
@@ -114,6 +114,9 @@ public class ShiftCompensationResolver {
         }
 
         CompensationComponent component = matching.get(0);
+        if (requestedWage != null && requestedWage.compareTo(component.getRate()) != 0) {
+            throw ApiException.conflict("لا يمكن تجاوز أجر الاتفاقية من شاشة الوردية. أنشئ اتفاقية معدّلة أو استخدم إجراء تصحيح معتمدًا.");
+        }
         if (component.getRate() == null || component.getRate().signum() < 0) {
             throw ApiException.conflict("قيمة أجر الوردية في الاتفاقية غير صالحة.");
         }
@@ -123,13 +126,14 @@ public class ShiftCompensationResolver {
                 Money.scale(component.getRate()), Money.scale(component.getRate()));
     }
 
-    private static void applyLegacyRate(Driver driver, LocalDate shiftDate, ShiftType shiftType, Shift shift) {
+    private static void applyLegacyRate(Driver driver, LocalDate shiftDate, ShiftType shiftType, BigDecimal requestedWage, Shift shift) {
         java.math.BigDecimal rate;
         switch (shiftType) {
             case MORNING: rate = driver.getMorningRate(); break;
             case EVENING: rate = driver.getEveningRate(); break;
             default: rate = driver.getNightRate(); break;
         }
+        if (requestedWage != null) rate = requestedWage;
         if (rate == null || rate.signum() < 0) {
             throw ApiException.conflict("لا توجد اتفاقية أجر للعامل، كما أن الأجر القديم غير صالح.");
         }
