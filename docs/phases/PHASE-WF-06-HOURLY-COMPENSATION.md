@@ -51,7 +51,7 @@ WF-06 adds the `HOUR` compensation basis to the existing shift lifecycle:
 1. [x] Update the shift entity, finish DTO/controller, resolver, service, response, and schema constraints for explicit hourly hours.
 2. [x] Preserve the distinction between a pending hourly total and a completed zero-wage shift; pending hourly margin is returned as null and the mobile editor shows the hourly rate.
 3. [x] Block the legacy completed-shift correction path for hourly shifts until an hourly-aware reversal/reposting workflow exists.
-4. [x] Add backend integration coverage for HOUR agreement resolution, rate snapshotting, required hours, decimal calculation/rounding, journal and earning creation. [ ] Extend with negative-input, advance-recovery, concurrency, and SHIFT regression cases.
+4. [x] Add backend integration coverage for HOUR agreement resolution, rate snapshotting, missing/zero/negative hours, decimal calculation/rounding, journal and earning creation. [ ] Extend with advance-recovery, concurrency, and SHIFT regression cases.
 5. [x] Add mobile hourly-rate display, actual-hours finish input with preview/confirmation, request payload, and bulk-finish exclusion. [ ] Add dedicated Flutter widget tests.
 6. [ ] Run the relevant backend and Flutter suites once after implementation, then open a reviewable PR targeting `feature/financial-foundation`.
 
