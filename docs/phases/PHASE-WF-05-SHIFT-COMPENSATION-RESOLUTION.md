@@ -55,6 +55,8 @@ This compatibility path is temporary and observable; it does not create a synthe
 - Added a resolver for general and assignment-specific agreements, with a member-row lock and locking reads to serialize wage resolution against agreement approval across application instances.
 - Wired shift start and editable source changes to resolve and freeze the wage. The existing finish flow continues to post the frozen `driver_wage` amount.
 - Exposed source and frozen agreement details in `ShiftResponse`.
+- Updated Flutter shift creation to request the suggested wage using the selected site and shift date, and to refresh the suggestion when site, date, driver, or shift type changes.
+- Added an integration assertion that the defaults endpoint previews the agreement rate for the selected site/date.
 - Added integration coverage for agreement-based wages, immutable shift snapshots, and contractual date gaps. CI validation is still required.
 
 ## Data model direction
