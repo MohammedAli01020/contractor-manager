@@ -71,6 +71,9 @@ public class CompensationAgreementService {
         if (agreement.getStatus() != CompensationAgreementStatus.DRAFT) {
             throw ApiException.conflict("لا يمكن اعتماد اتفاقية ليست مسودة.");
         }
+        if (agreement.getSupersedesAgreementId() != null) {
+            throw ApiException.conflict("يجب اعتماد مسودة الاستبدال من خلال إجراء الاستبدال المخصص.");
+        }
         List<CompensationComponent> agreementComponents =
                 components.findAllByTenantIdAndCompensationAgreementIdOrderBySortOrderAscIdAsc(
                         tenantId, agreementId);
