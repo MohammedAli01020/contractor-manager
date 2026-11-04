@@ -1,6 +1,6 @@
 # PR-WF-01 — WorkforceMember migration specification
 
-**Status:** Detailed implementation specification for review — not implemented  
+**Status:** Implemented on feature branch `feature/workforce-core-pr-wf-01`; draft PR #34 open, CI pending  
 **Date:** 2026-11-04  
 **Target implementation base:** `feature/financial-foundation` (revalidate branch head immediately before implementation)  
 **Reviewed source baseline:** `e03e49b1fbe882e08dde702acb7a9ff3fcd05c84`  
@@ -202,8 +202,8 @@ In the later workforce-payable phase:
 
 ## 11. Acceptance gate and approval
 
-PR-WF-01 may begin only after the product owner explicitly approves this specification. Approval covers only the scoped additive identity table and driver mapping described here. It does not approve PR-WF-02, ledger changes, payroll, a table rename, PR merges, or changes to `main`.
+The product owner authorized PR-WF-01 on 2026-11-04. This authorization covers only the scoped additive identity table, driver mapping, and transactional compatibility behavior described here. It does not approve PR-WF-02, ledger changes, payroll, a table rename, merging PR #34, or changes to `main`.
 
 Before implementation, revalidate the financial branch head and repeat the source inventory for all touched migrations, entities, tests, and tenant constraints. If the source has materially changed, update this specification and request approval again.
 
-**Implementation status:** Not started. No code or database objects were changed while preparing this specification.
+**Implementation status:** Code and migration are prepared on `feature/workforce-core-pr-wf-01` and proposed in draft PR #34. Backend CI is pending. The migration has not been applied to production, PR #34 has not been merged, and `main` is unchanged.
