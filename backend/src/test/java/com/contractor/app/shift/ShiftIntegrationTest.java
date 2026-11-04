@@ -143,6 +143,14 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
                 versionBody(started.path("version").asLong()), token)
                 .andExpect(status().isBadRequest());
 
+        Map<String, Object> invalidHours = versionBody(started.path("version").asLong());
+        invalidHours.put("actualHours", new BigDecimal("0"));
+        postJson("/api/v1/shifts/" + started.path("id").asLong() + "/finish",
+                invalidHours, token).andExpect(status().isBadRequest());
+        invalidHours.put("actualHours", new BigDecimal("-1"));
+        postJson("/api/v1/shifts/" + started.path("id").asLong() + "/finish",
+                invalidHours, token).andExpect(status().isBadRequest());
+
         Map<String, Object> finishBody = versionBody(started.path("version").asLong());
         finishBody.put("actualHours", new BigDecimal("7.25"));
         JsonNode finished = body(postJson("/api/v1/shifts/" + started.path("id").asLong()
