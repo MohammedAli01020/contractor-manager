@@ -258,9 +258,10 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
     @Test
     void defaultsEndpointSuggestsWageAndPrice() throws Exception {
         getJson("/api/v1/shifts/defaults?driverId=" + driverId + "&equipmentId=" + equipmentId
-                + "&shiftType=EVENING", token)
+                + "&shiftType=EVENING&siteId=" + siteId + "&shiftDate=" + day(1), token)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.driverWage").value(175.0))
+                .andExpect(jsonPath("$.wageSource").value("LEGACY_DRIVER_RATE"))
                 .andExpect(jsonPath("$.price").value(1200.0))
                 .andExpect(jsonPath("$.equipmentOperatingCost").value(500.0));
     }
@@ -1093,7 +1094,8 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
         getJson("/api/v1/shifts/defaults?driverId=" + driverId + "&equipmentId=" + equipmentId
                 + "&shiftType=MORNING&siteId=" + siteId + "&shiftDate=" + day(1), token)
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.driverWage").value(275.0));
+                .andExpect(jsonPath("$.driverWage").value(275.0))
+                .andExpect(jsonPath("$.wageSource").value("AGREEMENT"));
 
         JsonNode shift = startShift(token, shiftBody(siteId, driverId, equipmentId, day(1), "MORNING"));
 
