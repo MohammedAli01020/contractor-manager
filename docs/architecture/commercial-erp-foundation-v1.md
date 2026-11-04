@@ -325,3 +325,30 @@ The product owner approved the following architecture baseline:
 8. Existing driver, shift, journal, and ledger history must be preserved through an additive, backward-compatible migration. No destructive rename/drop in the first migration.
 9. HR delivery is phased; workforce core and compatibility come before full attendance, leave, payroll, and settlement capabilities.
 10. This approval authorizes the next detailed technical design and migration plan only. Implementation, schema changes, and PR merges remain subject to review and the user's explicit authorization.
+
+## 14. Workforce design artifacts and current review status
+
+The following detailed artifacts form the current Workforce Core design package:
+
+- `workforce-legacy-dependency-inventory-v1.md` — current driver/shift/ledger/journal/API/mobile dependency inventory.
+- `workforce-core-migration-proposal-v1.md` — additive identity, assignment, subledger and accounting-dimension migration proposal.
+- `workforce-compensation-and-hr-design-v1.md` — compensation agreement components, legacy three-rate mapping, payroll stages, HR boundaries and acceptance scenarios.
+
+### 14.1 Compensation decisions recommended
+
+- Convert each legacy driver's morning/evening/night rates into three SHIFT agreement components effective at the agreed cutover date; do not backdate or rewrite historic shifts.
+- Keep legacy rate columns as a temporary compatibility fallback, monitored and removed only after all tenants reconcile.
+- Model MIXED compensation as multiple typed components, not an opaque formula.
+- Make roles/assignments multi-role and effective-dated; operational eligibility remains separate.
+- Keep shift earning recognition in the existing shift completion transaction. Payroll reports those earnings as already recognized and never posts them a second time.
+- Draft payroll and attendance have no accounting effect. Approved non-shift earnings post once; actual payment remains a separate cash/bank settlement.
+- Keep one authoritative worker payable subledger.
+
+### 14.2 Current status and authorization boundary
+
+- Architecture and migration direction: approved by product owner.
+- Legacy dependency inventory: documented.
+- Detailed compensation/HR design: documented as recommended design for review.
+- Code and database implementation: not started.
+- The financial source branch reviewed remains at `e03e49b1fbe882e08dde702acb7a9ff3fcd05c84` at this checkpoint. Revalidate branch head and rerun relevant inventory before implementation.
+- No PR merged and no change made to `main`.
