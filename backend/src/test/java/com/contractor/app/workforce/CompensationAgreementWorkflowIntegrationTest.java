@@ -2,6 +2,9 @@ package com.contractor.app.workforce;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.reset;
 
 import com.contractor.app.AbstractIntegrationTest;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -14,6 +17,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.mock.mockito.SpyBean;
+import com.contractor.app.workforce.infra.CompensationAgreementRepository;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.junit.jupiter.api.Test;
 
@@ -21,6 +26,9 @@ class CompensationAgreementWorkflowIntegrationTest extends AbstractIntegrationTe
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @SpyBean
+    private CompensationAgreementRepository agreements;
 
     private String token;
     private long memberId;
@@ -30,6 +38,7 @@ class CompensationAgreementWorkflowIntegrationTest extends AbstractIntegrationTe
 
     @BeforeEach
     void setUp() throws Exception {
+        reset(agreements);
         JsonNode owner = registerTenant("Compensation Workflow Co", uniqueName("compwf"));
         token = owner.path("accessToken").asText();
         JsonNode roles = body(getJson("/api/v1/workforce/roles", token).andExpect(status().isOk()));
@@ -120,6 +129,42 @@ class CompensationAgreementWorkflowIntegrationTest extends AbstractIntegrationTe
         assertThat(old.path("effectiveTo").asText()).isEqualTo("2026-11-30");
         assertThat(old.path("approvedByUserId").asLong())
                 .isEqualTo(oldApproved.path("approvedByUserId").asLong());
+    }
+
+    @Test
+    void replacementFailureRollsBackOldAgreementClosure() throws Exception {
+        long oldId = createAgreement(null, "2026-01-01", null, null, null);
+        approve(oldId);
+        long newId = createAgreement(null, "2026-12-01", null, oldId,
+                "اختبار التراجع الذري عند فشل الحفظ");
+
+        doThrow(new IllegalStateException("forced replacement persistence failure"))
+                .when(agreements).saveAndFlush(argThat(
+                        agreement -> agreement != null
+                                && newId == agreement.getId()
+                                && agreement.getSupersedesAgreementId() != null));
+
+        boolean requestFailed = false;
+        try {
+            postJson(path(newId, "approve-replacement"), Map.of(), token).andReturn();
+        } catch (Exception expected) {
+            requestFailed = true;
+        } finally {
+            reset(agreements);
+        }
+        assertThat(requestFailed).isTrue();
+        assertThat(jdbc.queryForObject(
+                "select status from compensation_agreements where id = ?",
+                String.class, oldId)).isEqualTo("APPROVED");
+        assertThat(jdbc.queryForObject(
+                "select effective_to from compensation_agreements where id = ?",
+                java.sql.Date.class, oldId)).isNull();
+        assertThat(jdbc.queryForObject(
+                "select status from compensation_agreements where id = ?",
+                String.class, newId)).isEqualTo("DRAFT");
+        assertThat(jdbc.queryForObject(
+                "select approved_at from compensation_agreements where id = ?",
+                java.sql.Timestamp.class, newId)).isNull();
     }
 
     @Test
