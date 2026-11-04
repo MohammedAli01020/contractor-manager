@@ -136,6 +136,23 @@ class ShiftsApi {
     return _mapList(response.data, 'سجل التعديلات غير صالح.');
   }
 
+  Future<ShiftModel> correctShift(
+    int shiftId,
+    Map<String, dynamic> payload,
+  ) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/shifts/$shiftId/corrections',
+      data: payload,
+    );
+    if (response.data == null) {
+      throw const AppFailure(
+        FailureType.server,
+        'لم تصل بيانات الوردية بعد التصحيح.',
+      );
+    }
+    return ShiftModel.fromJson(response.data!);
+  }
+
   Future<ShiftModel> finishShift(
     ShiftModel shift, {
     double? actualHours,
