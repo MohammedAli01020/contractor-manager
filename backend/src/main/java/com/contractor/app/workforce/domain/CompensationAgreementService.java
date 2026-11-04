@@ -112,8 +112,9 @@ public class CompensationAgreementService {
         if (!newStart.isAfter(oldAgreement.getEffectiveFrom())) {
             throw ApiException.conflict("يجب أن يبدأ الاستبدال بعد تاريخ بداية الاتفاقية القديمة.");
         }
-        if (oldAgreement.getEffectiveTo() != null && oldAgreement.getEffectiveTo().isBefore(newStart)) {
-            throw ApiException.conflict("الاتفاقية القديمة انتهت قبل تاريخ الاستبدال؛ لا يمكن تمديدها ضمن عملية الاستبدال.");
+        if (oldAgreement.getEffectiveTo() != null
+                && oldAgreement.getEffectiveTo().isBefore(newStart.minusDays(1))) {
+            throw ApiException.conflict("توجد فجوة بين نهاية الاتفاقية القديمة وبداية الاتفاقية الجديدة.");
         }
         LocalDate oldLastDay = newStart.minusDays(1);
         if (oldLastDay.isBefore(oldAgreement.getEffectiveFrom())) {
@@ -166,8 +167,9 @@ public class CompensationAgreementService {
         if (!request.getEffectiveFrom().isAfter(old.getEffectiveFrom())) {
             throw ApiException.conflict("يجب أن يبدأ الاستبدال بعد تاريخ بداية الاتفاقية القديمة.");
         }
-        if (old.getEffectiveTo() != null && old.getEffectiveTo().isBefore(request.getEffectiveFrom())) {
-            throw ApiException.conflict("الاتفاقية القديمة انتهت قبل تاريخ الاستبدال.");
+        if (old.getEffectiveTo() != null
+                && old.getEffectiveTo().isBefore(request.getEffectiveFrom().minusDays(1))) {
+            throw ApiException.conflict("توجد فجوة بين نهاية الاتفاقية القديمة وبداية الاتفاقية الجديدة.");
         }
     }
 
