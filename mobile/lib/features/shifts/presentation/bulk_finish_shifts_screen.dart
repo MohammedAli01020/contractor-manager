@@ -53,7 +53,7 @@ class _BulkFinishShiftsScreenState extends State<BulkFinishShiftsScreen> {
 
   Future<void> _finishSelected() async {
     final selected = _shifts
-        .where((shift) => _selectedIds.contains(shift.id))
+        .where((shift) => _selectedIds.contains(shift.id) && shift.compensationBasis != 'HOUR')
         .toList();
     if (selected.isEmpty || _working) return;
 
@@ -232,7 +232,7 @@ class _BulkFinishShiftsScreenState extends State<BulkFinishShiftsScreen> {
                               return Card(
                                 child: CheckboxListTile(
                                   value: selected,
-                                  onChanged: _working
+                                  onChanged: _working || shift.compensationBasis == 'HOUR'
                                       ? null
                                       : (checked) {
                                           setState(() {
