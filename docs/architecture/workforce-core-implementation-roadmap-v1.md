@@ -1,0 +1,163 @@
+# Workforce Core implementation work breakdown
+
+**Status:** Planning only — no implementation authorized  
+**Date:** 2026-11-04  
+**Parent branch for future work:** `feature/financial-foundation` (revalidate before starting)  
+**Design package:** commercial ERP foundation, legacy dependency inventory, additive migration proposal, compensation/HR design.
+
+## 1. Delivery rules
+
+- Work on a dedicated feature branch from the then-current approved financial foundation branch.
+- Never merge a PR or modify `main` without explicit product-owner approval.
+- Each PR must be small, independently reviewable, and include its own tests and documentation.
+- No destructive rename/drop of legacy driver tables or columns in the Workforce Core release.
+- Do not introduce a second authoritative payable balance.
+- Keep existing Flutter shift and driver workflows backward-compatible until the replacement screens are ready and verified.
+- Database migrations are forward-only in production; define repair/rollback strategy before each migration.
+- Re-run the full source inventory against the actual branch head before implementation; the source commit in the current docs is a planning baseline, not a guarantee of today's head.
+
+## 2. Proposed PR sequence
+
+### PR-WF-01 — schema and service foundation for WorkforceMember
+
+Scope:
+- Add tenant-scoped `workforce_members`.
+- Add nullable `drivers.workforce_member_id` with composite tenant FK and uniqueness.
+- Backfill one member per existing driver, preserving driver IDs.
+- Add repository/domain/service tests for tenant isolation, mapping uniqueness and missing mapping detection.
+- No public API contract changes and no mobile changes.
+
+Gate:
+- Every legacy driver maps to exactly one member.
+- No cross-tenant links or duplicate mappings.
+- Pre/post row counts and identity fields reconcile for every tenant.
+- Existing driver/shift/ledger/journal tests pass on MySQL.
+
+### PR-WF-02 — canonical identity compatibility
+
+Scope:
+- Make workforce identity the write owner for person-level name/contact/national ID/notes.
+- Preserve legacy driver endpoints and response shape.
+- Add a reconciliation report for any retained mirrored columns.
+- Protect national ID from broad list responses and enforce permission checks on detail access.
+
+Gate:
+- Legacy API clients continue to work.
+- No independent conflicting writes to identity fields.
+- Audit and optimistic locking remain correct.
+
+### PR-WF-03 — roles and assignments
+
+Scope:
+- Add tenant role catalog with seeded common roles and tenant-defined roles.
+- Add effective-dated `workforce_assignments`.
+- Support multiple roles and optional department/project/site references.
+- Add service-level overlap validation under workforce-member locking.
+
+Gate:
+- Multiple legitimate roles per person supported.
+- Invalid date ranges and unauthorized tenant references rejected.
+- Existing driver eligibility and active-shift constraints unchanged.
+
+### PR-WF-04 — compensation agreement schema and legacy-rate conversion
+
+Scope:
+- Add effective-dated compensation agreement header and typed components.
+- Convert current morning/evening/night driver rates into three SHIFT components at cutover.
+- Keep legacy columns as monitored fallback.
+- Add agreement overlap validation and rate resolution tests.
+
+Gate:
+- Correct component selected by shift type and business date.
+- Zero-rate behavior matches explicit product rules.
+- No historic shift amount, journal, or ledger row is changed.
+- No overlapping ambiguous approved agreement for the same scope.
+
+### PR-WF-05 — shift integration with agreement snapshots
+
+Scope:
+- Resolve current shift rate through the agreement service.
+- Persist agreement/component/rate snapshot references on new shifts where appropriate.
+- Preserve current shift completion journal and ledger transaction semantics.
+- Keep legacy API/mobile payloads stable.
+
+Gate:
+- New shift wage snapshot deterministic and immutable after posting.
+- Old shifts remain byte-for-byte equivalent in financial values.
+- Finish/payment concurrency and idempotency tests pass.
+
+### PR-WF-06 — workforce payable and journal dimensions
+
+Scope:
+- Add workforce dimension to journal lines and existing ledger entries.
+- Backfill from driver mapping.
+- Generalize statement/read services to workforce identity without dual ledger writes.
+- Retain legacy driver references for driver-originated operational events.
+- Do not yet enable generic non-driver payroll posting until reconciliation and constraint changes are separately approved.
+
+Gate:
+- Every historical ledger row maps to one workforce member.
+- Worker statements and all financial balances reconcile before/after.
+- Journal reversals preserve dimensions.
+- Tenant-safe FK, trigger, idempotency, rollback and lock tests pass.
+
+### PR-WF-07 — generic earning sources and draft payroll
+
+Scope:
+- Add approved time/quantity/fixed-period source records as required by first supported use cases.
+- Add payroll period/run as calculation and approval workflow only.
+- Include existing shift earnings as already recognized.
+- No posting from draft or recalculation.
+
+Gate:
+- Each earning line traces to a source, agreement component, rate version and calculation inputs.
+- Draft/recalculation has no accounting effect.
+- Shift earning is never double-posted.
+
+### PR-WF-08 — approval and posting of non-shift earnings
+
+Scope:
+- Add approval workflow and idempotent journal/payable posting for approved hourly/day/quantity/fixed earnings.
+- Keep actual payment through existing cash/bank settlement controls.
+- Add reversal/replacement workflow for corrections.
+
+Gate:
+- One source/component posts once under retries and concurrency.
+- Worker payable statement and GL reconcile.
+- Partial payments, advances, recoveries and deductions reconcile.
+
+### PR-WF-09 — Flutter Workforce Core screens
+
+Scope:
+- Add workforce list/detail/create/edit.
+- Add role/assignment and compensation agreement views.
+- Keep driver operational controls and shift selection behavior intact.
+- Add permission-aware sensitive field display.
+
+Gate:
+- Real Android device workflow verified.
+- No regression to current shift creation, completion, correction or payment screens.
+- Empty/loading/error/offline states handled.
+
+## 3. Release boundaries
+
+- Workforce identity + legacy mapping can ship without payroll.
+- Roles/assignments can ship without attendance.
+- Compensation agreements can ship first for shift-based drivers while legacy fallback remains.
+- General non-shift payroll is a later feature, not a hidden side effect of adding workforce identity.
+- Full attendance, leave, overtime, statutory tax/insurance localization, employee self-service and advanced HR remain later releases.
+
+## 4. Required release evidence
+
+For every PR:
+- migration preflight and postflight output
+- tenant-isolation test results
+- MySQL integration test results for constraints/triggers/locking
+- financial reconciliation report where ledger/journal is touched
+- API compatibility test evidence
+- Flutter real-device verification where mobile changes
+- updated architecture/operations documentation
+
+## 5. Approval boundary
+
+This work breakdown is a proposed execution order. It does not authorize opening implementation PRs or changing the database. Start PR-WF-01 only after the product owner reviews and explicitly approves the concrete migration specification and its preflight/backfill/rollback plan.
