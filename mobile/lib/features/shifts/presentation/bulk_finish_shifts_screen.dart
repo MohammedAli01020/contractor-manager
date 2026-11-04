@@ -218,7 +218,8 @@ class _BulkFinishShiftsScreenState extends State<BulkFinishShiftsScreen> {
                           color: Theme.of(context).colorScheme.surfaceVariant,
                           child: Text(
                             'تم تحميل ${_shifts.length} وردية نشطة. '
-                            'لا يتم إنهاء أي وردية تلقائيًا؛ اختر الورديات ثم أكّد كل واحدة على حدة.',
+                            'لا يتم إنهاء أي وردية تلقائيًا؛ اختر الورديات ثم أكّد كل واحدة على حدة. '
+                            'الورديات بنظام الساعة تُنهى منفردة لإدخال ساعات العمل الفعلية.',
                           ),
                         ),
                         Expanded(
