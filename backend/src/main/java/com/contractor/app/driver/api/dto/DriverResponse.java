@@ -1,6 +1,7 @@
 package com.contractor.app.driver.api.dto;
 
 import com.contractor.app.driver.domain.Driver;
+import com.contractor.app.workforce.domain.WorkforceMember;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
@@ -22,26 +23,26 @@ public class DriverResponse {
     private final LocalDateTime createdAt;
     private final LocalDateTime updatedAt;
 
-    private DriverResponse(Driver d) {
+    private DriverResponse(Driver d, WorkforceMember member, boolean revealNationalId) {
         this.id = d.getId();
-        this.name = d.getName();
-        this.phone = d.getPhone();
-        this.nationalId = d.getNationalId();
+        this.name = member.getFullName();
+        this.phone = member.getPhone();
+        this.nationalId = revealNationalId ? member.getNationalId() : null;
         this.workerType = d.getWorkerType().name();
         this.morningRate = d.getMorningRate();
         this.eveningRate = d.getEveningRate();
         this.nightRate = d.getNightRate();
         this.availability = d.getAvailability().name();
         this.unavailableReason = d.getUnavailableReason();
-        this.notes = d.getNotes();
-        this.active = d.isActive();
+        this.notes = member.getNotes();
+        this.active = member.isActive();
         this.version = d.getVersion();
         this.createdAt = d.getCreatedAt();
         this.updatedAt = d.getUpdatedAt();
     }
 
-    public static DriverResponse from(Driver driver) {
-        return new DriverResponse(driver);
+    public static DriverResponse from(Driver driver, WorkforceMember member, boolean revealNationalId) {
+        return new DriverResponse(driver, member, revealNationalId);
     }
 
     public Long getId() {

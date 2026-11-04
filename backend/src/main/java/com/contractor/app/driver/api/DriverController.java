@@ -46,7 +46,7 @@ public class DriverController {
 
     @GetMapping("/{id}")
     public DriverResponse get(@PathVariable Long id) {
-        return service.get(CurrentUser.tenantId(), id);
+        return service.get(CurrentUser.tenantId(), id, CurrentUser.get().getRole());
     }
 
     @PreAuthorize("hasRole('ADMIN')")

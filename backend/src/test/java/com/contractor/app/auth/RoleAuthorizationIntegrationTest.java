@@ -143,6 +143,38 @@ class RoleAuthorizationIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void nationalIdIsHiddenFromListsAndNonAdminDetails() throws Exception {
+        Map<String, Object> request = new HashMap<>();
+        request.put("name", "Sensitive Identity Test");
+        request.put("workerType", "DRIVER");
+        request.put("morningRate", 0);
+        request.put("eveningRate", 0);
+        request.put("nightRate", 0);
+        request.put("nationalId", "29801011234567");
+        JsonNode created = body(postJson("/api/v1/drivers", request, adminToken)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.nationalId").value("29801011234567")));
+        long driverId = created.path("id").asLong();
+
+        getJson("/api/v1/drivers", adminToken)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].nationalId").value(org.hamcrest.Matchers.nullValue()));
+
+        for (String token : new String[] {operatorToken, viewerToken}) {
+            getJson("/api/v1/drivers", token)
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.items[0].nationalId").value(org.hamcrest.Matchers.nullValue()));
+            getJson("/api/v1/drivers/" + driverId, token)
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.nationalId").value(org.hamcrest.Matchers.nullValue()));
+        }
+
+        getJson("/api/v1/drivers/" + driverId, adminToken)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nationalId").value("29801011234567"));
+    }
+
+    @Test
     void adminCanManageMasterDataAndCannotGrantAdminThroughUserCreation() throws Exception {
         postJson("/api/v1/sites", Map.of("name", "Admin Site"), adminToken)
                 .andExpect(status().isCreated());
