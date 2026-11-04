@@ -327,6 +327,7 @@ class _ShiftsView extends StatelessWidget {
             actualHours: shift.compensationBasis == 'HOUR' ? actualHours : null,
           ),
           successMessage: 'تم إنهاء الوردية بنجاح.',
+          canCorrectCompletedShifts: canCorrectCompletedShifts,
         );
       }
       return;
@@ -352,6 +353,7 @@ class _ShiftsView extends StatelessWidget {
           () => getIt<ShiftsApi>().reinstateShift(shift),
           conflictTitle: 'تعذر إعادة تفعيل الوردية',
           successMessage: 'تمت إعادة تفعيل الوردية بنجاح.',
+          canCorrectCompletedShifts: canCorrectCompletedShifts,
         );
       }
       return;
@@ -625,6 +627,7 @@ class _ShiftsView extends StatelessWidget {
     Future<ShiftModel> Function() action, {
     String conflictTitle = 'تعذر تنفيذ الإجراء',
     String successMessage = 'تم حفظ التغييرات بنجاح.',
+    bool canCorrectCompletedShifts = false,
   }) async {
     try {
       await action();
@@ -673,7 +676,7 @@ class _ShiftsView extends StatelessWidget {
                   shift: conflictingShift,
                   conflictMessage: failure.message,
                   onManage: (currentShift) =>
-                      _manageShift(detailsContext, currentShift, bloc),
+                      _manageShift(detailsContext, currentShift, bloc, canCorrectCompletedShifts),
                 ),
               ),
             );
