@@ -126,6 +126,10 @@ public class ShiftCompensationResolver {
         }
 
         CompensationComponent component = matching.get(0);
+        if (requestedWage != null && component.getRate() != null
+                && requestedWage.compareTo(component.getRate()) != 0) {
+            throw ApiException.conflict("أجر الاتفاقية معتمد ولا يمكن تغييره من نموذج الوردية. استخدم إجراء تصحيح معتمدًا إذا لزم الأمر.");
+        }
         if (component.getRate() == null || component.getRate().signum() < 0) {
             throw ApiException.conflict("قيمة أجر الوردية في الاتفاقية غير صالحة.");
         }
