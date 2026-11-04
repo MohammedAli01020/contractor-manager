@@ -14,9 +14,9 @@ ALTER TABLE shifts
     ADD COLUMN compensation_calculated_amount DECIMAL(15,2) NULL;
 
 UPDATE shifts
-SET wage_source = 'LEGACY_DRIVER_RATE',
-    compensation_component_code = 'LEGACY_DRIVER_RATE',
-    compensation_component_name = 'Legacy driver rate',
+SET wage_source = 'HISTORICAL_SHIFT_SNAPSHOT',
+    compensation_component_code = 'HISTORICAL_SHIFT_WAGE',
+    compensation_component_name = 'Historical recorded shift wage',
     compensation_basis = 'SHIFT',
     compensation_rate = driver_wage,
     compensation_calculated_amount = driver_wage
@@ -31,7 +31,7 @@ ALTER TABLE shifts
     MODIFY COLUMN compensation_calculated_amount DECIMAL(15,2) NOT NULL,
     ADD KEY ix_shifts_compensation_agreement (tenant_id, compensation_agreement_id),
     ADD KEY ix_shifts_compensation_component (tenant_id, compensation_component_id),
-    ADD CONSTRAINT ck_shifts_wage_source CHECK (wage_source IN ('AGREEMENT', 'LEGACY_DRIVER_RATE')),
+    ADD CONSTRAINT ck_shifts_wage_source CHECK (wage_source IN ('AGREEMENT', 'LEGACY_DRIVER_RATE', 'HISTORICAL_SHIFT_SNAPSHOT')),
     ADD CONSTRAINT ck_shifts_compensation_basis CHECK (compensation_basis IN ('SHIFT', 'HOUR', 'DAY', 'QUANTITY', 'FIXED')),
     ADD CONSTRAINT ck_shifts_compensation_amount CHECK (compensation_rate >= 0 AND compensation_calculated_amount >= 0),
     ADD CONSTRAINT fk_shifts_compensation_agreement
