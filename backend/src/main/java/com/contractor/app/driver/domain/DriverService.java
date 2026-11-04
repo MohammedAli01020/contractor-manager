@@ -22,7 +22,6 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.List;
 import java.util.Locale;
-import java.util.Objects;
 import javax.persistence.criteria.Predicate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Sort;
@@ -50,7 +49,7 @@ public class DriverService {
 
     @Transactional(readOnly = true)
     public PageResponse<DriverResponse> list(Long tenantId, String q, WorkerType type, boolean includeInactive,
-                                             int page, int size, Role role) {
+                                             int page, int size) {
         Page<Driver> result = drivers.findAll(filter(tenantId, q, type, includeInactive),
                 PageParams.of(page, size, Sort.by("name").ascending()));
         List<Driver> content = result.getContent();
