@@ -33,6 +33,7 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
   bool _loading = true;
   bool _saving = false;
   bool _defaultsLoaded = false;
+  bool _contractualWage = false;
   String? _error;
 
   @override
@@ -46,6 +47,7 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
     _siteId = shift?.siteId;
     _price.text = shift?.price.toStringAsFixed(2) ?? '';
     _wage.text = shift?.driverWage.toStringAsFixed(2) ?? '';
+    _contractualWage = shift?.wageSource == 'AGREEMENT';
     _equipmentCost.text = shift?.equipmentOperatingCost.toStringAsFixed(2) ?? '';
     _notes.text = shift?.notes ?? '';
     _loadOptions();
@@ -92,8 +94,13 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
       );
       if (!mounted) return;
       setState(() {
-        if (_driverId != null && data['driverWage'] != null) {
-          _wage.text = _value(data['driverWage']);
+        _contractualWage = data['wageSource'] == 'AGREEMENT';
+        if (_driverId != null) {
+          if (data['driverWage'] != null) {
+            _wage.text = _value(data['driverWage']);
+          } else {
+            _wage.clear();
+          }
         }
         if (_equipmentId != null) {
           if (data['price'] != null) _price.text = _value(data['price']);
@@ -285,9 +292,12 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
                       TextFormField(
                         controller: _wage,
                         keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        decoration: const InputDecoration(
+                        readOnly: _contractualWage,
+                        decoration: InputDecoration(
                           labelText: 'أجر السائق بالجنيه',
-                          helperText: 'يتحدد تلقائيًا عند اختيار السائق ونوع الوردية',
+                          helperText: _contractualWage
+                              ? 'أجر الاتفاقية المعتمدة؛ لا يمكن تغييره من نموذج الوردية'
+                              : 'يتحدد تلقائيًا عند اختيار الموقع والسائق ونوع الوردية، ويمكن تعديله للعامل بنظام الأجر القديم',
                         ),
                         validator: _moneyValidator,
                       ),
