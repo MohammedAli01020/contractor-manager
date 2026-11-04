@@ -17,4 +17,9 @@ public interface CompensationComponentRepository extends JpaRepository<Compensat
     @Query("select c from CompensationComponent c where c.id = :id and c.tenantId = :tenantId")
     java.util.Optional<CompensationComponent> findByIdAndTenantIdForUpdate(
             @Param("id") Long id, @Param("tenantId") Long tenantId);
+
+    @Lock(LockModeType.PESSIMISTIC_READ)
+    @Query("select c from CompensationComponent c where c.tenantId = :tenantId and c.compensationAgreementId = :agreementId order by c.sortOrder asc, c.id asc")
+    List<CompensationComponent> findAllForWageResolution(
+            @Param("tenantId") Long tenantId, @Param("agreementId") Long agreementId);
 }
