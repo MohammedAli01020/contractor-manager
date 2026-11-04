@@ -40,6 +40,8 @@ Gate:
 
 ### PR-WF-02 — canonical identity compatibility
 
+Specification: [workforce-pr-wf-02-canonical-identity-spec-v1.md](workforce-pr-wf-02-canonical-identity-spec-v1.md). Implementation branch: `feature/workforce-core-pr-wf-02` (created from `feature/financial-foundation` at `dc181ebb8de55edf866943cf7b69e173b0dd90b6`).
+
 Scope:
 - Make workforce identity the write owner for person-level name/contact/national ID/notes.
 - Preserve legacy driver endpoints and response shape.
@@ -168,4 +170,4 @@ For every PR:
 
 ## 5. Approval boundary
 
-This work breakdown is a proposed execution order. PR-WF-01 was explicitly authorized and merged only into `feature/financial-foundation`; `main` was not changed. PR-WF-02 and every later PR require their own explicit approval.
+This work breakdown is a proposed execution order. PR-WF-01 was explicitly authorized and merged only into `feature/financial-foundation`; `main` was not changed. PR-WF-02 has been authorized for implementation on its dedicated branch, but must remain unmerged until review and explicit merge approval. Every later PR requires its own explicit approval.
