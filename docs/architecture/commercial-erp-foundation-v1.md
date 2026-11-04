@@ -189,3 +189,33 @@ The exact template mechanism and subscription packaging are future design work.
 This document records product direction and proposed architecture. It does not authorize code changes, database migrations, PR merges, or changes to `main`.
 
 Each detailed design decision must be reviewed and explicitly approved before implementation.
+
+### Additional verified findings — financial and identity relationships
+
+A second read-only pass inspected the shift service, worker ledger, ledger API/DTOs, user entity, and migrations:
+
+- `ShiftService.finish` locks the referenced driver before wage posting, creates the wage journal entry, stores its ID on the shift, and appends an `EARNING` ledger row. It also checks the recoverable-advance balance and may post a separate advance-recovery journal and ledger row in the same transaction.
+- The shift wage is therefore a recognized entitlement, not proof of cash payment. The payment endpoint is separate and reduces the worker's ledger balance while posting a cash/bank journal entry.
+- Advance handling already distinguishes two cases: an advance against earned payable (reduces the available worker balance immediately) and a recoverable advance (tracked as an asset and recovered from later earnings). Both remain separate from generic expenses.
+- Worker ledger rows are append-only at the database boundary. Corrections use compensating/reversal movements; they must not update or delete posted history.
+- Ledger rows carry tenant, driver, journal, creator, optional shift, idempotency key, amount, and balance effect. Database foreign keys enforce tenant-consistent links to drivers, shifts, and journal entries. The database also enforces one original earning per shift.
+- The ledger statement, payment, and advance APIs are currently nested under `/drivers/{driverId}/ledger`; the repository aggregates balances by `driverId`. This is a wider migration surface than changing a screen label or Java class name.
+- The current `User` entity represents a tenant login account with username, password, role, active state, and login metadata. It is not a workforce/employee record and should remain a separate security identity.
+- The shift itself stores the driver wage snapshot and the journal reference. A completed/posted shift is protected from changing its financially significant source fields; audited correction flows add reversal/replacement records rather than rewriting the original wage.
+
+### Consequences for the workforce and HR architecture
+
+1. A generic workforce identity must become the stable person reference for new HR and financial capabilities; the existing driver ID must remain valid for historical shifts and ledger rows during transition.
+2. Avoid a direct rename/drop of `drivers`, `driver_id`, or `driver_ledger_entries`. Existing foreign keys, unique constraints, idempotency, correction logic, and tenant-scoped balance queries make that unsafe.
+3. The migration should be additive first: introduce the general workforce identity, link each existing driver profile to it, and backfill existing records without changing historical shift or journal IDs.
+4. New worker types should be able to participate in suitable operational records and receive entitlements without pretending that every person is a driver. The shift workflow can initially continue to require a driver/operator profile if that is the business rule for equipment shifts.
+5. Before creating a generic worker ledger, compare whether to (a) generalize the current ledger behind a workforce-member abstraction while preserving the physical table during a compatibility period, or (b) create a new workforce ledger and migrate/read through old entries. Either path must preserve immutable history, idempotency, journal links, balance semantics, and tenant isolation.
+6. Payroll must not create a second wage expense for an amount already recognized through a completed shift. The design needs explicit earning sources and payroll inclusion rules so shift earnings, fixed/hourly salary, deductions, advances, and payments reconcile without duplication.
+7. Attendance is not automatically a payable event. Attendance records may feed payroll calculation, but only approved compensation rules and a defined posting event should create accounting entries.
+
+### Review status
+
+- **Verified in current code:** driver-specific shift and ledger identity; separate login users; separate wage recognition and cash payment; two advance behaviors; append-only ledger and audited correction approach.
+- **Recommended direction, pending explicit approval:** additive workforce identity linked to current driver profiles, with backward-compatible references during migration.
+- **Not decided:** physical design of a future generalized worker ledger; whether payroll consolidates shift earnings or consumes them as pre-calculated earning items; which non-driver roles may be assigned to each operational workflow.
+- **No implementation performed:** this review changed documentation only; no application code, database migration, PR, or `main` branch was modified.
