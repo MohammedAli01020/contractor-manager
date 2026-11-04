@@ -7,11 +7,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.contractor.app.AbstractIntegrationTest;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.math.BigDecimal;
+import java.sql.SQLException;
 import java.time.LocalDate;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.NestedExceptionUtils;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 
@@ -53,7 +55,7 @@ class CompensationAgreementSchemaIntegrationTest extends AbstractIntegrationTest
     }
 
     @Test
-    void schemaStoresZeroRatesAndAllowsIndependentShiftComponents() {
+    void schemaStoresZeroRatesAllowsShiftComponentsAndMemberLevelAgreements() {
         long agreementId = insertDraft(memberId, assignmentId, userId, tenantId);
         insertComponent(agreementId, tenantId, "MORNING", "Morning", "SHIFT",
                 new BigDecimal("0.00"), null, "MORNING");
@@ -69,10 +71,7 @@ class CompensationAgreementSchemaIntegrationTest extends AbstractIntegrationTest
         assertThat(jdbc.queryForObject(
                 "select count(*) from compensation_components where compensation_agreement_id = ?",
                 Integer.class, agreementId)).isEqualTo(3);
-    }
 
-    @Test
-    void schemaAllowsMemberLevelAgreementWithoutAssignment() {
         jdbc.update(
                 "insert into compensation_agreements (tenant_id, workforce_member_id, workforce_assignment_id, " +
                 "status, effective_from, currency_code, source, created_by_user_id, updated_by_user_id) " +
@@ -89,21 +88,17 @@ class CompensationAgreementSchemaIntegrationTest extends AbstractIntegrationTest
     void schemaRejectsInvalidBasisUnitAndShiftCombinations() {
         long agreementId = insertDraft(memberId, assignmentId, userId, tenantId);
 
-        assertThatThrownBy(() -> insertComponent(agreementId, tenantId, "BAD_SHIFT", "Bad shift",
-                "SHIFT", new BigDecimal("10.00"), null, null))
-                .isInstanceOf(DataIntegrityViolationException.class);
+        assertCheckConstraintViolation(() -> insertComponent(agreementId, tenantId, "BAD_SHIFT", "Bad shift",
+                "SHIFT", new BigDecimal("10.00"), null, null), "ck_compensation_components_shift");
 
-        assertThatThrownBy(() -> insertComponent(agreementId, tenantId, "BAD_FIXED", "Bad fixed",
-                "FIXED", new BigDecimal("10.00"), null, null))
-                .isInstanceOf(DataIntegrityViolationException.class);
+        assertCheckConstraintViolation(() -> insertComponent(agreementId, tenantId, "BAD_FIXED", "Bad fixed",
+                "FIXED", new BigDecimal("10.00"), null, null), "ck_compensation_components_unit");
 
-        assertThatThrownBy(() -> insertComponent(agreementId, tenantId, "BAD_HOUR", "Bad hour",
-                "HOUR", new BigDecimal("10.00"), null, null))
-                .isInstanceOf(DataIntegrityViolationException.class);
+        assertCheckConstraintViolation(() -> insertComponent(agreementId, tenantId, "BAD_HOUR", "Bad hour",
+                "HOUR", new BigDecimal("10.00"), null, null), "ck_compensation_components_unit");
 
-        assertThatThrownBy(() -> insertComponent(agreementId, tenantId, "NEGATIVE", "Negative",
-                "SHIFT", new BigDecimal("-1.00"), null, "MORNING"))
-                .isInstanceOf(DataIntegrityViolationException.class);
+        assertCheckConstraintViolation(() -> insertComponent(agreementId, tenantId, "NEGATIVE", "Negative",
+                "SHIFT", new BigDecimal("-1.00"), null, "MORNING"), "ck_compensation_components_rate");
     }
 
     @Test
@@ -118,12 +113,22 @@ class CompensationAgreementSchemaIntegrationTest extends AbstractIntegrationTest
                 ((Number) otherUser.get("id")).longValue(), otherTenantId))
                 .isInstanceOf(DataIntegrityViolationException.class);
 
-        assertThatThrownBy(() -> jdbc.update(
+        assertCheckConstraintViolation(() -> jdbc.update(
                 "insert into compensation_agreements (tenant_id, workforce_member_id, workforce_assignment_id, " +
                 "status, effective_from, currency_code, source, created_by_user_id, updated_by_user_id) " +
                 "values (?, ?, ?, 'APPROVED', ?, 'EGP', 'MANUAL', ?, ?)",
-                tenantId, memberId, assignmentId, LocalDate.of(2026, 1, 1), userId, userId))
-                .isInstanceOf(DataIntegrityViolationException.class);
+                tenantId, memberId, assignmentId, LocalDate.of(2026, 1, 1), userId, userId),
+                "ck_compensation_agreements_approval");
+    }
+
+    private void assertCheckConstraintViolation(Runnable operation, String constraintName) {
+        assertThatThrownBy(operation::run).satisfies(throwable -> {
+            Throwable rootCause = NestedExceptionUtils.getMostSpecificCause(throwable);
+            assertThat(rootCause).isInstanceOf(SQLException.class);
+            SQLException sqlException = (SQLException) rootCause;
+            assertThat(sqlException.getErrorCode()).isEqualTo(3819);
+            assertThat(sqlException.getMessage()).contains(constraintName);
+        });
     }
 
     private long insertDraft(long member, long assignment, long actor, long tenant) {
