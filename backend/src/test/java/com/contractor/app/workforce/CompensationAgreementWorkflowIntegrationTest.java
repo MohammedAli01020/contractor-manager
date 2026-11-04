@@ -8,6 +8,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -52,11 +56,40 @@ class CompensationAgreementWorkflowIntegrationTest extends AbstractIntegrationTe
     void differentAssignmentAgreementsMayOverlapButMemberLevelAgreementConflictsWithBoth() throws Exception {
         long driverAgreement = createAgreement(driverAssignmentId, "2026-01-01", null, null, null);
         approve(driverAgreement);
+        long duplicateDriverAgreement = createAgreement(driverAssignmentId, "2026-02-01", null, null, null);
+        postJson(path(duplicateDriverAgreement, "approve"), Map.of(), token)
+                .andExpect(status().isConflict());
         long workerAgreement = createAgreement(workerAssignmentId, "2026-01-01", null, null, null);
         approve(workerAgreement);
 
         long memberAgreement = createAgreement(null, "2026-01-01", null, null, null);
         postJson(path(memberAgreement, "approve"), Map.of(), token).andExpect(status().isConflict());
+    }
+
+    @Test
+    void concurrentOverlappingApprovalsForOneMemberAllowOnlyOneAgreement() throws Exception {
+        long first = createAgreement(null, "2026-01-01", null, null, null);
+        long second = createAgreement(null, "2026-01-01", null, null, null);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<Integer> firstResult = executor.submit(() -> {
+                start.await();
+                return postJson(path(first, "approve"), Map.of(), token)
+                        .andReturn().getResponse().getStatus();
+            });
+            Future<Integer> secondResult = executor.submit(() -> {
+                start.await();
+                return postJson(path(second, "approve"), Map.of(), token)
+                        .andReturn().getResponse().getStatus();
+            });
+            start.countDown();
+            int a = firstResult.get();
+            int b = secondResult.get();
+            assertThat(List.of(a, b)).containsExactlyInAnyOrder(200, 409);
+        } finally {
+            executor.shutdownNow();
+        }
     }
 
     @Test
