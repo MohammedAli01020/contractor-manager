@@ -20,6 +20,7 @@ import com.contractor.app.common.util.Texts;
 import com.contractor.app.driver.domain.Driver;
 import com.contractor.app.driver.domain.DriverAvailability;
 import com.contractor.app.driver.infra.DriverRepository;
+import com.contractor.app.workforce.domain.ShiftCompensationResolver;
 import com.contractor.app.equipment.domain.Equipment;
 import com.contractor.app.equipment.domain.EquipmentStatus;
 import com.contractor.app.equipment.infra.EquipmentRepository;
@@ -69,12 +70,14 @@ public class ShiftService {
     private final DriverLedgerEntryRepository driverLedger;
     private final DefaultChartOfAccountsService defaultAccounts;
     private final ZoneId businessZone;
+    private final ShiftCompensationResolver compensationResolver;
 
     public ShiftService(ShiftRepository shifts, SiteRepository sites, DriverRepository drivers,
                         EquipmentRepository equipment, AuditService audit,
                         JournalPostingService journalPosting, JournalEntryRepository journalEntries,
                         DriverLedgerEntryRepository driverLedger,
                         DefaultChartOfAccountsService defaultAccounts,
+                        ShiftCompensationResolver compensationResolver,
                         @Value("${app.business-timezone:Africa/Cairo}") String businessTimezone) {
         this.shifts = shifts;
         this.sites = sites;
@@ -85,6 +88,7 @@ public class ShiftService {
         this.journalEntries = journalEntries;
         this.driverLedger = driverLedger;
         this.defaultAccounts = defaultAccounts;
+        this.compensationResolver = compensationResolver;
         this.businessZone = ZoneId.of(businessTimezone);
     }
 
@@ -159,9 +163,8 @@ public class ShiftService {
         shift.setStartedAt(LocalDateTime.now(ZoneOffset.UTC));
         shift.setNotes(Texts.blankToNull(request.getNotes()));
         // نسخ ثابتة وقت التسجيل: تغيير الأسعار لاحقًا لا يمس هذه الوردية
-        shift.setDriverWage(request.getDriverWage() != null
-                ? Money.scale(request.getDriverWage())
-                : Money.scale(rateFor(driver, request.getShiftType())));
+        compensationResolver.resolveAndApply(tenantId, driver, date, request.getSiteId(),
+                request.getShiftType(), request.getDriverWage(), shift);
         shift.setPrice(request.getPrice() != null
                 ? Money.scale(request.getPrice())
                 : Money.scale(item.getDefaultShiftPrice()));
@@ -207,11 +210,15 @@ public class ShiftService {
         boolean typeChanged = request.getShiftType() != shift.getShiftType();
         boolean equipmentChanged = !request.getEquipmentId().equals(shift.getEquipmentId());
 
-        // الأجر: قيمة صريحة، أو إعادة احتساب إن تغيّر السائق/نوع الوردية، وإلا تبقى النسخة القديمة
-        BigDecimal wage = request.getDriverWage() != null
-                ? Money.scale(request.getDriverWage())
-                : (driverChanged || typeChanged ? Money.scale(rateFor(driver, request.getShiftType()))
-                        : shift.getDriverWage());
+        boolean siteChanged = !java.util.Objects.equals(request.getSiteId(), shift.getSiteId());
+        boolean dateChanged = !java.util.Objects.equals(request.getShiftDate(), shift.getShiftDate());
+        boolean wageOverrideChanged = request.getDriverWage() != null
+                && request.getDriverWage().compareTo(shift.getDriverWage()) != 0;
+        if (driverChanged || typeChanged || siteChanged || dateChanged || wageOverrideChanged) {
+            compensationResolver.resolveAndApply(tenantId, driver, request.getShiftDate(), request.getSiteId(),
+                    request.getShiftType(), wageOverrideChanged ? request.getDriverWage() : null, shift);
+        }
+        BigDecimal wage = shift.getDriverWage();
         BigDecimal price = request.getPrice() != null
                 ? Money.scale(request.getPrice())
                 : (equipmentChanged ? Money.scale(item.getDefaultShiftPrice()) : shift.getPrice());
