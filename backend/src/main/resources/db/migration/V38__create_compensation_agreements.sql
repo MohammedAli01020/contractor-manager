@@ -8,7 +8,7 @@ CREATE TABLE compensation_agreements (
     id                      BIGINT        NOT NULL AUTO_INCREMENT,
     tenant_id               BIGINT        NOT NULL,
     workforce_member_id     BIGINT        NOT NULL,
-    workforce_assignment_id BIGINT        NOT NULL,
+    workforce_assignment_id BIGINT        NULL,
     agreement_reference     VARCHAR(80)   NULL,
     status                  VARCHAR(20)   NOT NULL DEFAULT 'DRAFT',
     effective_from          DATE          NOT NULL,
