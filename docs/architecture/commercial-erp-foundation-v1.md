@@ -352,3 +352,5 @@ The following detailed artifacts form the current Workforce Core design package:
 - Code and database implementation: not started.
 - The financial source branch reviewed remains at `e03e49b1fbe882e08dde702acb7a9ff3fcd05c84` at this checkpoint. Revalidate branch head and rerun relevant inventory before implementation.
 - No PR merged and no change made to `main`.
+
+- `workforce-core-implementation-roadmap-v1.md` — proposed PR-by-PR delivery sequence and release gates; implementation remains gated on explicit approval.
