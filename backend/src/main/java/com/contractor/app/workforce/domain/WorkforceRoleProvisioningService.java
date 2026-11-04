@@ -1,5 +1,7 @@
 package com.contractor.app.workforce.domain;
 
+import com.contractor.app.common.error.ApiException;
+import com.contractor.app.tenant.infra.TenantRepository;
 import com.contractor.app.workforce.infra.WorkforceRoleRepository;
 import java.util.Arrays;
 import java.util.List;
@@ -20,13 +22,19 @@ public class WorkforceRoleProvisioningService {
     );
 
     private final WorkforceRoleRepository roles;
+    private final TenantRepository tenants;
 
-    public WorkforceRoleProvisioningService(WorkforceRoleRepository roles) {
+    public WorkforceRoleProvisioningService(WorkforceRoleRepository roles, TenantRepository tenants) {
         this.roles = roles;
+        this.tenants = tenants;
     }
 
     @Transactional
     public void initializeForTenant(Long tenantId) {
+        // Serialize all provisioning attempts for this tenant before checking/inserting roles.
+        // This makes the operation safe to repeat and prevents concurrent check-then-insert races.
+        tenants.findByIdForUpdate(tenantId)
+                .orElseThrow(() -> ApiException.notFound("الشركة غير موجودة."));
         for (String[] definition : DEFAULT_ROLES) {
             if (!roles.existsByTenantIdAndCode(tenantId, definition[0])) {
                 WorkforceRole role = new WorkforceRole(tenantId, definition[0], definition[1]);
