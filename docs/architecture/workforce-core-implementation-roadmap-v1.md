@@ -1,6 +1,6 @@
 # Workforce Core implementation work breakdown
 
-**Status:** Planning only — no implementation authorized  
+**Status:** PR-WF-01 implementation prepared in draft PR #34; CI pending. Later PRs remain planning only.  
 **Date:** 2026-11-04  
 **Parent branch for future work:** `feature/financial-foundation` (revalidate before starting)  
 **Design package:** commercial ERP foundation, legacy dependency inventory, additive migration proposal, compensation/HR design, [PR-WF-01 migration specification](workforce-pr-wf-01-migration-spec-v1.md).
@@ -20,7 +20,7 @@
 
 ### PR-WF-01 — schema and service foundation for WorkforceMember
 
-Detailed migration, backfill, preflight, postflight, test, and repair specification: [workforce-pr-wf-01-migration-spec-v1.md](workforce-pr-wf-01-migration-spec-v1.md).
+Implementation branch: `feature/workforce-core-pr-wf-01` — [draft PR #34](https://github.com/MohammedAli01020/contractor-manager/pull/34). Detailed migration, backfill, preflight, postflight, test, and repair specification: [workforce-pr-wf-01-migration-spec-v1.md](workforce-pr-wf-01-migration-spec-v1.md).
 
 Scope:
 - Add tenant-scoped `workforce_members`.
@@ -166,4 +166,4 @@ For every PR:
 
 ## 5. Approval boundary
 
-This work breakdown is a proposed execution order. It does not authorize opening implementation PRs or changing the database. Start PR-WF-01 only after the product owner reviews and explicitly approves the concrete migration specification and its preflight/backfill/rollback plan.
+This work breakdown is a proposed execution order. PR-WF-01 has been authorized and is under review in draft PR #34; this does not authorize merging it, changing `main`, or starting PR-WF-02. Each later PR still requires its own explicit approval.
