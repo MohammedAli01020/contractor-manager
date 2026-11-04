@@ -4,5 +4,6 @@ public enum CompensationAgreementStatus {
     DRAFT,
     APPROVED,
     SUPERSEDED,
-    EXPIRED
+    EXPIRED,
+    CANCELLED
 }
