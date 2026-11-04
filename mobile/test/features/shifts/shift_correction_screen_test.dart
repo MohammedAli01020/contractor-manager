@@ -78,4 +78,32 @@ void main() {
     expect(find.text('سبب التصحيح يجب ألا يقل عن 5 أحرف'), findsOneWidget);
     verifyNever(() => api.correctShift(any(), any()));
   });
+
+  testWidgets('rejects a zero driver wage before sending a correction',
+      (tester) async {
+    await tester.pumpWidget(MaterialApp(
+      home: ShiftCorrectionScreen(shift: shift, api: api),
+    ));
+    await tester.pumpAndSettle();
+
+    final wageField = find.byType(TextFormField).first;
+    await tester.scrollUntilVisible(
+      wageField,
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.enterText(wageField, '0');
+
+    final submitButton = find.text('مراجعة وتأكيد التصحيح');
+    await tester.scrollUntilVisible(
+      submitButton,
+      400,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(submitButton);
+    await tester.pumpAndSettle();
+
+    expect(find.text('أجر السائق يجب أن يكون أكبر من صفر'), findsOneWidget);
+    verifyNever(() => api.correctShift(any(), any()));
+  });
 }
