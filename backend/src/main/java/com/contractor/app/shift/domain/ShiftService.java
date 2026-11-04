@@ -206,6 +206,10 @@ public class ShiftService {
             throw ApiException.conflict("لا يمكن تعديل وردية ملغاة. أعد تفعيلها أولًا.");
         }
         shift.requireVersion(request.getVersion());
+        if ("HOUR".equals(shift.getCompensationBasis())
+                && (shift.getStatus() == ShiftStatus.COMPLETED || shift.getDriverWageJournalEntryId() != null)) {
+            throw ApiException.conflict("لا يمكن تعديل مصدر وردية بالساعة بعد اعتمادها؛ استخدم مسار تصحيح مخصصًا.");
+        }
         if ((shift.getStatus() == ShiftStatus.COMPLETED || shift.getDriverWageJournalEntryId() != null)
                 && (!java.util.Objects.equals(request.getShiftDate(), shift.getShiftDate())
                     || !java.util.Objects.equals(request.getShiftType(), shift.getShiftType())
@@ -279,6 +283,11 @@ public class ShiftService {
     // recoverable-advance balances are read after that lock, not from a pre-lock snapshot.
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public ShiftResponse finish(Long tenantId, Long id, Long version, Long actorUserId) {
+        return finish(tenantId, id, version, actorUserId, null);
+    }
+
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public ShiftResponse finish(Long tenantId, Long id, Long version, Long actorUserId, BigDecimal actualHours) {
         Shift shift = findForUpdate(tenantId, id);
         if (shift.getStatus() != ShiftStatus.IN_PROGRESS) {
             throw ApiException.conflict("الوردية ليست شغالة.");
@@ -286,6 +295,25 @@ public class ShiftService {
         shift.requireVersion(version);
         if (actorUserId == null || actorUserId <= 0) {
             throw ApiException.unauthorized("تعذر تحديد المستخدم المنفّذ للترحيل المالي.");
+        }
+        if ("HOUR".equals(shift.getCompensationBasis())) {
+            if (actualHours == null) {
+                throw ApiException.badRequest("عدد ساعات العمل الفعلية مطلوب لإنهاء هذه الوردية.");
+            }
+            if (actualHours.signum() <= 0 || actualHours.scale() > 2
+                    || actualHours.precision() - actualHours.scale() > 6) {
+                throw ApiException.badRequest("عدد الساعات يجب أن يكون أكبر من صفر وبحد أقصى خانتين عشريتين.");
+            }
+            BigDecimal normalizedHours;
+            try {
+                normalizedHours = actualHours.setScale(2, java.math.RoundingMode.UNNECESSARY);
+            } catch (ArithmeticException ex) {
+                throw ApiException.badRequest("عدد الساعات يقبل حتى خانتين عشريتين فقط.");
+            }
+            BigDecimal calculated = Money.scale(shift.getCompensationRate().multiply(normalizedHours));
+            shift.applyHourlyCalculation(normalizedHours, calculated);
+        } else if (actualHours != null) {
+            throw ApiException.badRequest("لا ترسل عدد ساعات مع وردية لا تُحسب بالساعة.");
         }
         if (shift.getDriverWage() == null || shift.getDriverWage().signum() < 0) {
             throw ApiException.conflict("لا يمكن إكمال الوردية قبل تحديد أجر صالح للسائق.");
