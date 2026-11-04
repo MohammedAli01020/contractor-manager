@@ -139,12 +139,16 @@ public class ShiftService {
                 .orElseThrow(() -> ApiException.notFound("المعدة غير موجودة."));
         BigDecimal suggestedWage = null;
         String wageSource = null;
+        String compensationBasis = null;
+        BigDecimal compensationRate = null;
         if (driver != null) {
             if (siteId != null) {
                 LocalDate date = shiftDate == null ? today() : shiftDate;
                 Shift preview = new Shift(tenantId, date, type, siteId, driverId, equipmentId);
                 compensationResolver.resolveAndApply(tenantId, driver, date, siteId, type, null, preview);
-                suggestedWage = preview.getDriverWage();
+                compensationBasis = preview.getCompensationBasis();
+                compensationRate = preview.getCompensationRate();
+                suggestedWage = "HOUR".equals(compensationBasis) ? null : preview.getDriverWage();
                 wageSource = preview.getWageSource();
             } else {
                 // Without a site/date there is no safe way to resolve an assignment-scoped agreement.
@@ -154,6 +158,8 @@ public class ShiftService {
         return new ShiftDefaultsResponse(
                 suggestedWage,
                 wageSource,
+                compensationBasis,
+                compensationRate,
                 item == null ? null : Money.scale(item.getDefaultShiftPrice()),
                 item == null ? null : Money.scale(item.getOperatingCostPerShift()));
     }
