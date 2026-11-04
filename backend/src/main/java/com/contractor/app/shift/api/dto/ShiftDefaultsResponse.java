@@ -6,17 +6,23 @@ import java.math.BigDecimal;
 public class ShiftDefaultsResponse {
 
     private final BigDecimal driverWage;
+    private final String wageSource;
     private final BigDecimal price;
     private final BigDecimal equipmentOperatingCost;
 
-    public ShiftDefaultsResponse(BigDecimal driverWage, BigDecimal price, BigDecimal equipmentOperatingCost) {
+    public ShiftDefaultsResponse(BigDecimal driverWage, String wageSource, BigDecimal price, BigDecimal equipmentOperatingCost) {
         this.driverWage = driverWage;
+        this.wageSource = wageSource;
         this.price = price;
         this.equipmentOperatingCost = equipmentOperatingCost;
     }
 
     public BigDecimal getDriverWage() {
         return driverWage;
+    }
+
+    public String getWageSource() {
+        return wageSource;
     }
 
     public BigDecimal getPrice() {

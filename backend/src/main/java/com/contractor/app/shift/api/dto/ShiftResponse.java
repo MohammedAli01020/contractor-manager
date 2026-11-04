@@ -24,6 +24,17 @@ public class ShiftResponse {
     private final BigDecimal driverWage;
     private final BigDecimal equipmentOperatingCost;
     private final Long driverWageJournalEntryId;
+    private final String wageSource;
+    private final Long compensationAgreementId;
+    private final String compensationAgreementReference;
+    private final Long compensationComponentId;
+    private final String compensationComponentCode;
+    private final String compensationComponentName;
+    private final String compensationBasis;
+    private final String compensationCurrencyCode;
+    private final BigDecimal compensationRate;
+    private final BigDecimal compensationCalculatedAmount;
+
     private final BigDecimal priceAfterWage;
     private final String notes;
     private final String cancelReason;
@@ -49,6 +60,16 @@ public class ShiftResponse {
         this.driverWage = s.getDriverWage();
         this.equipmentOperatingCost = s.getEquipmentOperatingCost();
         this.driverWageJournalEntryId = s.getDriverWageJournalEntryId();
+        this.wageSource = s.getWageSource();
+        this.compensationAgreementId = s.getCompensationAgreementId();
+        this.compensationAgreementReference = s.getCompensationAgreementReference();
+        this.compensationComponentId = s.getCompensationComponentId();
+        this.compensationComponentCode = s.getCompensationComponentCode();
+        this.compensationComponentName = s.getCompensationComponentName();
+        this.compensationBasis = s.getCompensationBasis();
+        this.compensationCurrencyCode = s.getCompensationCurrencyCode();
+        this.compensationRate = s.getCompensationRate();
+        this.compensationCalculatedAmount = s.getCompensationCalculatedAmount();
         // الإيراد ناقص أجر السائق (قبل المصروفات الفعلية). تكلفة تشغيل المعدة مؤشر فقط ولا تدخل هنا.
         this.priceAfterWage = s.getPrice().subtract(s.getDriverWage());
         this.notes = s.getNotes();
@@ -119,6 +140,16 @@ public class ShiftResponse {
     }
 
     public Long getDriverWageJournalEntryId() { return driverWageJournalEntryId; }
+    public String getWageSource() { return wageSource; }
+    public Long getCompensationAgreementId() { return compensationAgreementId; }
+    public String getCompensationAgreementReference() { return compensationAgreementReference; }
+    public Long getCompensationComponentId() { return compensationComponentId; }
+    public String getCompensationComponentCode() { return compensationComponentCode; }
+    public String getCompensationComponentName() { return compensationComponentName; }
+    public String getCompensationBasis() { return compensationBasis; }
+    public String getCompensationCurrencyCode() { return compensationCurrencyCode; }
+    public BigDecimal getCompensationRate() { return compensationRate; }
+    public BigDecimal getCompensationCalculatedAmount() { return compensationCalculatedAmount; }
 
     public BigDecimal getEquipmentOperatingCost() {
         return equipmentOperatingCost;

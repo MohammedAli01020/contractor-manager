@@ -95,6 +95,8 @@ class ShiftsApi {
   Future<Map<String, dynamic>> fetchDefaults({
     int? driverId,
     int? equipmentId,
+    int? siteId,
+    String? shiftDate,
     required String shiftType,
   }) async {
     final response = await _dio.get<Map<String, dynamic>>(
@@ -102,6 +104,8 @@ class ShiftsApi {
       queryParameters: {
         if (driverId != null) 'driverId': driverId,
         if (equipmentId != null) 'equipmentId': equipmentId,
+        if (siteId != null) 'siteId': siteId,
+        if (shiftDate != null) 'shiftDate': shiftDate,
         'shiftType': shiftType,
       },
     );

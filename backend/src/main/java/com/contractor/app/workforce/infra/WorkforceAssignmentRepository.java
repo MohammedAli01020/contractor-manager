@@ -30,4 +30,9 @@ public interface WorkforceAssignmentRepository extends JpaRepository<WorkforceAs
     @Query("select a from WorkforceAssignment a where a.id = :id and a.tenantId = :tenantId")
     Optional<WorkforceAssignment> findByIdAndTenantIdForUpdate(
             @Param("id") Long id, @Param("tenantId") Long tenantId);
+
+    @Lock(LockModeType.PESSIMISTIC_READ)
+    @Query("select a from WorkforceAssignment a where a.tenantId = :tenantId and a.workforceMemberId = :memberId")
+    List<WorkforceAssignment> findAllForWageResolution(
+            @Param("tenantId") Long tenantId, @Param("memberId") Long memberId);
 }

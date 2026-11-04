@@ -56,6 +56,39 @@ public class Shift extends BaseTenantEntity {
     @Column(name = "driver_wage_journal_entry_id", unique = true)
     private Long driverWageJournalEntryId;
 
+    @Column(name = "wage_source", nullable = false, length = 30)
+    private String wageSource = "LEGACY_DRIVER_RATE";
+
+    @Column(name = "compensation_agreement_id")
+    private Long compensationAgreementId;
+
+    @Column(name = "compensation_component_id")
+    private Long compensationComponentId;
+
+    @Column(name = "compensation_agreement_reference", length = 80)
+    private String compensationAgreementReference;
+
+    @Column(name = "compensation_component_code", nullable = false, length = 60)
+    private String compensationComponentCode = "LEGACY_DRIVER_RATE";
+
+    @Column(name = "compensation_component_name", nullable = false, length = 120)
+    private String compensationComponentName = "Legacy driver rate";
+
+    @Column(name = "compensation_basis", nullable = false, length = 20)
+    private String compensationBasis = "SHIFT";
+
+    @Column(name = "compensation_currency_code", length = 3)
+    private String compensationCurrencyCode;
+
+    @Column(name = "compensation_unit_code", length = 30)
+    private String compensationUnitCode;
+
+    @Column(name = "compensation_rate", nullable = false, precision = 15, scale = 2)
+    private BigDecimal compensationRate;
+
+    @Column(name = "compensation_calculated_amount", nullable = false, precision = 15, scale = 2)
+    private BigDecimal compensationCalculatedAmount;
+
     @Column(length = 500)
     private String notes;
 
@@ -154,6 +187,10 @@ public class Shift extends BaseTenantEntity {
 
     public void setDriverWage(BigDecimal driverWage) {
         this.driverWage = driverWage;
+        this.compensationCalculatedAmount = driverWage;
+        if ("LEGACY_DRIVER_RATE".equals(this.wageSource)) {
+            this.compensationRate = driverWage;
+        }
     }
 
     public Long getDriverWageJournalEntryId() { return driverWageJournalEntryId; }
@@ -168,6 +205,45 @@ public class Shift extends BaseTenantEntity {
 
     public void setEquipmentOperatingCost(BigDecimal equipmentOperatingCost) {
         this.equipmentOperatingCost = equipmentOperatingCost;
+    }
+
+    public String getWageSource() { return wageSource; }
+    public Long getCompensationAgreementId() { return compensationAgreementId; }
+    public Long getCompensationComponentId() { return compensationComponentId; }
+    public String getCompensationAgreementReference() { return compensationAgreementReference; }
+    public String getCompensationComponentCode() { return compensationComponentCode; }
+    public String getCompensationComponentName() { return compensationComponentName; }
+    public String getCompensationBasis() { return compensationBasis; }
+    public String getCompensationCurrencyCode() { return compensationCurrencyCode; }
+    public String getCompensationUnitCode() { return compensationUnitCode; }
+    public BigDecimal getCompensationRate() { return compensationRate; }
+    public BigDecimal getCompensationCalculatedAmount() { return compensationCalculatedAmount; }
+
+    public void applyCompensationSnapshot(String source, Long agreementId, Long componentId,
+            String agreementReference, String componentCode, String componentName,
+            String basis, String currencyCode, String unitCode, BigDecimal rate, BigDecimal amount) {
+        if (source == null || componentCode == null || componentName == null || basis == null
+                || rate == null || amount == null || rate.signum() < 0 || amount.signum() < 0) {
+            throw new IllegalArgumentException("Invalid shift compensation snapshot");
+        }
+        if ("AGREEMENT".equals(source) && (agreementId == null || componentId == null || currencyCode == null)) {
+            throw new IllegalArgumentException("Agreement snapshot requires agreement, component and currency");
+        }
+        if (!"AGREEMENT".equals(source) && !"LEGACY_DRIVER_RATE".equals(source)) {
+            throw new IllegalArgumentException("Unsupported shift wage source");
+        }
+        this.wageSource = source;
+        this.compensationAgreementId = agreementId;
+        this.compensationComponentId = componentId;
+        this.compensationAgreementReference = agreementReference;
+        this.compensationComponentCode = componentCode;
+        this.compensationComponentName = componentName;
+        this.compensationBasis = basis;
+        this.compensationCurrencyCode = currencyCode;
+        this.compensationUnitCode = unitCode;
+        this.compensationRate = rate;
+        this.compensationCalculatedAmount = amount;
+        this.driverWage = amount;
     }
 
     public String getNotes() {

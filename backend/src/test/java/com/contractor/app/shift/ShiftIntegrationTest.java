@@ -258,9 +258,10 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
     @Test
     void defaultsEndpointSuggestsWageAndPrice() throws Exception {
         getJson("/api/v1/shifts/defaults?driverId=" + driverId + "&equipmentId=" + equipmentId
-                + "&shiftType=EVENING", token)
+                + "&shiftType=EVENING&siteId=" + siteId + "&shiftDate=" + day(1), token)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.driverWage").value(175.0))
+                .andExpect(jsonPath("$.wageSource").value("LEGACY_DRIVER_RATE"))
                 .andExpect(jsonPath("$.price").value(1200.0))
                 .andExpect(jsonPath("$.equipmentOperatingCost").value(500.0));
     }
@@ -610,23 +611,71 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
     }
 
     @Test
-    void zeroWageShiftCannotBeCompleted() throws Exception {
-        Map<String, Object> startBody = shiftBody(siteId, driverId, equipmentId, day(1), "MORNING");
-        startBody.put("driverWage", BigDecimal.ZERO);
-        JsonNode running = startShift(token, startBody);
+    void approvedZeroWageShiftCanFinishWithoutWageOrAdvanceRecoveryPostings() throws Exception {
+        long memberId = jdbcTemplate.queryForObject(
+                "SELECT workforce_member_id FROM drivers WHERE id = ?", Long.class, driverId);
+        String reference = "WF05-ZERO-" + java.util.UUID.randomUUID().toString().substring(0, 8);
+        jdbcTemplate.update("INSERT INTO compensation_agreements "
+                + "(tenant_id, workforce_member_id, agreement_reference, status, effective_from, "
+                + "currency_code, source, approved_by_user_id, approved_at, created_by_user_id, updated_by_user_id) "
+                + "VALUES (?, ?, ?, 'APPROVED', ?, 'EGP', 'MANUAL', ?, ?, ?, ?)",
+                tenantId, memberId, reference, day(10), actorUserId,
+                LocalDateTime.now(java.time.ZoneOffset.UTC), actorUserId, actorUserId);
+        Long agreementId = jdbcTemplate.queryForObject(
+                "SELECT id FROM compensation_agreements WHERE tenant_id = ? AND agreement_reference = ?",
+                Long.class, tenantId, reference);
+        jdbcTemplate.update("INSERT INTO compensation_components "
+                + "(tenant_id, compensation_agreement_id, component_code, display_name, basis, rate, shift_type, sort_order) "
+                + "VALUES (?, ?, 'MORNING_BASE', 'وردية بدون أجر', 'SHIFT', 0.00, 'MORNING', 0)",
+                tenantId, agreementId);
 
-        Map<String, Object> finish = versionBody(running.path("version").asLong());
-        postJson("/api/v1/shifts/" + running.path("id").asLong() + "/finish", finish, token)
-                .andExpect(status().isConflict());
+        seedCashBalance(new BigDecimal("1000.00"));
+        Long cashId = jdbcTemplate.queryForObject(
+                "SELECT id FROM chart_of_accounts WHERE tenant_id = ? AND account_code = '1000'",
+                Long.class, tenantId);
+        Map<String, Object> advance = new HashMap<>();
+        advance.put("clientRequestKey", "zero-wage-recoverable-" + java.util.UUID.randomUUID());
+        advance.put("advanceDate", day(2).toString());
+        advance.put("amount", new BigDecimal("200.00"));
+        advance.put("paymentAccountId", cashId);
+        advance.put("description", "سلفة قابلة للاسترداد");
+        advance.put("advanceType", "RECOVERABLE");
+        postJson("/api/v1/drivers/" + driverId + "/ledger/advances", advance, token)
+                .andExpect(status().isCreated());
 
-        Shift unchanged = shiftRepository.findById(running.path("id").asLong())
-                .orElseThrow(AssertionError::new);
-        assertThat(unchanged.getStatus().name()).isEqualTo("IN_PROGRESS");
-        assertThat(unchanged.getDriverWage()).isEqualByComparingTo("0.00");
-        assertThat(unchanged.getDriverWageJournalEntryId()).isNull();
+        JsonNode running = startShift(token,
+                shiftBody(siteId, driverId, equipmentId, day(1), "MORNING"));
+        long shiftId = running.path("id").asLong();
+        assertThat(running.path("driverWage").decimalValue()).isEqualByComparingTo("0.00");
+        assertThat(running.path("wageSource").asText()).isEqualTo("AGREEMENT");
+
+        JsonNode completed = finishShift(token, running);
+
+        assertThat(completed.path("status").asText()).isEqualTo("COMPLETED");
+        assertThat(completed.path("finishedAt").isNull()).isFalse();
+        assertThat(completed.path("driverWage").decimalValue()).isEqualByComparingTo("0.00");
+        assertThat(completed.path("driverWageJournalEntryId").isNull()).isTrue();
         assertThat(jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM driver_ledger_entries WHERE shift_id = ? AND transaction_type = 'EARNING'",
-                Integer.class, running.path("id").asLong())).isZero();
+                "SELECT COUNT(*) FROM journal_entries WHERE tenant_id = ? AND source_type = 'SHIFT_WAGE' AND source_id = ?",
+                Integer.class, tenantId, shiftId)).isZero();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM journal_entries WHERE tenant_id = ? AND posting_key = ?",
+                Integer.class, tenantId, "shift-wage-" + shiftId)).isZero();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM driver_ledger_entries WHERE tenant_id = ? AND shift_id = ? "
+                        + "AND transaction_type = 'EARNING'",
+                Integer.class, tenantId, shiftId)).isZero();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM driver_ledger_entries WHERE tenant_id = ? AND shift_id = ? "
+                        + "AND transaction_type = 'ADVANCE_RECOVERY'",
+                Integer.class, tenantId, shiftId)).isZero();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM journal_entries WHERE tenant_id = ? AND posting_key = ?",
+                Integer.class, tenantId, "shift-advance-recovery-" + shiftId)).isZero();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM driver_ledger_entries WHERE tenant_id = ? AND driver_id = ? "
+                        + "AND transaction_type = 'RECOVERABLE_ADVANCE'",
+                Integer.class, tenantId, driverId)).isEqualTo(1);
     }
 
     @Test
@@ -649,25 +698,10 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
         assertThat(completed.path("driverWageJournalEntryId").isNull()).isFalse();
     }
 
-    @Test
-    void databaseRejectsDirectCompletionOfZeroWageShift() throws Exception {
-        Map<String, Object> startBody = shiftBody(siteId, driverId, equipmentId, day(1), "MORNING");
-        startBody.put("driverWage", BigDecimal.ZERO);
-        JsonNode running = startShift(token, startBody);
-        long id = running.path("id").asLong();
 
-        assertThatThrownBy(() -> jdbcTemplate.update(
-                "UPDATE shifts SET status = 'COMPLETED', finished_at = UTC_TIMESTAMP(6) WHERE id = ?", id))
-                .hasMessageContaining("COMPLETED_SHIFT_WAGE_REQUIRED");
-
-        Shift unchanged = shiftRepository.findById(id).orElseThrow(AssertionError::new);
-        assertThat(unchanged.getStatus().name()).isEqualTo("IN_PROGRESS");
-        assertThat(unchanged.getDriverWage()).isEqualByComparingTo("0.00");
-        assertThat(unchanged.getDriverWageJournalEntryId()).isNull();
-    }
 
     @Test
-    void databaseRejectsReinstatingCancelledZeroWageShiftAsCompleted() throws Exception {
+    void previouslyFinishedZeroWageShiftCanBeReinstatedWithoutWageJournal() throws Exception {
         Map<String, Object> startBody = shiftBody(siteId, driverId, equipmentId, day(1), "MORNING");
         startBody.put("driverWage", BigDecimal.ZERO);
         JsonNode running = startShift(token, startBody);
@@ -677,14 +711,12 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
         jdbcTemplate.update(
                 "UPDATE shifts SET status = 'CANCELLED', finished_at = UTC_TIMESTAMP(6) WHERE id = ?", id);
 
-        assertThatThrownBy(() -> jdbcTemplate.update(
-                "UPDATE shifts SET status = 'COMPLETED' WHERE id = ?", id))
-                .hasMessageContaining("COMPLETED_SHIFT_WAGE_REQUIRED");
+        JsonNode reinstated = body(postJson("/api/v1/shifts/" + id + "/reinstate",
+                versionBody(running.path("version").asLong()), token).andExpect(status().isOk()));
 
-        Shift unchanged = shiftRepository.findById(id).orElseThrow(AssertionError::new);
-        assertThat(unchanged.getStatus()).isEqualTo(com.contractor.app.shift.domain.ShiftStatus.CANCELLED);
-        assertThat(unchanged.getDriverWage()).isEqualByComparingTo("0.00");
-        assertThat(unchanged.getDriverWageJournalEntryId()).isNull();
+        assertThat(reinstated.path("status").asText()).isEqualTo("COMPLETED");
+        assertThat(reinstated.path("driverWage").decimalValue()).isEqualByComparingTo("0.00");
+        assertThat(reinstated.path("driverWageJournalEntryId").isNull()).isTrue();
     }
 
     @Test
@@ -1069,5 +1101,72 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
         }
         assertThat(correctionAudited).isTrue();
     }
+
+
+    @Test
+    void approvedGeneralAgreementOverridesLegacyDriverRateAndIsFrozenOnShift() throws Exception {
+        long memberId = jdbcTemplate.queryForObject(
+                "SELECT workforce_member_id FROM drivers WHERE id = ?", Long.class, driverId);
+        String reference = "WF05-" + java.util.UUID.randomUUID().toString().substring(0, 8);
+        jdbcTemplate.update("INSERT INTO compensation_agreements "
+                + "(tenant_id, workforce_member_id, agreement_reference, status, effective_from, "
+                + "currency_code, source, approved_by_user_id, approved_at, created_by_user_id, updated_by_user_id) "
+                + "VALUES (?, ?, ?, 'APPROVED', ?, 'EGP', 'MANUAL', ?, ?, ?, ?)",
+                tenantId, memberId, reference, day(10), actorUserId,
+                LocalDateTime.now(java.time.ZoneOffset.UTC), actorUserId, actorUserId);
+        Long agreementId = jdbcTemplate.queryForObject(
+                "SELECT id FROM compensation_agreements WHERE tenant_id = ? AND agreement_reference = ?",
+                Long.class, tenantId, reference);
+        jdbcTemplate.update("INSERT INTO compensation_components "
+                + "(tenant_id, compensation_agreement_id, component_code, display_name, basis, rate, shift_type, sort_order) "
+                + "VALUES (?, ?, 'MORNING_BASE', 'أجر الوردية الصباحية', 'SHIFT', 275.00, 'MORNING', 0)",
+                tenantId, agreementId);
+
+        getJson("/api/v1/shifts/defaults?driverId=" + driverId + "&equipmentId=" + equipmentId
+                + "&shiftType=MORNING&siteId=" + siteId + "&shiftDate=" + day(1), token)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.driverWage").value(275.0))
+                .andExpect(jsonPath("$.wageSource").value("AGREEMENT"));
+
+        Map<String, Object> manualOverride = shiftBody(siteId, driverId, equipmentId, day(1), "MORNING");
+        manualOverride.put("driverWage", 999.00);
+        postJson("/api/v1/shifts", manualOverride, token)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CONFLICT"));
+
+        JsonNode shift = startShift(token, shiftBody(siteId, driverId, equipmentId, day(1), "MORNING"));
+
+        assertThat(shift.path("driverWage").decimalValue()).isEqualByComparingTo("275.00");
+        assertThat(shift.path("wageSource").asText()).isEqualTo("AGREEMENT");
+        assertThat(shift.path("compensationAgreementId").asLong()).isEqualTo(agreementId);
+        assertThat(shift.path("compensationAgreementReference").asText()).isEqualTo(reference);
+        assertThat(shift.path("compensationBasis").asText()).isEqualTo("SHIFT");
+        assertThat(shift.path("compensationRate").decimalValue()).isEqualByComparingTo("275.00");
+
+        jdbcTemplate.update("UPDATE compensation_components SET rate = 999.00 "
+                + "WHERE tenant_id = ? AND compensation_agreement_id = ?", tenantId, agreementId);
+        JsonNode reread = body(getJson("/api/v1/shifts/" + shift.path("id").asLong(), token)
+                .andExpect(status().isOk()));
+        assertThat(reread.path("driverWage").decimalValue()).isEqualByComparingTo("275.00");
+        assertThat(reread.path("compensationRate").decimalValue()).isEqualByComparingTo("275.00");
+    }
+
+    @Test
+    void contractualGapDoesNotSilentlyFallBackToLegacyDriverRate() throws Exception {
+        long memberId = jdbcTemplate.queryForObject(
+                "SELECT workforce_member_id FROM drivers WHERE id = ?", Long.class, driverId);
+        String reference = "WF05-GAP-" + java.util.UUID.randomUUID().toString().substring(0, 8);
+        jdbcTemplate.update("INSERT INTO compensation_agreements "
+                + "(tenant_id, workforce_member_id, agreement_reference, status, effective_from, "
+                + "currency_code, source, approved_by_user_id, approved_at, created_by_user_id, updated_by_user_id) "
+                + "VALUES (?, ?, ?, 'APPROVED', ?, 'EGP', 'MANUAL', ?, ?, ?, ?)",
+                tenantId, memberId, reference, today().plusDays(1), actorUserId,
+                LocalDateTime.now(java.time.ZoneOffset.UTC), actorUserId, actorUserId);
+
+        postJson("/api/v1/shifts", shiftBody(siteId, driverId, equipmentId, today(), "MORNING"), token)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CONFLICT"));
+    }
+
 
 }

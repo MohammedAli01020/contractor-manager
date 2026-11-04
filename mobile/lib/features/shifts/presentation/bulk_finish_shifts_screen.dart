@@ -68,6 +68,9 @@ class _BulkFinishShiftsScreenState extends State<BulkFinishShiftsScreen> {
 
     for (final shift in selected) {
       if (!mounted) return;
+      final zeroWageWarning = shift.driverWage == 0
+          ? '\n\nتنبيه: أجر السائق صفر؛ لن يُنشأ قيد أجر أو استحقاق، ولن تُسترد أي سلفة من هذه الوردية.\n'
+          : '';
       final confirm = await showDialog<bool>(
         context: context,
         barrierDismissible: false,
@@ -77,7 +80,8 @@ class _BulkFinishShiftsScreenState extends State<BulkFinishShiftsScreen> {
             'السائق: ${shift.driverName}\n'
             'المعدة: ${_equipmentLabel(shift)}\n'
             'الموقع: ${shift.siteName}\n'
-            'التاريخ: ${shift.shiftDate}\n\n'
+            'التاريخ: ${shift.shiftDate}\n'
+            '$zeroWageWarning\n'
             'هل تؤكد إنهاء هذه الوردية تحديدًا؟ لن يتم إنهاء أي وردية دون تأكيدك.',
           ),
           actions: [

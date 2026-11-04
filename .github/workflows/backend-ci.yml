@@ -181,8 +181,9 @@ jobs:
                     for key in ("tests", "failures", "errors", "skipped")}
           names = [case.attrib.get("name") for case in root.findall(".//testcase")]
           required = {
-              "zeroWageShiftCannotBeCompleted",
-              "databaseRejectsDirectCompletionOfZeroWageShift",
+              "approvedZeroWageShiftCanFinishWithoutWageOrAdvanceRecoveryPostings",
+              "previouslyFinishedZeroWageShiftCanBeReinstatedWithoutWageJournal",
+              "finishRecognizesDriverWageExactlyOnce",
               "databaseRejectsCompletingPositiveWageShiftWithoutJournal",
               "databaseRejectsUnrelatedJournalLinkEvenWhenShiftWageIsZero",
               "zeroEquipmentOperatingCostDoesNotPreventShiftCompletion",

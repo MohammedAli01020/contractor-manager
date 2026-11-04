@@ -20,6 +20,7 @@ import com.contractor.app.common.util.Texts;
 import com.contractor.app.driver.domain.Driver;
 import com.contractor.app.driver.domain.DriverAvailability;
 import com.contractor.app.driver.infra.DriverRepository;
+import com.contractor.app.workforce.domain.ShiftCompensationResolver;
 import com.contractor.app.equipment.domain.Equipment;
 import com.contractor.app.equipment.domain.EquipmentStatus;
 import com.contractor.app.equipment.infra.EquipmentRepository;
@@ -69,12 +70,14 @@ public class ShiftService {
     private final DriverLedgerEntryRepository driverLedger;
     private final DefaultChartOfAccountsService defaultAccounts;
     private final ZoneId businessZone;
+    private final ShiftCompensationResolver compensationResolver;
 
     public ShiftService(ShiftRepository shifts, SiteRepository sites, DriverRepository drivers,
                         EquipmentRepository equipment, AuditService audit,
                         JournalPostingService journalPosting, JournalEntryRepository journalEntries,
                         DriverLedgerEntryRepository driverLedger,
                         DefaultChartOfAccountsService defaultAccounts,
+                        ShiftCompensationResolver compensationResolver,
                         @Value("${app.business-timezone:Africa/Cairo}") String businessTimezone) {
         this.shifts = shifts;
         this.sites = sites;
@@ -85,6 +88,7 @@ public class ShiftService {
         this.journalEntries = journalEntries;
         this.driverLedger = driverLedger;
         this.defaultAccounts = defaultAccounts;
+        this.compensationResolver = compensationResolver;
         this.businessZone = ZoneId.of(businessTimezone);
     }
 
@@ -118,8 +122,14 @@ public class ShiftService {
     }
 
     /** القيم التي سيقترحها النموذج قبل الحفظ. */
-    @Transactional(readOnly = true)
+    @Transactional
     public ShiftDefaultsResponse defaults(Long tenantId, Long driverId, Long equipmentId, ShiftType type) {
+        return defaults(tenantId, driverId, equipmentId, type, null, null);
+    }
+
+    @Transactional
+    public ShiftDefaultsResponse defaults(Long tenantId, Long driverId, Long equipmentId, ShiftType type,
+                                          Long siteId, LocalDate shiftDate) {
         if (driverId == null && equipmentId == null) {
             throw ApiException.badRequest("اختار سائقًا أو معدة لحساب القيم الافتراضية.");
         }
@@ -127,8 +137,23 @@ public class ShiftService {
                 .orElseThrow(() -> ApiException.notFound("السائق أو العامل غير موجود."));
         Equipment item = equipmentId == null ? null : equipment.findByIdAndTenantId(equipmentId, tenantId)
                 .orElseThrow(() -> ApiException.notFound("المعدة غير موجودة."));
+        BigDecimal suggestedWage = null;
+        String wageSource = null;
+        if (driver != null) {
+            if (siteId != null) {
+                LocalDate date = shiftDate == null ? today() : shiftDate;
+                Shift preview = new Shift(tenantId, date, type, siteId, driverId, equipmentId);
+                compensationResolver.resolveAndApply(tenantId, driver, date, siteId, type, null, preview);
+                suggestedWage = preview.getDriverWage();
+                wageSource = preview.getWageSource();
+            } else {
+                // Without a site/date there is no safe way to resolve an assignment-scoped agreement.
+                suggestedWage = null;
+            }
+        }
         return new ShiftDefaultsResponse(
-                driver == null ? null : Money.scale(rateFor(driver, type)),
+                suggestedWage,
+                wageSource,
                 item == null ? null : Money.scale(item.getDefaultShiftPrice()),
                 item == null ? null : Money.scale(item.getOperatingCostPerShift()));
     }
@@ -159,9 +184,8 @@ public class ShiftService {
         shift.setStartedAt(LocalDateTime.now(ZoneOffset.UTC));
         shift.setNotes(Texts.blankToNull(request.getNotes()));
         // نسخ ثابتة وقت التسجيل: تغيير الأسعار لاحقًا لا يمس هذه الوردية
-        shift.setDriverWage(request.getDriverWage() != null
-                ? Money.scale(request.getDriverWage())
-                : Money.scale(rateFor(driver, request.getShiftType())));
+        compensationResolver.resolveAndApply(tenantId, driver, date, request.getSiteId(),
+                request.getShiftType(), request.getDriverWage(), shift);
         shift.setPrice(request.getPrice() != null
                 ? Money.scale(request.getPrice())
                 : Money.scale(item.getDefaultShiftPrice()));
@@ -203,15 +227,20 @@ public class ShiftService {
         Driver driver = requireDriver(tenantId, request.getDriverId(), shift.getDriverId());
         Equipment item = requireEquipment(tenantId, request.getEquipmentId(), shift.getEquipmentId());
 
+        BigDecimal previousWage = shift.getDriverWage();
         boolean driverChanged = !request.getDriverId().equals(shift.getDriverId());
         boolean typeChanged = request.getShiftType() != shift.getShiftType();
         boolean equipmentChanged = !request.getEquipmentId().equals(shift.getEquipmentId());
 
-        // الأجر: قيمة صريحة، أو إعادة احتساب إن تغيّر السائق/نوع الوردية، وإلا تبقى النسخة القديمة
-        BigDecimal wage = request.getDriverWage() != null
-                ? Money.scale(request.getDriverWage())
-                : (driverChanged || typeChanged ? Money.scale(rateFor(driver, request.getShiftType()))
-                        : shift.getDriverWage());
+        boolean siteChanged = !java.util.Objects.equals(request.getSiteId(), shift.getSiteId());
+        boolean dateChanged = !java.util.Objects.equals(request.getShiftDate(), shift.getShiftDate());
+        boolean wageOverrideChanged = request.getDriverWage() != null
+                && request.getDriverWage().compareTo(shift.getDriverWage()) != 0;
+        if (driverChanged || typeChanged || siteChanged || dateChanged || wageOverrideChanged) {
+            compensationResolver.resolveAndApply(tenantId, driver, request.getShiftDate(), request.getSiteId(),
+                    request.getShiftType(), wageOverrideChanged ? request.getDriverWage() : null, shift);
+        }
+        BigDecimal wage = shift.getDriverWage();
         BigDecimal price = request.getPrice() != null
                 ? Money.scale(request.getPrice())
                 : (equipmentChanged ? Money.scale(item.getDefaultShiftPrice()) : shift.getPrice());
@@ -226,7 +255,7 @@ public class ShiftService {
                 .track("driverId", shift.getDriverId(), request.getDriverId())
                 .track("equipmentId", shift.getEquipmentId(), request.getEquipmentId())
                 .track("price", shift.getPrice(), price)
-                .track("driverWage", shift.getDriverWage(), wage)
+                .track("driverWage", previousWage, wage)
                 .track("equipmentOperatingCost", shift.getEquipmentOperatingCost(), operatingCost)
                 .track("notes", shift.getNotes(), Texts.blankToNull(request.getNotes()));
 
@@ -258,19 +287,20 @@ public class ShiftService {
         if (actorUserId == null || actorUserId <= 0) {
             throw ApiException.unauthorized("تعذر تحديد المستخدم المنفّذ للترحيل المالي.");
         }
-        // Ensure baseline wage accounts exist, then post the earning in the same outer transaction.
-        defaultAccounts.initializeForTenant(tenantId);
-        ChartAccount wageExpense = defaultAccounts.requireSystemAccount(
-                tenantId, SystemAccountCode.DRIVER_WAGE_EXPENSE);
-        ChartAccount driverPayable = defaultAccounts.requireSystemAccount(
-                tenantId, SystemAccountCode.DRIVER_PAYABLE);
-        if (shift.getDriverWage() == null || shift.getDriverWage().signum() <= 0) {
-            throw ApiException.conflict("لا يمكن إكمال الوردية قبل تحديد أجر موجب للسائق.");
+        if (shift.getDriverWage() == null || shift.getDriverWage().signum() < 0) {
+            throw ApiException.conflict("لا يمكن إكمال الوردية قبل تحديد أجر صالح للسائق.");
         }
-        // Serialize wage recognition against payments for the same worker.
-        drivers.findByIdAndTenantIdForUpdate(shift.getDriverId(), tenantId)
-                .orElseThrow(() -> ApiException.notFound("السائق المرتبط بالوردية غير موجود."));
+        // Zero is an explicit operational wage: complete the shift without zero-value
+        // journal/ledger rows and without recovering advances from a zero earning.
         if (shift.getDriverWage().signum() > 0) {
+            // Serialize wage recognition against payments for the same worker.
+            drivers.findByIdAndTenantIdForUpdate(shift.getDriverId(), tenantId)
+                    .orElseThrow(() -> ApiException.notFound("السائق المرتبط بالوردية غير موجود."));
+            defaultAccounts.initializeForTenant(tenantId);
+            ChartAccount wageExpense = defaultAccounts.requireSystemAccount(
+                    tenantId, SystemAccountCode.DRIVER_WAGE_EXPENSE);
+            ChartAccount driverPayable = defaultAccounts.requireSystemAccount(
+                    tenantId, SystemAccountCode.DRIVER_PAYABLE);
             com.contractor.app.accounting.domain.JournalEntry wageJournal = journalPosting.post(tenantId, actorUserId, new JournalPostingRequest(
                     "shift-wage-" + shift.getId(), "SHIFT_WAGE", shift.getId(), shift.getShiftDate(),
                     "استحقاق أجر السائق عن الوردية رقم " + shift.getId(), null,
@@ -345,12 +375,13 @@ public class ShiftService {
 
         ShiftStatus restoredStatus;
         if (shift.getFinishedAt() != null) {
-            // A legacy cancelled shift may have been completed before wage posting became mandatory.
-            // Never restore it as completed unless its positive wage and immutable journal link exist.
-            if (shift.getDriverWage() == null || shift.getDriverWage().signum() <= 0
-                    || shift.getDriverWageJournalEntryId() == null) {
+            // A completed zero-wage shift intentionally has no wage journal.
+            // Positive wages must retain their immutable journal link.
+            if (shift.getDriverWage() == null || shift.getDriverWage().signum() < 0
+                    || (shift.getDriverWage().signum() > 0 && shift.getDriverWageJournalEntryId() == null)
+                    || (shift.getDriverWage().signum() == 0 && shift.getDriverWageJournalEntryId() != null)) {
                 throw ApiException.conflict(
-                        "لا يمكن إعادة تفعيل وردية منتهية دون أجر موجب وقيد أجر محاسبي صحيح.");
+                        "لا يمكن إعادة تفعيل الوردية المنتهية دون لقطة أجر صحيحة ومتسقة مع القيد المحاسبي.");
             }
             // وردية كانت منتهية قبل إلغائها: أعدها منتهية مع الاحتفاظ بوقت الإنهاء والقيم المحفوظة.
             restoredStatus = ShiftStatus.COMPLETED;

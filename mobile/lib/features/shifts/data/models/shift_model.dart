@@ -10,6 +10,7 @@ class ShiftModel {
     required this.equipmentName,
     required this.price,
     required this.driverWage,
+    this.wageSource = '',
     required this.priceAfterWage,
     required this.notes,
     this.siteId,
@@ -34,6 +35,7 @@ class ShiftModel {
       equipmentName: _stringValue(json['equipmentName'], 'غير محددة'),
       price: _numberValue(json['price']),
       driverWage: _numberValue(json['driverWage']),
+      wageSource: _stringValue(json['wageSource'], ''),
       equipmentOperatingCost: _numberValue(json['equipmentOperatingCost']),
       priceAfterWage: _numberValue(json['priceAfterWage']),
       notes: _stringValue(json['notes'], ''),
@@ -57,6 +59,7 @@ class ShiftModel {
   final String equipmentName;
   final double price;
   final double driverWage;
+  final String wageSource;
   final double equipmentOperatingCost;
   final double priceAfterWage;
   final String notes;
