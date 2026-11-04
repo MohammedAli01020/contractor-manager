@@ -3,6 +3,7 @@ package com.contractor.app.workforce.domain;
 import com.contractor.app.common.error.ApiException;
 import com.contractor.app.site.domain.Site;
 import com.contractor.app.site.infra.SiteRepository;
+import com.contractor.app.tenant.infra.TenantRepository;
 import com.contractor.app.workforce.api.dto.EndWorkforceAssignmentRequest;
 import com.contractor.app.workforce.api.dto.WorkforceAssignmentRequest;
 import com.contractor.app.workforce.api.dto.WorkforceAssignmentResponse;
@@ -25,15 +26,18 @@ public class WorkforceAssignmentService {
     private final WorkforceRoleRepository roles;
     private final WorkforceAssignmentRepository assignments;
     private final SiteRepository sites;
+    private final TenantRepository tenants;
 
     public WorkforceAssignmentService(WorkforceMemberRepository members,
                                       WorkforceRoleRepository roles,
                                       WorkforceAssignmentRepository assignments,
-                                      SiteRepository sites) {
+                                      SiteRepository sites,
+                                      TenantRepository tenants) {
         this.members = members;
         this.roles = roles;
         this.assignments = assignments;
         this.sites = sites;
+        this.tenants = tenants;
     }
 
     @Transactional(readOnly = true)
@@ -45,6 +49,10 @@ public class WorkforceAssignmentService {
 
     @Transactional
     public WorkforceRoleResponse createRole(Long tenantId, WorkforceRoleRequest request) {
+        // Use the same tenant-first lock as default-role provisioning so concurrent
+        // role creation requests cannot both pass the existence check.
+        tenants.findByIdForUpdate(tenantId)
+                .orElseThrow(() -> ApiException.notFound("الشركة غير موجودة."));
         String code = request.getCode().trim().toUpperCase(Locale.ROOT);
         String name = request.getName().trim();
         if (roles.existsByTenantIdAndCode(tenantId, code)) {
