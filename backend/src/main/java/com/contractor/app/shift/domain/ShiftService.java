@@ -122,8 +122,14 @@ public class ShiftService {
     }
 
     /** القيم التي سيقترحها النموذج قبل الحفظ. */
-    @Transactional(readOnly = true)
+    @Transactional
     public ShiftDefaultsResponse defaults(Long tenantId, Long driverId, Long equipmentId, ShiftType type) {
+        return defaults(tenantId, driverId, equipmentId, type, null, null);
+    }
+
+    @Transactional
+    public ShiftDefaultsResponse defaults(Long tenantId, Long driverId, Long equipmentId, ShiftType type,
+                                          Long siteId, LocalDate shiftDate) {
         if (driverId == null && equipmentId == null) {
             throw ApiException.badRequest("اختار سائقًا أو معدة لحساب القيم الافتراضية.");
         }
@@ -131,8 +137,19 @@ public class ShiftService {
                 .orElseThrow(() -> ApiException.notFound("السائق أو العامل غير موجود."));
         Equipment item = equipmentId == null ? null : equipment.findByIdAndTenantId(equipmentId, tenantId)
                 .orElseThrow(() -> ApiException.notFound("المعدة غير موجودة."));
+        BigDecimal suggestedWage = null;
+        if (driver != null) {
+            if (siteId != null) {
+                LocalDate date = shiftDate == null ? today() : shiftDate;
+                Shift preview = new Shift(tenantId, date, type, siteId, driverId, equipmentId);
+                compensationResolver.resolveAndApply(tenantId, driver, date, siteId, type, null, preview);
+                suggestedWage = preview.getDriverWage();
+            } else {
+                suggestedWage = Money.scale(rateFor(driver, type));
+            }
+        }
         return new ShiftDefaultsResponse(
-                driver == null ? null : Money.scale(rateFor(driver, type)),
+                suggestedWage,
                 item == null ? null : Money.scale(item.getDefaultShiftPrice()),
                 item == null ? null : Money.scale(item.getOperatingCostPerShift()));
     }
