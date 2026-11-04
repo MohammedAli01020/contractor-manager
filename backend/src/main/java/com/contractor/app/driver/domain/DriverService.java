@@ -18,6 +18,7 @@ import com.contractor.app.shift.infra.ShiftRepository;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import javax.persistence.criteria.Predicate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Sort;
@@ -139,8 +140,15 @@ public class DriverService {
         WorkforceMember member = workforceMembers.findByIdAndTenantId(driver.getWorkforceMemberId(), tenantId)
                 .orElseThrow(() -> ApiException.conflict(
                         "تعذر العثور على الهوية العامة المرتبطة بالسائق. أوقف العملية وراجع ربط بيانات العامل."));
-        copyIdentity(driver, member);
-        workforceMembers.saveAndFlush(member);
+        boolean changed = !Objects.equals(member.getFullName(), driver.getName())
+                || !Objects.equals(member.getPhone(), driver.getPhone())
+                || !Objects.equals(member.getNationalId(), driver.getNationalId())
+                || !Objects.equals(member.getNotes(), driver.getNotes())
+                || member.isActive() != driver.isActive();
+        if (changed) {
+            copyIdentity(driver, member);
+            workforceMembers.saveAndFlush(member);
+        }
     }
 
     private static void copyIdentity(Driver driver, WorkforceMember member) {
