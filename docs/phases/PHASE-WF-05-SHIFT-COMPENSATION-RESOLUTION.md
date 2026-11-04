@@ -44,7 +44,7 @@ This compatibility path is temporary and observable; it does not create a synthe
 
 - On shift start: resolve and freeze the wage snapshot using the requested shift date and type.
 - On update while still editable and before posting: if worker, site, date, or shift type changes, resolve again and replace the snapshot in the same transaction. If only notes or equipment details change, retain the snapshot.
-- On finish: require a valid frozen wage snapshot and use its calculated amount for the existing idempotent journal and driver-ledger postings.
+- On finish: require a valid frozen wage snapshot. Positive wages use the existing idempotent journal, earning, and recoverable-advance postings. An explicit zero wage completes the operational shift but creates no zero-value journal/ledger entries and triggers no advance recovery.
 - On completed or financially posted shifts: preserve existing correction workflow; do not recompute from current agreements.
 - On reinstate: preserve the original snapshot for an already-started shift; do not resolve a new agreement retroactively.
 
@@ -96,3 +96,11 @@ The existing `driver_wage` remains the amount consumed by the current accounting
 - Payroll periods, payslips, and bulk payroll.
 - New accounting posting types or changes to driver advance recovery.
 - Production migration execution.
+
+## Explicit zero-wage behavior
+
+- Zero is a valid, intentional wage value; it is distinct from a missing (`null`) wage.
+- A shift with a frozen zero wage may start and finish normally.
+- Finishing a zero-wage shift creates no `SHIFT_WAGE` journal, no `EARNING` ledger entry, and no `ADVANCE_RECOVERY` journal/ledger entry. A recoverable advance remains outstanding until a later positive earning is available.
+- The mobile editor displays a warning beside a zero wage and asks for confirmation before saving/starting. The finish action (including bulk finish) also asks for explicit confirmation and explains that no wage posting or advance recovery will occur.
+- Positive-wage posting behavior remains unchanged. A missing wage is still invalid.

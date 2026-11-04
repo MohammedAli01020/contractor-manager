@@ -287,19 +287,20 @@ public class ShiftService {
         if (actorUserId == null || actorUserId <= 0) {
             throw ApiException.unauthorized("تعذر تحديد المستخدم المنفّذ للترحيل المالي.");
         }
-        // Ensure baseline wage accounts exist, then post the earning in the same outer transaction.
-        defaultAccounts.initializeForTenant(tenantId);
-        ChartAccount wageExpense = defaultAccounts.requireSystemAccount(
-                tenantId, SystemAccountCode.DRIVER_WAGE_EXPENSE);
-        ChartAccount driverPayable = defaultAccounts.requireSystemAccount(
-                tenantId, SystemAccountCode.DRIVER_PAYABLE);
-        if (shift.getDriverWage() == null || shift.getDriverWage().signum() <= 0) {
-            throw ApiException.conflict("لا يمكن إكمال الوردية قبل تحديد أجر موجب للسائق.");
+        if (shift.getDriverWage() == null || shift.getDriverWage().signum() < 0) {
+            throw ApiException.conflict("لا يمكن إكمال الوردية قبل تحديد أجر صالح للسائق.");
         }
-        // Serialize wage recognition against payments for the same worker.
-        drivers.findByIdAndTenantIdForUpdate(shift.getDriverId(), tenantId)
-                .orElseThrow(() -> ApiException.notFound("السائق المرتبط بالوردية غير موجود."));
+        // Zero is an explicit operational wage: complete the shift without zero-value
+        // journal/ledger rows and without recovering advances from a zero earning.
         if (shift.getDriverWage().signum() > 0) {
+            // Serialize wage recognition against payments for the same worker.
+            drivers.findByIdAndTenantIdForUpdate(shift.getDriverId(), tenantId)
+                    .orElseThrow(() -> ApiException.notFound("السائق المرتبط بالوردية غير موجود."));
+            defaultAccounts.initializeForTenant(tenantId);
+            ChartAccount wageExpense = defaultAccounts.requireSystemAccount(
+                    tenantId, SystemAccountCode.DRIVER_WAGE_EXPENSE);
+            ChartAccount driverPayable = defaultAccounts.requireSystemAccount(
+                    tenantId, SystemAccountCode.DRIVER_PAYABLE);
             com.contractor.app.accounting.domain.JournalEntry wageJournal = journalPosting.post(tenantId, actorUserId, new JournalPostingRequest(
                     "shift-wage-" + shift.getId(), "SHIFT_WAGE", shift.getId(), shift.getShiftDate(),
                     "استحقاق أجر السائق عن الوردية رقم " + shift.getId(), null,
@@ -374,12 +375,13 @@ public class ShiftService {
 
         ShiftStatus restoredStatus;
         if (shift.getFinishedAt() != null) {
-            // A legacy cancelled shift may have been completed before wage posting became mandatory.
-            // Never restore it as completed unless its positive wage and immutable journal link exist.
-            if (shift.getDriverWage() == null || shift.getDriverWage().signum() <= 0
-                    || shift.getDriverWageJournalEntryId() == null) {
+            // A completed zero-wage shift intentionally has no wage journal.
+            // Positive wages must retain their immutable journal link.
+            if (shift.getDriverWage() == null || shift.getDriverWage().signum() < 0
+                    || (shift.getDriverWage().signum() > 0 && shift.getDriverWageJournalEntryId() == null)
+                    || (shift.getDriverWage().signum() == 0 && shift.getDriverWageJournalEntryId() != null)) {
                 throw ApiException.conflict(
-                        "لا يمكن إعادة تفعيل وردية منتهية دون أجر موجب وقيد أجر محاسبي صحيح.");
+                        "لا يمكن إعادة تفعيل الوردية المنتهية دون لقطة أجر صحيحة ومتسقة مع القيد المحاسبي.");
             }
             // وردية كانت منتهية قبل إلغائها: أعدها منتهية مع الاحتفاظ بوقت الإنهاء والقيم المحفوظة.
             restoredStatus = ShiftStatus.COMPLETED;

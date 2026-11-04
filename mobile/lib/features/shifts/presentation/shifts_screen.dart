@@ -291,7 +291,11 @@ class _ShiftsView extends StatelessWidget {
         context: context,
         builder: (dialogContext) => AlertDialog(
           title: Text('إنهاء الوردية #${shift.id}؟'),
-          content: const Text('سيتم تغيير حالة الوردية إلى منتهية.'),
+          content: Text(
+            shift.driverWage == 0
+                ? 'أجر السائق لهذه الوردية صفر جنيه. سيتم إنهاؤها دون قيد أجر أو استحقاق، ولن تُسترد أي سلفة من أجر هذه الوردية. هل تؤكد؟'
+                : 'سيتم تغيير حالة الوردية إلى منتهية وترحيل أجر السائق المستحق.',
+          ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('رجوع')),
             ElevatedButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('إنهاء')),

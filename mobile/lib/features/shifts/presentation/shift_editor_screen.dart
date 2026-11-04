@@ -123,6 +123,32 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
     return value.toString();
   }
 
+  bool get _isZeroWage => double.tryParse(_wage.text.trim()) == 0;
+
+  Future<bool> _confirmZeroWage(String action) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('تنبيه: أجر الوردية صفر'),
+        content: Text(
+          'أجر السائق لهذه الوردية 0.00 جنيه. $action بهذه القيمة؟ '
+          'عند إنهاء الوردية لن يُسجل قيد أجر أو استحقاق، ولن تُسترد أي سلفة من أجر هذه الوردية.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('مراجعة الأجر'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('تأكيد والمتابعة'),
+          ),
+        ],
+      ),
+    );
+    return confirmed == true;
+  }
+
   String _message(Object error) {
     if (error is AppFailure) return error.message;
     return 'تعذر تنفيذ الطلب. تحقق من الاتصال وحاول مرة أخرى.';
@@ -161,6 +187,12 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
     if (_driverId == null || _equipmentId == null || _siteId == null) {
       setState(() => _error = 'اختار الموقع والسائق/العامل والمعدة.');
       return;
+    }
+    if (_isZeroWage) {
+      final confirmed = await _confirmZeroWage(
+        widget.shift == null ? 'هل تريد بدء الوردية' : 'هل تريد حفظ الوردية',
+      );
+      if (!mounted || !confirmed) return;
     }
     setState(() {
       _saving = true;
@@ -302,7 +334,33 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
                               : 'يتحدد تلقائيًا عند اختيار الموقع والسائق ونوع الوردية، ويمكن تعديله للعامل بنظام الأجر القديم',
                         ),
                         validator: _moneyValidator,
+                        onChanged: (_) => setState(() {}),
                       ),
+                      if (_isZeroWage) ...[
+                        const SizedBox(height: 8),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.shade50,
+                            border: Border.all(color: Colors.orange.shade300),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(Icons.warning_amber_rounded, color: Colors.orange.shade900),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'تنبيه: أجر هذه الوردية صفر. تأكد أن ذلك مقصود؛ لن يُسجل أجر أو تُخصم سلفة من هذه الوردية عند إنهائها.',
+                                  style: TextStyle(color: Colors.orange.shade900, fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 12),
                       TextFormField(
                         controller: _equipmentCost,
