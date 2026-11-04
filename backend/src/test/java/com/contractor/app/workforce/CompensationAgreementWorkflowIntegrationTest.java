@@ -144,15 +144,14 @@ class CompensationAgreementWorkflowIntegrationTest extends AbstractIntegrationTe
                                 && newId == agreement.getId()
                                 && agreement.getSupersedesAgreementId() != null));
 
-        boolean requestFailed = false;
+        int responseStatus;
         try {
-            postJson(path(newId, "approve-replacement"), Map.of(), token).andReturn();
-        } catch (Exception expected) {
-            requestFailed = true;
+            responseStatus = postJson(path(newId, "approve-replacement"), Map.of(), token)
+                    .andReturn().getResponse().getStatus();
         } finally {
             reset(agreements);
         }
-        assertThat(requestFailed).isTrue();
+        assertThat(responseStatus).isEqualTo(500);
         assertThat(jdbc.queryForObject(
                 "select status from compensation_agreements where id = ?",
                 String.class, oldId)).isEqualTo("APPROVED");
