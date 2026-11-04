@@ -141,15 +141,25 @@ class MasterDataIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void driverUpdateRequiresCurrentVersion() throws Exception {
-        JsonNode created = body(postJson("/api/v1/drivers", driverBody("Old Name", "DRIVER"), token)
+        Map<String, Object> create = driverBody("Old Name", "DRIVER");
+        create.put("nationalId", "29801011234567");
+        JsonNode created = body(postJson("/api/v1/drivers", create, token)
                 .andExpect(status().isCreated()));
         long id = created.path("id").asLong();
 
         Map<String, Object> update = driverBody("New Name", "DRIVER");
+        update.put("nationalId", "29902021234567");
         update.put("version", created.path("version").asLong());
         update.put("morningRate", new BigDecimal("300"));
         JsonNode updated = body(putJson("/api/v1/drivers/" + id, update, token).andExpect(status().isOk()));
         assertThat(updated.path("morningRate").decimalValue()).isEqualByComparingTo("300.00");
+        assertThat(updated.path("nationalId").asText()).isEqualTo("29902021234567");
+        getJson("/api/v1/drivers/" + id, token)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nationalId").value("29902021234567"));
+        getJson("/api/v1/drivers", token)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].nationalId").value(org.hamcrest.Matchers.nullValue()));
 
         putJson("/api/v1/drivers/" + id, update, token).andExpect(status().isConflict());
     }
