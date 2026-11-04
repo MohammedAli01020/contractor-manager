@@ -72,6 +72,20 @@ class CompensationAgreementSchemaIntegrationTest extends AbstractIntegrationTest
     }
 
     @Test
+    void schemaAllowsMemberLevelAgreementWithoutAssignment() {
+        jdbc.update(
+                "insert into compensation_agreements (tenant_id, workforce_member_id, workforce_assignment_id, " +
+                "status, effective_from, currency_code, source, created_by_user_id, updated_by_user_id) " +
+                "values (?, ?, null, 'DRAFT', ?, 'EGP', 'MANUAL', ?, ?)",
+                tenantId, memberId, LocalDate.of(2026, 1, 1), userId, userId);
+
+        assertThat(jdbc.queryForObject(
+                "select count(*) from compensation_agreements where tenant_id = ? " +
+                "and workforce_member_id = ? and workforce_assignment_id is null",
+                Integer.class, tenantId, memberId)).isEqualTo(1);
+    }
+
+    @Test
     void schemaRejectsInvalidBasisUnitAndShiftCombinations() {
         long agreementId = insertDraft(memberId, assignmentId, userId, tenantId);
 
