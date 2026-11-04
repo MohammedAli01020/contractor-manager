@@ -65,14 +65,23 @@ Existing `drivers` remains the first operational profile. It keeps availability 
 
 ### Release C — one logical payable subledger
 
+**Approved naming and compatibility decision (2026-11-04):** keep the existing physical table name `driver_ledger_entries` throughout the initial workforce transition. The preferred eventual name is `workforce_ledger_entries`, because the ledger will represent all workforce members, but do not rename it now. A later rename is optional and requires a separate dependency inventory, compatibility plan, and migration review. If the rename adds operational risk without meaningful value, retaining `driver_ledger_entries` is an acceptable final state.
+
 Do not create a second authoritative payroll balance table.
 
 Recommended compatibility direction:
-- Keep the existing `driver_ledger_entries` physical table initially, but add `workforce_member_id` and backfill it through `drivers.workforce_member_id`.
+- Keep the existing `driver_ledger_entries` physical table initially, but add `workforce_member_id` and backfill it through `drivers.workforce_member_id`. Preserve each row's primary key, tenant, `driver_id`, source/shift references, amount, movement type, timestamps, journal linkage, and idempotency identity exactly.
 - Keep `driver_id` and all current constraints during the first mapping release.
-- Add workforce-member indexes and tenant-safe FK; update statement/read services to aggregate by workforce member only after all historical entries are mapped and reconciliation passes.
-- In a later, separately reviewed release, permit non-driver workforce movements by making the legacy `driver_id` nullable only after every legacy writer, trigger, query, and correction guard has been updated. Preserve the rule that shift-originated EARNING and shift-correction entries must still identify the exact legacy driver and shift.
+- Add workforce-member indexes and a tenant-safe composite FK; validate every historical row maps to exactly one member before enforcing required constraints. Update statement/read services to aggregate by workforce member only after all historical entries are mapped and reconciliation passes.
+- In a later, separately reviewed release, permit non-driver workforce movements by making the legacy `driver_id` nullable only after every legacy writer, trigger, query, and correction guard has been updated. Do not make `driver_id` nullable in the same migration that first adds `workforce_member_id`. Preserve the rule that shift-originated EARNING and shift-correction entries must still identify the exact legacy driver and shift.
 - All new ledger rows must have exactly one workforce identity. A driver-originated row may carry both workforce member and legacy driver references; a generic worker row may carry only workforce member. Never dual-write one business event into two ledgers.
+
+Required staged migration sequence:
+1. Add `workforce_member_id` as nullable, with the correct tenant-aware index/FK strategy.
+2. Backfill using `driver_ledger_entries.driver_id -> drivers.workforce_member_id`; do not infer identity by name or phone.
+3. Reconcile row counts, unmapped rows, tenant ownership, balances by member, totals by movement type, and journal/source links.
+4. Enforce `workforce_member_id` NOT NULL only when every legacy row has a verified mapping.
+5. In a later release, generalize read/write services and only then consider nullable `driver_id` for non-driver workforce entries.
 
 Before relaxing `driver_id`, revise and test:
 - V20/V22/V31/V35 checks, generated columns, unique indexes and triggers
@@ -105,6 +114,10 @@ Payroll periods/runs are calculation and approval records, not a second ledger. 
 - shift earnings are included as previously recognized; never post again
 - fixed salary and approved hourly/quantity amounts are recognized once on approval
 - actual cash/bank payment remains a separate settlement event
+
+### Physical table naming policy
+
+The name `driver_ledger_entries` is retained during compatibility because schema objects, Java entities/repositories, native SQL, triggers, reports, migrations, correction guards, and integrations may depend on it. Do not perform a broad rename as part of the first workforce-dimension migration. After all dependencies have been inventoried and migrated, assess a separate rename to `workforce_ledger_entries`. Preserve the table's primary keys and all historical foreign-key relationships; if a rename is not operationally valuable, keep the legacy physical name and treat it as an internal compatibility detail.
 
 ## 3. Compatibility and accounting rules
 
