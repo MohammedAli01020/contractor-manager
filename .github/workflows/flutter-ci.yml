@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feature/accounting-mobile-rebased
+      - integration/stabilization-2026-11
     paths:
       - "mobile/**"
       - ".github/workflows/flutter-ci.yml"
@@ -11,6 +12,7 @@ on:
     branches:
       - feature/financial-foundation
       - feature/accounting-mobile-rebased
+      - integration/stabilization-2026-11
     paths:
       - "mobile/**"
       - ".github/workflows/flutter-ci.yml"
