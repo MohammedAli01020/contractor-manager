@@ -212,10 +212,6 @@ public class ShiftService {
             throw ApiException.conflict("لا يمكن تعديل وردية ملغاة. أعد تفعيلها أولًا.");
         }
         shift.requireVersion(request.getVersion());
-        if ("HOUR".equals(shift.getCompensationBasis())
-                && (shift.getStatus() == ShiftStatus.COMPLETED || shift.getDriverWageJournalEntryId() != null)) {
-            throw ApiException.conflict("لا يمكن تعديل مصدر وردية بالساعة بعد اعتمادها؛ استخدم مسار تصحيح مخصصًا.");
-        }
         if ((shift.getStatus() == ShiftStatus.COMPLETED || shift.getDriverWageJournalEntryId() != null)
                 && (!java.util.Objects.equals(request.getShiftDate(), shift.getShiftDate())
                     || !java.util.Objects.equals(request.getShiftType(), shift.getShiftType())
