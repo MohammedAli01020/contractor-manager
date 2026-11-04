@@ -270,6 +270,32 @@ jobs:
               sys.exit("Trial-balance integration tests were skipped or reported failures/errors.")
           PY
 
+      - name: Require WorkforceMember migration and compatibility tests to execute
+        run: |
+          python3 - <<'PY'
+          import glob
+          import sys
+          import xml.etree.ElementTree as ET
+
+          required = {
+              "WorkforceMemberMigrationIntegrationTest": 1,
+              "WorkforceMemberBackfillIntegrationTest": 3,
+          }
+          for suite, expected in required.items():
+              pattern = f"target/surefire-reports/TEST-com.contractor.app.workforce.{suite}.xml"
+              reports = glob.glob(pattern)
+              if not reports:
+                  sys.exit(f"Required workforce integration-test report missing: {pattern}")
+              root = ET.parse(reports[0]).getroot()
+              totals = {key: int(root.attrib.get(key, 0))
+                        for key in ("tests", "failures", "errors", "skipped")}
+              print(f"{suite}: {totals}")
+              if totals["tests"] != expected:
+                  sys.exit(f"{suite} must execute exactly {expected} tests.")
+              if totals["skipped"] != 0 or totals["failures"] != 0 or totals["errors"] != 0:
+                  sys.exit(f"{suite} was skipped or reported failures/errors.")
+          PY
+
       - name: Write test summary
         if: always()
         env:

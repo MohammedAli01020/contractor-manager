@@ -15,6 +15,9 @@ public class Driver extends BaseTenantEntity {
     @Column(nullable = false, length = 150)
     private String name;
 
+    @Column(name = "workforce_member_id", nullable = false)
+    private Long workforceMemberId;
+
     @Column(length = 30)
     private String phone;
 
@@ -54,6 +57,14 @@ public class Driver extends BaseTenantEntity {
         super(tenantId);
         this.name = name;
         this.workerType = workerType;
+    }
+
+    public Long getWorkforceMemberId() {
+        return workforceMemberId;
+    }
+
+    public void setWorkforceMemberId(Long workforceMemberId) {
+        this.workforceMemberId = workforceMemberId;
     }
 
     public String getName() {
