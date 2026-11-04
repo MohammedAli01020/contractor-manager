@@ -10,6 +10,7 @@ import com.contractor.app.workforce.infra.WorkforceAssignmentRepository;
 import com.contractor.app.workforce.infra.WorkforceMemberRepository;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
@@ -77,7 +78,7 @@ public class CompensationAgreementService {
             throw ApiException.badRequest("يجب إضافة مكون أجر واحد على الأقل قبل الاعتماد.");
         }
         validateNoOverlap(tenantId, agreement, null);
-        agreement.approve(actorId, LocalDateTime.now());
+        agreement.approve(actorId, LocalDateTime.now(ZoneOffset.UTC));
         agreements.saveAndFlush(agreement);
         return response(agreement, agreementComponents);
     }
