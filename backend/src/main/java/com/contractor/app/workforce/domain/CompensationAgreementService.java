@@ -125,7 +125,7 @@ public class CompensationAgreementService {
 
         // Both state transitions are committed or rolled back together.
         oldAgreement.supersedeOn(oldLastDay, actorId);
-        replacement.approve(actorId, LocalDateTime.now());
+        replacement.approve(actorId, LocalDateTime.now(ZoneOffset.UTC));
         agreements.saveAndFlush(oldAgreement);
         agreements.saveAndFlush(replacement);
         return response(replacement, newComponents);
