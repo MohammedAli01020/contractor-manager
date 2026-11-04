@@ -4,6 +4,8 @@ import com.contractor.app.common.error.ApiException;
 import com.contractor.app.driver.domain.Driver;
 import com.contractor.app.workforce.infra.WorkforceMemberRepository;
 import java.util.Objects;
+import java.util.Collection;
+import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -42,6 +44,11 @@ public class WorkforceIdentityService {
             return members.saveAndFlush(member);
         }
         return member;
+    }
+
+    @Transactional(readOnly = true)
+    public List<WorkforceMember> findAllForTenant(Long tenantId, Collection<Long> memberIds) {
+        return members.findAllByTenantIdAndIdIn(tenantId, memberIds);
     }
 
     @Transactional(readOnly = true)
