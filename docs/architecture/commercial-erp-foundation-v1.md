@@ -219,3 +219,95 @@ A second read-only pass inspected the shift service, worker ledger, ledger API/D
 - **Recommended direction, pending explicit approval:** additive workforce identity linked to current driver profiles, with backward-compatible references during migration.
 - **Not decided:** physical design of a future generalized worker ledger; whether payroll consolidates shift earnings or consumes them as pre-calculated earning items; which non-driver roles may be assigned to each operational workflow.
 - **No implementation performed:** this review changed documentation only; no application code, database migration, PR, or `main` branch was modified.
+## 12. Workforce subledger and payroll architecture — design recommendation
+
+### 12.1 Decision recommendation
+
+**Recommended direction, pending explicit product approval:** one logical worker-payables subledger for all workforce members, not a separate ledger per worker type and not a second parallel payroll ledger. Preserve the current `driver_ledger_entries` implementation as the compatibility baseline while introducing a stable general workforce identity and migrating additively.
+
+This is a logical/domain decision, not an instruction to rename or replace the current table immediately. The physical schema and migration sequence must be designed separately after reviewing every foreign key, journal dimension, API consumer, trigger, and integration test.
+
+Why this direction:
+- The current ledger already provides tenant-scoped idempotency, journal linkage, append-only protection, balance effects, and serialized balance-changing operations.
+- Two independently authoritative ledgers would make the same worker's payable balance difficult to reconcile and could allow double payment or inconsistent statements.
+- A direct rename of `driver_id` is unsafe: shifts, ledger rows, journal lines, repositories, API routes, unique constraints, and database triggers still depend on driver identity.
+- The existing worker payable account code 2100 and wage expense code 5000 are named and described for drivers. Their accounting meaning should be generalized to workforce payables and labor/compensation expense through a deliberate chart-account compatibility plan, not by silently changing deployed account codes.
+
+### 12.2 Target conceptual model
+
+Use these distinct concepts:
+
+- **WorkforceMember:** the tenant-scoped human identity and core profile. It is not a login account.
+- **WorkforceAssignment:** one or more roles/classifications a person performs (driver, operator, technician, supervisor, engineer, administrative staff, etc.), with effective dates and optional department/site/project context.
+- **OperationalProfile:** specialized capability data needed by a workflow. The existing Driver profile remains the first such profile and keeps its operational availability and legacy rates during transition.
+- **CompensationAgreement:** effective-dated rules for shift, hourly, quantity, fixed salary, or other approved compensation. A worker classification must not hard-code the pay basis.
+- **WorkerPayableSubledger:** one chronological, append-only statement per workforce member, with entries sourced from approved business events.
+- **PayrollPeriod / PayrollRun:** a period-scoped calculation, review, approval, and reconciliation process. It is not a second balance ledger.
+- **SystemUser:** a separate authentication and authorization identity. Linking a workforce member to a system user is optional and must not grant permissions automatically.
+
+### 12.3 How earnings and payroll must work
+
+Do not make every attendance or payroll calculation create a new wage expense. Separate the lifecycle into:
+
+1. **Measurement/input:** completed shifts, approved attendance, approved hours, accepted quantities, fixed salary terms, overtime, and approved adjustments.
+2. **Calculation:** calculate the amount due under the effective compensation agreement and show the source details. A calculation or draft payroll run is not yet an accounting posting.
+3. **Recognition:** create one earning/payable event for each approved compensation source, with a unique source identity and idempotency key. The existing completed-shift flow already recognizes shift earnings; payroll must consume and reconcile those earnings rather than post them again.
+4. **Settlement:** record actual cash/bank payment separately, reducing the payable through the existing payment semantics. A payslip or approved payroll is not proof of payment.
+
+Recommended source rules:
+- **Shift-paid worker:** shift completion continues to recognize the shift earning once. Payroll period reporting includes those existing earning entries as items already recognized; it does not debit wage expense or credit payable a second time.
+- **Fixed monthly or periodic salary:** approved payroll posts the salary expense and workforce payable once for the approved period. Attendance, leave, overtime, and deductions are calculation inputs and audit evidence.
+- **Hourly or quantity-paid worker:** approved time/quantity records feed payroll calculation; the approved payroll run recognizes the resulting payable once, unless a future workflow explicitly recognizes each approved work item earlier.
+- **Mixed compensation:** each component has a distinct source and rule. The same source cannot be recognized both at shift completion and again in payroll.
+- **Corrections after posting:** use reversal/adjustment entries and a re-run/reconciliation process; never edit posted ledger or journal rows.
+
+### 12.4 Advances, deductions, and settlements
+
+- Keep advances as explicit worker financial events, not generic expenses.
+- Preserve the distinction between an advance against already-earned payable and a recoverable advance/employee receivable.
+- Recoverable advances are reduced only through explicit recovery entries linked to an earning/payroll source; the recovery must not create a second wage expense.
+- Penalties, deductions, loans, custody, reimbursements, and end-of-service settlements need distinct business types, authorization, reason codes, effective dates, and accounting mappings. Do not represent all of them as an untyped negative salary number.
+- Actual payment remains a cash/bank event and must pass the centralized posting and cash/bank balance controls.
+
+### 12.5 Accounting dimensions and compatibility work
+
+The current accounting journal line has a `driver_id` dimension with a foreign key to `drivers`; the current payable and wage expense system accounts are also driver-named. A generalized workforce ledger therefore requires a coordinated design for:
+
+- a tenant-safe workforce-member dimension on journal lines, with a compatibility/read strategy for existing `driver_id` history;
+- worker payable account semantics and account-code/name compatibility across existing tenants;
+- mapping every legacy driver to exactly one workforce member before new generic entries are accepted;
+- preservation of old shift, ledger, journal, and payment IDs and source links;
+- uniqueness and idempotency across old and new API routes so retries cannot create duplicate movements;
+- report behavior that combines legacy and new entries into one continuous statement without double-counting;
+- row-lock ordering and database constraints for concurrent earnings, recoveries, payments, and payroll posting.
+
+Do not drop `driver_id` from journal lines or `driver_ledger_entries`, or remove account code 2100/5000, as part of the first workforce migration. A later cleanup is a separate approved migration after all consumers and historical reports are proven compatible.
+
+### 12.6 Recommended delivery sequence
+
+1. Finalize and approve the target workforce identity, assignment, and compensation concepts.
+2. Inventory all foreign keys, triggers, repositories, API/mobile consumers, journal dimensions, and tests that depend on `drivers` and `driver_id`.
+3. Add the workforce identity and a one-to-one legacy driver link; backfill existing drivers without changing their IDs or historical transactions. Validate tenant isolation and duplicate/missing mappings.
+4. Add workforce-aware read models and statements that can display legacy driver entries under the new workforce identity. Keep existing APIs working.
+5. Route new generic workforce earning/payment/advance events through one subledger service and one idempotency/locking policy. Do not dual-write to two independently authoritative ledgers.
+6. Add compensation agreements and payroll calculation in draft mode first; prove that shift earnings are included but not re-posted.
+7. Add approved payroll recognition for non-shift compensation, followed by payroll payment/settlement integration and period-close controls.
+8. Only after reconciliation and compatibility evidence, consider deprecating legacy driver-specific APIs or columns in a separate release.
+
+### 12.7 Required acceptance tests before implementation is considered safe
+
+- Every existing driver maps to exactly one workforce member; no historical shift, ledger entry, or journal line loses its identity.
+- Tenant A cannot read, mutate, pay, or reconcile a workforce member or ledger entry belonging to tenant B.
+- A completed shift appears once in the worker statement and once in the payroll-period reconciliation, but creates only one wage expense/payable recognition.
+- Fixed salary and hourly/quantity payroll are recognized once on approval; draft, recalculation, retry, and duplicate approval do not create extra journals.
+- Partial payments, recoverable advances, advance recovery, deductions, reversals, and settlements reconcile to the same worker payable balance.
+- Concurrent payroll approval, shift completion, advance recovery, and payment cannot overstate available payable or create duplicate source recognition.
+- Existing mobile and API flows continue to work throughout the compatibility phase.
+- MySQL integration tests verify foreign keys, triggers, idempotency, rollback atomicity, lock ordering, and tenant isolation; unit tests alone are insufficient.
+
+### 12.8 Status
+
+- **Recommended architecture:** one logical workforce payable subledger, one general workforce identity, optional operational profiles, and payroll as a calculation/approval/reconciliation process.
+- **Explicitly not recommended:** a separate independent payroll balance ledger; direct table rename/drop; posting shift wages again during payroll; treating attendance as automatic expense recognition.
+- **Pending user approval:** the target model and migration direction before any code or database changes.
+- **No implementation performed:** this section records design analysis only.
