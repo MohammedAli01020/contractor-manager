@@ -25,6 +25,7 @@ This directory is the **official design reference** for Contractor Manager.
 - [Document Center](documents/document-center.md) — transaction documents, statements, attachments, PDFs, sharing, permissions, and audit.
 - [Collection receipt and payment voucher](documents/collection-receipt-payment-voucher.md) — mobile preview and generation rules for confirmed receipts and payments.
 - [Mobile operating experience](mobile/mobile-operating-experience.md) — role-aware access, optional driver login, notifications, global search, and offline-first synchronization.
+- [Approval workflow and permissions](security/approval-workflow.md) — role permissions, configurable approval policies, maker-checker separation, approval inbox, and audit/security controls.
 - [Progress tracker](DESIGN_PROGRESS.md) — screen status, decisions, and approvals.
 
 ## Status vocabulary
