@@ -1,0 +1,147 @@
+# Design Progress — Contractor Manager
+
+Last updated: 2026-11-03  
+Current design baseline: [Design System v1.0](design-system/v1.0.md)
+
+## Status legend
+
+- [ ] Not started
+- [~] Draft / in review
+- [x] Product direction/decision approved
+- [>] Implemented and verified
+
+## Shared foundation
+
+| Item | Status | Notes |
+|---|---|---|
+| ERP-inspired visual direction | [x] | Selected by product owner |
+| Arabic-first / RTL | [x] | Required across contractor mobile screens |
+| Color direction | [x] | Navy, white, light blue, semantic status colors |
+| Typography | [~] | Cairo preferred; validate actual Flutter rendering |
+| Navigation architecture | [~] | Proposed five primary destinations; needs screen-level review |
+| Design System v1.0 documentation | [x] | Initial shared baseline |
+| Offline-first architecture direction | [x] | Product owner approved Offline-first Architecture + Offline-aware UX |
+| Role-aware single Flutter app | [~] | One Flutter app with role-aware navigation; permission model approved, detailed role journeys still require review |
+
+## Screens and workflows
+
+| Screen / flow | Status | Next action |
+|---|---|---|
+| Dashboard and reports | [~] | Review definitions, period filters, metrics, and drill-down |
+| Main navigation / More | [~] | Validate destination grouping and reachability |
+| Shifts list | [~] | Finish filters, statuses, and layouts |
+| Create shift | [~] | Driver wage is variable per shift; define full form against backend |
+| Shift details | [~] | Show operational, driver, equipment, and financial information |
+| Completed shift correction | [~] | Dedicated correction flow; ordinary edit remains distinct |
+| Equipment list/details | [~] | Aggregate shifts, actual expenses, stock issues, drivers, and results |
+| Driver account | [~] | Aggregate shift wages, advances, and payments into a statement |
+| Optional driver login | [~] | Link login to existing driver profile; define invitation and recovery |
+| Advances | [~] | Separate driver receivable/advance workflow |
+| Expenses | [~] | One transaction can be linked to equipment and shift simultaneously |
+| Custom categories | [~] | Tenant-specific labels/categories; protected accounting transaction types |
+| Treasury and banks | [~] | Separate accounts, receipts, payments, transfers, and statements |
+| Inventory and warehouses | [~] | Multiple warehouses, receipts, issues, transfers, stocktake, and direct purchase/use |
+| Monthly and annual close | [~] | Review close states, checklist, reconciliation, corrections, approvals, and year-end policy |
+| Document Center | [~] | Review transaction documents, statements, attachments, PDF output, permissions, and archive links |
+| Collection receipt / payment voucher | [~] | Review eligibility, source-linked previews, Arabic PDF, permissions, and document history |
+| Notification center | [~] | Define event catalog, role routing, channels, privacy, and deduplication |
+| Global search | [~] | Define searchable entities, filters, ranking, and permission enforcement |
+| Offline/synchronization center | [~] | Define first-release offline action matrix, local persistence, retries, and conflicts |
+| Platform Owner Web | [ ] | Separate responsive web design scope |
+
+## Decisions recorded on 2026-11-03
+
+- Driver wage is variable per shift. A suggested/default value may be offered, but the final wage is snapshotted on the shift.
+- Driver statements separate earned wages, advances, and actual payments. Partial payments leave the remaining balance outstanding.
+- Advances are separate movements against the driver's balance, not operating expenses by default.
+- Users may add, rename, reorder, and deactivate tenant-specific categories. Core accounting transaction types remain protected.
+- Used categories are deactivated rather than deleted; historical transactions retain their original meaning and audit trail.
+- An expense may be associated with equipment, a shift, both, or neither. One source expense linked to both remains one financial transaction.
+- Equipment profile aggregates shifts, expenses, stock issues, drivers, and results. The shift remains the operational record.
+- Stock purchase/receipt and stock consumption/issue are distinct. Direct purchase-and-use without a warehouse should be supported.
+- Multiple warehouses are supported from the initial product model; one default warehouse is sufficient for a new/small contractor.
+- Stock quantities are maintained per item per warehouse. Internal transfers change location, not company profit.
+- Stocktake differences require a reason and auditable adjustment; users must not overwrite balances directly.
+- Negative stock is blocked by default.
+- Inventory costing method is not selected in this design draft; it must be explicit and match backend/accounting policy before implementation.
+- Estimated equipment costs are not actual posted expenses.
+- Treasury accounts have separate derived balances. Receipts/payments link to source obligations; internal cash/bank transfers are not income or expense.
+- Opening balances and posted financial corrections use controlled, auditable workflows.
+- Management reports must distinguish period profitability, actual cash flow, point-in-time cash/bank balances, receivables, payables, and inventory value.
+- Profit-and-loss, cash-flow, receivable/payable, driver, equipment, inventory, trial-balance, and general-ledger reports must reconcile to their source records.
+- Report totals must drill down to source transactions; repeated references to one source transaction must not double-count it.
+- Equipment profitability is not claimed unless revenue attribution and actual cost allocation are explicit and sufficiently complete.
+- Inventory valuation is displayed only after the costing method and cost completeness are verified.
+- Monthly close is a controlled review/approval workflow with explicit period boundaries, blocking exceptions, reproducible close evidence, and an auditable reopen path.
+- Closed periods reject ordinary edits, deletion, and backdated posting. The default correction path posts in the first open period while preserving both effective and posting dates; authorized restatement requires a reasoned reopen.
+- Annual close reuses monthly controls; year-end profit/equity transfer accounts and local tax treatment remain subject to accounting-policy confirmation.
+- The mobile product direction is one Flutter app with role-aware navigation; backend authorization remains authoritative.
+- Driver login is optional and linked to the existing driver profile; it does not create a second driver identity or financial account.
+- Driver self-service is limited to the driver's own permitted shifts and account statement; drivers cannot edit posted wages/financial movements or view company-wide sensitive accounts.
+- Notifications should be generated from authoritative server-side events, deep-link to authorized source records, and avoid duplicate delivery on retries.
+- Global search is permission-aware and opens source records; it must not reveal inaccessible or cross-tenant records.
+- **Offline-first Architecture + Offline-aware User Experience** is the approved architectural direction. Offline-first includes offline support; Offline Support is not a separate competing architecture goal.
+- Offline UX distinguishes local Draft, Pending Sync, Syncing, server-confirmed Synced, Sync Failed, and Conflict/Needs Review states.
+- Local drafts/eligible queued operations should survive app restarts; retries use stable idempotency identifiers to prevent duplicate operations.
+- The server remains authoritative for permissions, shared business state, posted financial records, balances, stock, and period status.
+- Cash/bank receipts and payments, advances, journal posting/corrections, and period close/reopen must not be shown as completed before server confirmation.
+- Offline operations are enabled progressively by risk. The exact first-release offline action matrix and conflict policy remain open for backend/security review.
+
+## Approved permissions and approval workflow — 2026-11-04
+
+- Product owner approved the role-based permission and approval-workflow design direction.
+- Separate **role permissions** (what a user may do) from **approval policies** (when an otherwise permitted action requires another person's approval).
+- Keep routine low-risk actions direct when the user's permissions allow them; do not force every operation through approval.
+- Start with role templates for company owner, company manager, accountant, operations supervisor, cashier/treasury custodian, storekeeper, and driver. Templates are configurable, not rigid hard-coded grants.
+- Permissions are granular by action (view/create/edit draft/submit/approve/reject/execute/post/correct/export/configure) and may be scoped to company, branch, project, work site, warehouse, equipment, or the driver's own profile.
+- Approval policies are tenant-scoped and configurable by operation type, amount threshold, resource scope, approver authority, and number of approval levels. The example EGP thresholds shown in the specification are illustrative only, not system defaults.
+- Maker-checker separation is the default for selected sensitive workflows: the requester cannot approve their own request unless a specifically authorized policy permits it. Users cannot grant themselves higher privileges.
+- Approval state is distinct from business transaction state and accounting posting state. Approval alone does not mean payment execution, stock movement, or journal posting has occurred.
+- Initial request lifecycle: Draft → Pending Approval → Approved/Rejected → Executed/Posted where applicable, with Cancelled where allowed. Rejection requires a reason; history is retained.
+- Initial delivery direction: granular role permissions, tenant-scoped assignment, audit trail, selected configurable thresholds, a single-level approval inbox, requester tracking, and explicit separation of approval from execution/posting.
+- Later phases may add multi-level conditional chains, delegation/escalation, and advanced policy builders.
+- Backend authorization is authoritative at submission, decision, execution, and posting. Inbox, search, notifications, and deep links must enforce tenant and resource scope.
+- Sensitive decisions and permission changes require append-only audit evidence, including actor, timestamps, policy version, reason, source reference, and execution/posting reference where applicable.
+- The approved specification is product design only. It does not authorize immediate application-code changes or prescribe a final backend schema; implementation must first be reconciled with existing authorization and accounting mechanisms.
+
+## Product and accounting guardrails
+
+- Completed zero-wage/zero-fee shifts follow explicit backend rules; UI must not invent journal entries.
+- Completed shift corrections use the approved correction/audit workflow.
+- Driver advances are not automatically operating expenses.
+- Estimated costs must not be posted as actual expenses.
+- Cash and bank balances are not revenue or profit.
+- Unpaid expenses and wages do not reduce cash/bank until paid.
+- Internal account/warehouse transfers do not change profit.
+- Records shown in multiple screens must never be duplicated in the ledger or stock movement history.
+- Historical posted transactions and stock movements must not be silently rewritten.
+- Report totals must be derived from the accounting/operational source of truth and must indicate incomplete data.
+- Period close/reopen and year-end posting must be enforced by backend/database controls, not only by Flutter.
+- Close operations must be transactional, tenant-scoped, idempotent, and safe under concurrent requests and multiple application instances.
+- Offline retries must be idempotent; stale local data must not silently overwrite server or financial history.
+- Prototype sample values are never presented as real customer data.
+
+## Approval and implementation workflow
+
+1. Build/revise the interactive prototype for one screen or flow.
+2. Review it with the product owner.
+3. Record explicit approval here and in that screen's specification.
+4. Confirm relevant API/backend behavior and accounting posting/costing rules.
+5. Implement in Flutter in a separate, reviewed code change.
+6. Test on the target Android device and update status only after verification.
+
+## Change log
+
+- 2026-11-04 — Product owner approved the permissions and approval workflow direction; added role/action/resource-scoped permissions, tenant-configurable policies, maker-checker controls, approval lifecycle/inbox, audit requirements, and phased delivery to `security/approval-workflow.md`.
+
+- 2026-11-03 — Added mobile operating-experience specification for role-aware access, optional driver login, notification center, global search, and offline-first architecture/synchronization.
+- 2026-11-03 — Product owner approved Offline-first Architecture + Offline-aware User Experience; Offline Support is treated as included within Offline-first rather than a separate architecture target.
+- 2026-11-03 — Added mobile design draft for collection receipts and payment vouchers, emphasizing confirmed source transactions, no duplicate posting, Arabic/RTL PDF, document history, and permission-aware actions.
+- 2026-11-03 — Added Document Center draft: source-linked receipts/vouchers/statements, evidence attachments, private file access, versioning, Arabic PDF/print/share, numbering safeguards, and separation from tax invoicing.
+- 2026-11-03 — Confirmed close deliverables direction: optional tenant-configured email notifications, a full monthly close report package, immutable/versioned PDF archive, print/save/share and accountant email delivery; tax invoices remain a separate legally validated workflow.
+- 2026-11-03 — Initial design tracking created; ERP-inspired, Arabic-first mobile direction and Design System v1.0 established.
+- 2026-11-03 — Added driver account, configurable categories, expense linking, equipment profile, and inventory workflow decisions.
+- 2026-11-03 — Added treasury and bank account specification.
+- 2026-11-03 — Added multiple-warehouse inventory specification, including stock receipts/issues/transfers, stocktake, direct purchase-and-use, and costing-policy guardrails.
+- 2026-11-03 — Added management dashboard and reports specification with source drill-down and accounting reconciliation guardrails.
+- 2026-11-03 — Added monthly/annual period-close draft covering review workflow, reconciliation, close exceptions, corrections, reopen controls, annual close, mobile UX, and concurrency/tenant-integrity requirements.
