@@ -89,6 +89,10 @@ public class Shift extends BaseTenantEntity {
     @Column(name = "compensation_calculated_amount", nullable = false, precision = 15, scale = 2)
     private BigDecimal compensationCalculatedAmount;
 
+    /** Explicit actual hours entered when an hourly shift is completed. */
+    @Column(name = "actual_hours", precision = 8, scale = 2)
+    private BigDecimal actualHours;
+
     @Column(length = 500)
     private String notes;
 
@@ -218,6 +222,7 @@ public class Shift extends BaseTenantEntity {
     public String getCompensationUnitCode() { return compensationUnitCode; }
     public BigDecimal getCompensationRate() { return compensationRate; }
     public BigDecimal getCompensationCalculatedAmount() { return compensationCalculatedAmount; }
+    public BigDecimal getActualHours() { return actualHours; }
 
     public void applyCompensationSnapshot(String source, Long agreementId, Long componentId,
             String agreementReference, String componentCode, String componentName,
@@ -242,6 +247,18 @@ public class Shift extends BaseTenantEntity {
         this.compensationCurrencyCode = currencyCode;
         this.compensationUnitCode = unitCode;
         this.compensationRate = rate;
+        this.compensationCalculatedAmount = amount;
+        this.driverWage = amount;
+        this.actualHours = null;
+    }
+
+    /** Finalize an hourly calculation from explicitly measured hours. */
+    public void applyHourlyCalculation(BigDecimal hours, BigDecimal amount) {
+        if (!"HOUR".equals(this.compensationBasis) || hours == null || hours.signum() <= 0
+                || amount == null || amount.signum() < 0 || this.compensationRate == null) {
+            throw new IllegalArgumentException("Invalid hourly shift calculation");
+        }
+        this.actualHours = hours;
         this.compensationCalculatedAmount = amount;
         this.driverWage = amount;
     }
