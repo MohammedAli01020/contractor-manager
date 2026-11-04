@@ -24,7 +24,7 @@ Explicitly out of scope:
 - No rename/drop of `drivers`, `driver_id`, or `driver_ledger_entries`.
 - No merge to `main`.
 
-The current `Driver` remains the application write owner for identity fields during PR-WF-01. This avoids creating two competing write paths. Canonical identity write ownership moves to WorkforceMember only in PR-WF-02, with legacy endpoints preserved through a single transactional service.
+The current `DriverService` remains the sole application write entry point and `Driver` remains the source of truth for person fields during PR-WF-01. The service creates and synchronizes the linked `WorkforceMember` in the same database transaction, so there is one controlled write path rather than independent writers. Canonical identity write ownership moves to WorkforceMember only in PR-WF-02, with legacy endpoints preserved through that same transactional service.
 
 ## 2. Verified source constraints
 
@@ -75,10 +75,10 @@ The column remains nullable during schema deployment and backfill. It becomes NO
 ### 3.3 Identity field ownership in this phase
 
 During PR-WF-01:
-- Existing `drivers` columns remain the source of truth and all current APIs keep reading/writing them.
+- Existing `drivers` columns remain the source of truth and all current APIs keep their existing request/response contracts.
 - Backfill copies identity values into `workforce_members`.
-- No ongoing dual-write is introduced.
-- The new row is a migration mapping snapshot, not yet the canonical write owner.
+- `DriverService` creates the linked member on every new driver and synchronizes name, phone, national ID, notes, and active state on updates/deactivation in the same transaction.
+- No second API/service is allowed to write workforce identity independently in this phase.
 
 During PR-WF-02:
 - A single application service changes the write owner to `workforce_members`.
@@ -146,13 +146,13 @@ Retain a migration report with counts by tenant and any exceptions. Do not place
 ## 7. Application impact
 
 Expected application changes are intentionally small:
-- Add a `WorkforceMember` JPA entity and repository if the migration is accompanied by domain verification.
-- Add the nullable mapping to `Driver` only if required by the selected persistence approach.
-- Do not change DriverController routes, DTO JSON, Flutter models, shift selection, or ledger endpoints.
+- Add `WorkforceMember` JPA entity and tenant-scoped repository.
+- Map `Driver.workforceMemberId` without exposing it in the legacy response DTO.
+- Create and synchronize the member from the existing `DriverService` transaction; avoid independent write services.
+- Do not change DriverController routes, request/response JSON, Flutter models, shift selection, or ledger endpoints.
 - Do not expose the new table through a public endpoint in this PR.
 - Keep optimistic locking and tenant-scoped repository access consistent with `BaseTenantEntity`.
 
-If no runtime code is needed to validate the backfill, prefer keeping PR-WF-01 migration-focused and introduce the domain repository in PR-WF-02. Avoid adding unused abstractions merely to make the schema appear active.
 
 ## 8. Test plan
 
@@ -160,6 +160,7 @@ Use the repository's actual MySQL integration-test setup; H2-only tests are insu
 
 Required evidence:
 - Fresh database Flyway migration succeeds.
+- A dedicated MySQL Testcontainers migration test stops at V35, inserts legacy tenant/driver rows, applies V36, and verifies field/timestamp/version preservation and exact mapping.
 - Upgrade migration succeeds against a representative database containing existing tenants and drivers.
 - Composite FK rejects a link to another tenant's workforce member.
 - Unique key rejects two driver profiles linked to the same workforce member.
