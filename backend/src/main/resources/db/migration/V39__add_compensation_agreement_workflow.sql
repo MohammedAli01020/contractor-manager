@@ -4,13 +4,8 @@ ALTER TABLE compensation_agreements
     ADD COLUMN change_reason VARCHAR(500) NULL AFTER supersedes_agreement_id;
 
 ALTER TABLE compensation_agreements
-    ADD UNIQUE KEY uq_compensation_agreements_id_tenant_member
-        (id, tenant_id, workforce_member_id),
     ADD KEY ix_compensation_agreements_supersedes
-        (supersedes_agreement_id, tenant_id, workforce_member_id),
-    ADD CONSTRAINT fk_compensation_agreements_supersedes
-        FOREIGN KEY (supersedes_agreement_id, tenant_id, workforce_member_id)
-        REFERENCES compensation_agreements (id, tenant_id, workforce_member_id),
+        (tenant_id, workforce_member_id, supersedes_agreement_id),
     DROP CHECK ck_compensation_agreements_status,
     ADD CONSTRAINT ck_compensation_agreements_status
         CHECK (status IN ('DRAFT', 'APPROVED', 'SUPERSEDED', 'EXPIRED', 'CANCELLED')),
