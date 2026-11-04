@@ -34,6 +34,7 @@ public class ShiftResponse {
     private final String compensationCurrencyCode;
     private final BigDecimal compensationRate;
     private final BigDecimal compensationCalculatedAmount;
+    private final BigDecimal actualHours;
 
     private final BigDecimal priceAfterWage;
     private final String notes;
@@ -70,8 +71,11 @@ public class ShiftResponse {
         this.compensationCurrencyCode = s.getCompensationCurrencyCode();
         this.compensationRate = s.getCompensationRate();
         this.compensationCalculatedAmount = s.getCompensationCalculatedAmount();
+        this.actualHours = s.getActualHours();
         // الإيراد ناقص أجر السائق (قبل المصروفات الفعلية). تكلفة تشغيل المعدة مؤشر فقط ولا تدخل هنا.
-        this.priceAfterWage = s.getPrice().subtract(s.getDriverWage());
+        this.priceAfterWage = "HOUR".equals(s.getCompensationBasis())
+                && s.getStatus() == com.contractor.app.shift.domain.ShiftStatus.IN_PROGRESS
+                ? null : s.getPrice().subtract(s.getDriverWage());
         this.notes = s.getNotes();
         this.cancelReason = s.getCancelReason();
         this.version = s.getVersion();
@@ -150,6 +154,7 @@ public class ShiftResponse {
     public String getCompensationCurrencyCode() { return compensationCurrencyCode; }
     public BigDecimal getCompensationRate() { return compensationRate; }
     public BigDecimal getCompensationCalculatedAmount() { return compensationCalculatedAmount; }
+    public BigDecimal getActualHours() { return actualHours; }
 
     public BigDecimal getEquipmentOperatingCost() {
         return equipmentOperatingCost;
