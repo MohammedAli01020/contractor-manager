@@ -87,10 +87,10 @@ CREATE TABLE compensation_components (
     CONSTRAINT ck_compensation_components_rate
         CHECK (rate >= 0),
     CONSTRAINT ck_compensation_components_shift
-        CHECK ((basis = 'SHIFT' AND shift_type IN ('MORNING', 'EVENING', 'NIGHT'))
+        CHECK ((basis = 'SHIFT' AND shift_type IS NOT NULL AND shift_type IN ('MORNING', 'EVENING', 'NIGHT'))
             OR (basis <> 'SHIFT' AND shift_type IS NULL)),
     CONSTRAINT ck_compensation_components_unit
         CHECK ((basis IN ('HOUR', 'DAY', 'QUANTITY') AND unit_code IS NOT NULL AND TRIM(unit_code) <> '')
-            OR (basis = 'FIXED' AND unit_code IN ('MONTH', 'WEEK', 'DAY'))
+            OR (basis = 'FIXED' AND unit_code IS NOT NULL AND unit_code IN ('MONTH', 'WEEK', 'DAY'))
             OR (basis = 'SHIFT' AND (unit_code IS NULL OR TRIM(unit_code) <> '')))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
