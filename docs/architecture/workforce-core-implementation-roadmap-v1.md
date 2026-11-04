@@ -3,7 +3,7 @@
 **Status:** Planning only — no implementation authorized  
 **Date:** 2026-11-04  
 **Parent branch for future work:** `feature/financial-foundation` (revalidate before starting)  
-**Design package:** commercial ERP foundation, legacy dependency inventory, additive migration proposal, compensation/HR design.
+**Design package:** commercial ERP foundation, legacy dependency inventory, additive migration proposal, compensation/HR design, [PR-WF-01 migration specification](workforce-pr-wf-01-migration-spec-v1.md).
 
 ## 1. Delivery rules
 
@@ -20,12 +20,15 @@
 
 ### PR-WF-01 — schema and service foundation for WorkforceMember
 
+Detailed migration, backfill, preflight, postflight, test, and repair specification: [workforce-pr-wf-01-migration-spec-v1.md](workforce-pr-wf-01-migration-spec-v1.md).
+
 Scope:
 - Add tenant-scoped `workforce_members`.
 - Add nullable `drivers.workforce_member_id` with composite tenant FK and uniqueness.
 - Backfill one member per existing driver, preserving driver IDs.
 - Add repository/domain/service tests for tenant isolation, mapping uniqueness and missing mapping detection.
 - No public API contract changes and no mobile changes.
+- Keep `Driver` as the sole identity write owner in this PR; canonical WorkforceMember writes begin only in PR-WF-02.
 
 Gate:
 - Every legacy driver maps to exactly one member.
@@ -89,11 +92,12 @@ Gate:
 ### PR-WF-06 — workforce payable and journal dimensions
 
 Scope:
-- Add workforce dimension to journal lines and existing ledger entries.
-- Backfill from driver mapping.
+- Add `workforce_member_id` to existing `driver_ledger_entries` and journal lines in a controlled, separately reviewed compatibility migration.
+- Backfill the workforce dimension from the existing driver mapping.
 - Generalize statement/read services to workforce identity without dual ledger writes.
-- Retain legacy driver references for driver-originated operational events.
+- Retain `driver_id` and all legacy shift/journal references while driver-originated events still depend on them.
 - Do not yet enable generic non-driver payroll posting until reconciliation and constraint changes are separately approved.
+- Keep the physical table name `driver_ledger_entries` during compatibility. A rename to `workforce_ledger_entries` is optional and must not happen until all legacy code, reports, integrations, triggers, correction paths, and tooling no longer depend on the old name. The recommended default is to keep the physical name if renaming provides no material benefit.
 
 Gate:
 - Every historical ledger row maps to one workforce member.
