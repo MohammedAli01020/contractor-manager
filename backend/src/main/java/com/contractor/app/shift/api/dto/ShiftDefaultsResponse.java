@@ -7,12 +7,17 @@ public class ShiftDefaultsResponse {
 
     private final BigDecimal driverWage;
     private final String wageSource;
+    private final String compensationBasis;
+    private final BigDecimal compensationRate;
     private final BigDecimal price;
     private final BigDecimal equipmentOperatingCost;
 
-    public ShiftDefaultsResponse(BigDecimal driverWage, String wageSource, BigDecimal price, BigDecimal equipmentOperatingCost) {
+    public ShiftDefaultsResponse(BigDecimal driverWage, String wageSource, String compensationBasis,
+                                 BigDecimal compensationRate, BigDecimal price, BigDecimal equipmentOperatingCost) {
         this.driverWage = driverWage;
         this.wageSource = wageSource;
+        this.compensationBasis = compensationBasis;
+        this.compensationRate = compensationRate;
         this.price = price;
         this.equipmentOperatingCost = equipmentOperatingCost;
     }
@@ -24,6 +29,10 @@ public class ShiftDefaultsResponse {
     public String getWageSource() {
         return wageSource;
     }
+
+    public String getCompensationBasis() { return compensationBasis; }
+
+    public BigDecimal getCompensationRate() { return compensationRate; }
 
     public BigDecimal getPrice() {
         return price;
