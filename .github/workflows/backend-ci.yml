@@ -10,6 +10,7 @@ on:
       - fix/multi-instance-accounting-safety
       - fix/accounting-concurrency-hardening
       - feature/financial-foundation
+      - feature/workforce-core-pr-wf-03
       - feature/trial-balance-reconciliation
       - feature/default-chart-of-accounts
       - feature/equipment-expenses-accounting
@@ -19,6 +20,7 @@ on:
       - fix/treasury-concurrency-hardening
     paths:
       - "backend/**"
+      - "docs/architecture/workforce-pr-wf-*.md"
       - ".github/workflows/backend-ci.yml"
       - "docs/ACCOUNTING-TREASURY-CONCURRENCY-2026-10-31.md"
       - "docs/ACCOUNTING-PR-MERGE-PLAN-2026-10-31.md"
@@ -36,9 +38,11 @@ on:
       - feature/request-tracking
       - feature/driver-worker-ledger
       - feature/financial-foundation
+      - feature/workforce-core-pr-wf-03
       - feature/trial-balance-reconciliation
     paths:
       - "backend/**"
+      - "docs/architecture/workforce-pr-wf-*.md"
       - ".github/workflows/backend-ci.yml"
       - "docs/ACCOUNTING-TREASURY-CONCURRENCY-2026-10-31.md"
       - "docs/ACCOUNTING-PR-MERGE-PLAN-2026-10-31.md"
