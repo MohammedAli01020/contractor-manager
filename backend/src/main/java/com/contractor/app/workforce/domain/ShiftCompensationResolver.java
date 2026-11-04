@@ -117,21 +117,32 @@ public class ShiftCompensationResolver {
 
         List<CompensationComponent> matching = components
                 .findAllForWageResolution(tenantId, selected.getId()).stream()
-                .filter(c -> c.getBasis() == CompensationBasis.SHIFT)
-                .filter(c -> c.getShiftType() == CompensationShiftType.valueOf(shiftType.name()))
+                .filter(c -> c.getBasis() == CompensationBasis.HOUR
+                        ? "HOUR".equals(c.getUnitCode())
+                        : c.getBasis() == CompensationBasis.SHIFT
+                            && c.getShiftType() == CompensationShiftType.valueOf(shiftType.name()))
                 .collect(Collectors.toList());
 
         if (matching.size() != 1) {
-            throw ApiException.conflict("الاتفاقية المعتمدة لا تحتوي على مكوّن أجر وردية واحد مطابق لنوع الوردية.");
+            throw ApiException.conflict("الاتفاقية المعتمدة لا تحتوي على مكوّن أجر واحد مطابق للوردية. يجب وجود مكوّن SHIFT مطابق أو مكوّن HOUR بوحدة HOUR واحد فقط.");
         }
 
         CompensationComponent component = matching.get(0);
-        if (requestedWage != null && component.getRate() != null
-                && requestedWage.compareTo(component.getRate()) != 0) {
-            throw ApiException.conflict("أجر الاتفاقية معتمد ولا يمكن تغييره من نموذج الوردية. استخدم إجراء تصحيح معتمدًا إذا لزم الأمر.");
-        }
         if (component.getRate() == null || component.getRate().signum() < 0) {
-            throw ApiException.conflict("قيمة أجر الوردية في الاتفاقية غير صالحة.");
+            throw ApiException.conflict("قيمة الأجر في الاتفاقية غير صالحة.");
+        }
+        if (component.getBasis() == CompensationBasis.HOUR) {
+            if (requestedWage != null) {
+                throw ApiException.conflict("أجر الساعة محدد بالاتفاقية ولا يمكن تغييره من نموذج الوردية.");
+            }
+            shift.applyCompensationSnapshot("AGREEMENT", selected.getId(), component.getId(),
+                    selected.getAgreementReference(), component.getComponentCode(), component.getDisplayName(),
+                    component.getBasis().name(), selected.getCurrencyCode(), component.getUnitCode(),
+                    Money.scale(component.getRate()), BigDecimal.ZERO.setScale(2));
+            return;
+        }
+        if (requestedWage != null && requestedWage.compareTo(component.getRate()) != 0) {
+            throw ApiException.conflict("أجر الاتفاقية معتمد ولا يمكن تغييره من نموذج الوردية. استخدم إجراء تصحيح معتمدًا إذا لزم الأمر.");
         }
         shift.applyCompensationSnapshot("AGREEMENT", selected.getId(), component.getId(),
                 selected.getAgreementReference(), component.getComponentCode(), component.getDisplayName(),
