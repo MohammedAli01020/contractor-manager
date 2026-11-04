@@ -206,6 +206,7 @@ public class ShiftService {
         Driver driver = requireDriver(tenantId, request.getDriverId(), shift.getDriverId());
         Equipment item = requireEquipment(tenantId, request.getEquipmentId(), shift.getEquipmentId());
 
+        BigDecimal previousWage = shift.getDriverWage();
         boolean driverChanged = !request.getDriverId().equals(shift.getDriverId());
         boolean typeChanged = request.getShiftType() != shift.getShiftType();
         boolean equipmentChanged = !request.getEquipmentId().equals(shift.getEquipmentId());
@@ -233,7 +234,7 @@ public class ShiftService {
                 .track("driverId", shift.getDriverId(), request.getDriverId())
                 .track("equipmentId", shift.getEquipmentId(), request.getEquipmentId())
                 .track("price", shift.getPrice(), price)
-                .track("driverWage", shift.getDriverWage(), wage)
+                .track("driverWage", previousWage, wage)
                 .track("equipmentOperatingCost", shift.getEquipmentOperatingCost(), operatingCost)
                 .track("notes", shift.getNotes(), Texts.blankToNull(request.getNotes()));
 
