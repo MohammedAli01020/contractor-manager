@@ -136,10 +136,16 @@ class ShiftsApi {
     return _mapList(response.data, 'سجل التعديلات غير صالح.');
   }
 
-  Future<ShiftModel> finishShift(ShiftModel shift) async {
+  Future<ShiftModel> finishShift(
+    ShiftModel shift, {
+    double? actualHours,
+  }) async {
     final response = await _dio.post<Map<String, dynamic>>(
       '/shifts/${shift.id}/finish',
-      data: {'version': shift.version},
+      data: {
+        'version': shift.version,
+        if (actualHours != null) 'actualHours': actualHours,
+      },
     );
     if (response.data == null) {
       throw const AppFailure(FailureType.server, 'لم تصل بيانات الوردية بعد الإنهاء.');
