@@ -1,6 +1,6 @@
 # Workforce Core implementation work breakdown
 
-**Status:** PR-WF-01 implementation is in draft PR #34; required Backend CI passed on 2026-11-04. PR remains open, draft, and unmerged. Later PRs remain planning only.  
+**Status:** PR-WF-01 was merged into `feature/financial-foundation` on 2026-11-04 as squash commit `dc181ebb8de55edf866943cf7b69e173b0dd90b6`. Required Backend CI passed for head `cfab4e4c24b5ccc2c3a081509ef1c7505c0b2109`. No production migration or `main` change was made. PR-WF-02 remains planning only.  
 **Date:** 2026-11-04  
 **Parent branch for future work:** `feature/financial-foundation` (revalidate before starting)  
 **Design package:** commercial ERP foundation, legacy dependency inventory, additive migration proposal, compensation/HR design, [PR-WF-01 migration specification](workforce-pr-wf-01-migration-spec-v1.md).
@@ -20,7 +20,7 @@
 
 ### PR-WF-01 — schema and service foundation for WorkforceMember
 
-Implementation branch: `feature/workforce-core-pr-wf-01` — [draft PR #34](https://github.com/MohammedAli01020/contractor-manager/pull/34). Detailed migration, backfill, preflight, postflight, test, and repair specification: [workforce-pr-wf-01-migration-spec-v1.md](workforce-pr-wf-01-migration-spec-v1.md).
+Implementation branch: `feature/workforce-core-pr-wf-01` — [merged PR #34](https://github.com/MohammedAli01020/contractor-manager/pull/34), squash commit `dc181ebb8de55edf866943cf7b69e173b0dd90b6`. Detailed migration, backfill, preflight, postflight, test, and repair specification: [workforce-pr-wf-01-migration-spec-v1.md](workforce-pr-wf-01-migration-spec-v1.md).
 
 Scope:
 - Add tenant-scoped `workforce_members`.
@@ -168,4 +168,4 @@ For every PR:
 
 ## 5. Approval boundary
 
-This work breakdown is a proposed execution order. PR-WF-01 has been authorized and is under review in draft PR #34; this does not authorize merging it, changing `main`, or starting PR-WF-02. Each later PR still requires its own explicit approval.
+This work breakdown is a proposed execution order. PR-WF-01 was explicitly authorized and merged only into `feature/financial-foundation`; `main` was not changed. PR-WF-02 and every later PR require their own explicit approval.
