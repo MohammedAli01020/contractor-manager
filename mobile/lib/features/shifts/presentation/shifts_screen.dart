@@ -9,24 +9,29 @@ import '../../../core/error/app_failure.dart';
 import '../../../core/widgets/loading_view.dart';
 import '../data/datasources/shifts_api.dart';
 import 'shift_editor_screen.dart';
+import 'shift_correction_screen.dart';
 import 'bulk_finish_shifts_screen.dart';
 import '../data/models/shift_model.dart';
 import 'bloc/shifts_bloc.dart';
 
 class ShiftsScreen extends StatelessWidget {
-  const ShiftsScreen({Key? key}) : super(key: key);
+  const ShiftsScreen({Key? key, this.canCorrectCompletedShifts = false}) : super(key: key);
+
+  final bool canCorrectCompletedShifts;
 
   @override
   Widget build(BuildContext context) {
     return BlocProvider<ShiftsBloc>(
       create: (_) => getIt<ShiftsBloc>()..add(const ShiftsRequested()),
-      child: const _ShiftsView(),
+      child: _ShiftsView(canCorrectCompletedShifts: canCorrectCompletedShifts),
     );
   }
 }
 
 class _ShiftsView extends StatelessWidget {
-  const _ShiftsView();
+  const _ShiftsView({required this.canCorrectCompletedShifts});
+
+  final bool canCorrectCompletedShifts;
 
   @override
   Widget build(BuildContext context) {
@@ -211,7 +216,7 @@ class _ShiftsView extends StatelessWidget {
                             final shift = state.visibleItems[index];
                             return _ShiftCard(
                               shift: shift,
-                              onManage: () => _manageShift(context, shift, bloc),
+                              onManage: () => _manageShift(context, shift, bloc, canCorrectCompletedShifts),
                             );
                           },
                         ),
@@ -229,6 +234,7 @@ class _ShiftsView extends StatelessWidget {
     BuildContext context,
     ShiftModel shift,
     ShiftsBloc bloc,
+    bool canCorrectCompletedShifts,
   ) async {
     final actions = <String, String>{};
     if (shift.status == 'IN_PROGRESS') {
@@ -239,7 +245,14 @@ class _ShiftsView extends StatelessWidget {
       actions['reinstate'] = 'إعادة تفعيل الوردية';
       actions['history'] = 'عرض سجل التعديلات';
     } else {
-      actions['edit'] = 'عرض / تعديل البيانات';
+      if (shift.status == 'COMPLETED') {
+        if (canCorrectCompletedShifts && shift.compensationBasis != 'HOUR') {
+          actions['correct'] = 'تصحيح الوردية المكتملة';
+        }
+        actions['edit'] = 'تعديل ملاحظات الوردية فقط';
+      } else {
+        actions['edit'] = 'عرض / تعديل البيانات';
+      }
       actions['history'] = 'عرض سجل التعديلات';
     }
     final choice = await showModalBottomSheet<String>(
@@ -263,6 +276,23 @@ class _ShiftsView extends StatelessWidget {
       ),
     );
     if (choice == null) return;
+    if (choice == 'correct') {
+      final corrected = await Navigator.of(context).push<ShiftModel>(
+        MaterialPageRoute(
+          builder: (_) => ShiftCorrectionScreen(
+            shift: shift,
+            api: getIt<ShiftsApi>(),
+          ),
+        ),
+      );
+      if (corrected != null) {
+        bloc.add(const ShiftsRequested());
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('تم تصحيح الوردية وتحديث القيد المحاسبي ودفتر السائق.')),
+        );
+      }
+      return;
+    }
     if (choice == 'edit') {
       final saved = await Navigator.of(context).push<bool>(
         MaterialPageRoute(builder: (_) => ShiftEditorScreen(shift: shift)),
@@ -581,6 +611,7 @@ class _ShiftsView extends StatelessWidget {
   IconData _actionIcon(String action) {
     switch (action) {
       case 'edit': return Icons.edit_outlined;
+      case 'correct': return Icons.verified_outlined;
       case 'finish': return Icons.check_circle_outline;
       case 'cancel': return Icons.cancel_outlined;
       case 'reinstate': return Icons.restore;
