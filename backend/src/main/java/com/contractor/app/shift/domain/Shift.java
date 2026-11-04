@@ -187,6 +187,10 @@ public class Shift extends BaseTenantEntity {
 
     public void setDriverWage(BigDecimal driverWage) {
         this.driverWage = driverWage;
+        if ("LEGACY_DRIVER_RATE".equals(this.wageSource)) {
+            this.compensationRate = driverWage;
+            this.compensationCalculatedAmount = driverWage;
+        }
     }
 
     public Long getDriverWageJournalEntryId() { return driverWageJournalEntryId; }
