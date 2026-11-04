@@ -35,6 +35,8 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
   bool _defaultsLoaded = false;
   String? _error;
 
+  bool get _isCompletedShift => widget.shift?.status == 'COMPLETED';
+
   @override
   void initState() {
     super.initState();
@@ -190,7 +192,7 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(widget.shift == null ? 'بدء وردية جديدة' : 'تعديل وردية #${widget.shift!.id}')),
+      appBar: AppBar(title: Text(widget.shift == null ? 'بدء وردية جديدة' : _isCompletedShift ? 'ملاحظات الوردية #${widget.shift!.id}' : 'تعديل وردية #${widget.shift!.id}')),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null && _drivers.isEmpty && _equipment.isEmpty && _sites.isEmpty
@@ -200,13 +202,26 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
                   child: ListView(
                     padding: const EdgeInsets.all(16),
                     children: [
+                      if (_isCompletedShift) ...[
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.primary.withOpacity(0.07),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Text(
+                            'الوردية مكتملة. يمكنك تعديل الملاحظات فقط من هنا؛ لتغيير التاريخ أو الموقع أو المعدة أو المبالغ استخدم إجراء تصحيح الوردية المعتمد.',
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
                       if (_error != null) ...[
                         Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
                         const SizedBox(height: 8),
                       ],
                       InkWell(
                         borderRadius: BorderRadius.circular(12),
-                        onTap: _saving ? null : _pickDate,
+                        onTap: _saving || _isCompletedShift ? null : _pickDate,
                         child: InputDecorator(
                           decoration: const InputDecoration(
                             labelText: 'تاريخ الوردية',
@@ -230,7 +245,7 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
                           DropdownMenuItem(value: 'EVENING', child: Text('مسائية')),
                           DropdownMenuItem(value: 'NIGHT', child: Text('ليلية')),
                         ],
-                        onChanged: (v) {
+                        onChanged: _isCompletedShift ? null : (v) {
                           if (v == null) return;
                           setState(() { _type = v; _defaultsLoaded = false; });
                           _loadDefaults();
@@ -245,7 +260,7 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
                           child: Text((s['name'] ?? 'موقع').toString()),
                         )).toList(),
                         validator: (v) => v == null ? 'اختار الموقع' : null,
-                        onChanged: (v) => setState(() => _siteId = v),
+                        onChanged: _isCompletedShift ? null : (v) => setState(() => _siteId = v),
                       ),
                       const SizedBox(height: 12),
                       _resourcePicker(
@@ -253,6 +268,7 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
                         items: _drivers,
                         selectedId: _driverId,
                         kind: 'driver',
+                        disabled: _isCompletedShift,
                         onChanged: (v) {
                           setState(() { _driverId = v; _defaultsLoaded = false; });
                           _loadDefaults();
@@ -264,6 +280,7 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
                         items: _equipment,
                         selectedId: _equipmentId,
                         kind: 'equipment',
+                        disabled: _isCompletedShift,
                         onChanged: (v) {
                           setState(() { _equipmentId = v; _defaultsLoaded = false; });
                           _loadDefaults();
@@ -273,6 +290,7 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
                       TextFormField(
                         controller: _price,
                         keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        readOnly: _isCompletedShift,
                         decoration: const InputDecoration(labelText: 'قيمة الوردية بالجنيه', helperText: 'تُملأ تلقائيًا من السعر الافتراضي عند اختيار السائق والمعدة'),
                         validator: _moneyValidator,
                       ),
@@ -280,6 +298,7 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
                       TextFormField(
                         controller: _wage,
                         keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        readOnly: _isCompletedShift,
                         decoration: const InputDecoration(
                           labelText: 'أجر السائق بالجنيه',
                           helperText: 'يتحدد تلقائيًا عند اختيار السائق ونوع الوردية',
@@ -307,7 +326,7 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
                       ElevatedButton.icon(
                         onPressed: _saving ? null : _save,
                         icon: _saving ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.save_outlined),
-                        label: Text(_saving ? 'جارٍ الحفظ...' : widget.shift == null ? 'بدء الوردية' : 'حفظ التعديلات'),
+                        label: Text(_saving ? 'جارٍ الحفظ...' : widget.shift == null ? 'بدء الوردية' : _isCompletedShift ? 'حفظ الملاحظات' : 'حفظ التعديلات'),
                       ),
                     ],
                   ),
@@ -345,6 +364,7 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
     required List<Map<String, dynamic>> items,
     required int? selectedId,
     required String kind,
+    bool disabled = false,
     required ValueChanged<int?> onChanged,
   }) {
     final selected = items.where((e) => (e['id'] as num).toInt() == selectedId).toList();
@@ -357,7 +377,7 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
     final selectedAvailable = selectedItem != null && _available(selectedItem, kind);
     return InkWell(
       borderRadius: BorderRadius.circular(12),
-      onTap: _saving ? null : () => _chooseResource(
+      onTap: _saving || disabled ? null : () => _chooseResource(
         label: label, items: items, selectedId: selectedId, kind: kind, onChanged: onChanged,
       ),
       child: InputDecorator(
