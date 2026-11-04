@@ -24,4 +24,9 @@ public interface CompensationAgreementRepository extends JpaRepository<Compensat
 
     boolean existsByTenantIdAndWorkforceAssignmentIdAndStatus(
             Long tenantId, Long workforceAssignmentId, CompensationAgreementStatus status);
+
+    @Lock(LockModeType.PESSIMISTIC_READ)
+    @Query("select a from CompensationAgreement a where a.tenantId = :tenantId and a.workforceMemberId = :memberId")
+    List<CompensationAgreement> findAllForWageResolution(
+            @Param("tenantId") Long tenantId, @Param("memberId") Long memberId);
 }
