@@ -22,7 +22,8 @@ This phase supports `SHIFT` compensation components only. Hour, day, quantity, a
 3. An assignment-specific agreement is eligible only when its assignment belongs to the same member and tenant, is effective on the shift date, and its site is either the shift site or site-independent.
 4. General and assignment-specific agreements must never overlap. If corrupt or legacy data produces both as effective for the same shift, reject the resolution instead of silently preferring one.
 5. More than one eligible assignment-specific agreement is an ambiguity error; never choose one arbitrarily.
-6. If there is no eligible assignment-specific agreement, use the eligible general agreement.
+6. Because the current shift record does not carry a workforce assignment ID, if multiple assignments are effective for the same member/site and an assignment-specific agreement could apply, reject rather than guessing which role the shift represents. A later UI/API enhancement can make the assignment explicit.
+7. If there is no eligible assignment-specific agreement, use the eligible general agreement.
 7. Within the selected agreement, select exactly one `SHIFT` component matching the shift type. Missing or duplicate matches are errors.
 8. Reject unsupported bases for this phase. Do not infer hours, quantities, or units.
 9. Persist the resolved agreement/component identifiers, agreement reference, source, basis, rate, shift type, currency, and calculated amount on the shift. The posting path must use this frozen snapshot, not re-resolve the agreement at finish time.
