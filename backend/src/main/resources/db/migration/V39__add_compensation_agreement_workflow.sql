@@ -20,5 +20,4 @@ ALTER TABLE compensation_agreements
         ),
     ADD CONSTRAINT ck_compensation_agreements_replacement_reason
         CHECK (supersedes_agreement_id IS NULL OR
-               (supersedes_agreement_id <> id AND change_reason IS NOT NULL
-                AND TRIM(change_reason) <> ''));
+               (change_reason IS NOT NULL AND TRIM(change_reason) <> ''));
