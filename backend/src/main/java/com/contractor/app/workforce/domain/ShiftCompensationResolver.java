@@ -8,6 +8,7 @@ import com.contractor.app.shift.domain.ShiftType;
 import com.contractor.app.workforce.infra.CompensationAgreementRepository;
 import com.contractor.app.workforce.infra.CompensationComponentRepository;
 import com.contractor.app.workforce.infra.WorkforceAssignmentRepository;
+import com.contractor.app.workforce.infra.WorkforceMemberRepository;
 import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.List;
@@ -26,12 +27,15 @@ public class ShiftCompensationResolver {
     private final CompensationAgreementRepository agreements;
     private final CompensationComponentRepository components;
     private final WorkforceAssignmentRepository assignments;
+    private final WorkforceMemberRepository members;
 
     public ShiftCompensationResolver(CompensationAgreementRepository agreements,
-            CompensationComponentRepository components, WorkforceAssignmentRepository assignments) {
+            CompensationComponentRepository components, WorkforceAssignmentRepository assignments,
+            WorkforceMemberRepository members) {
         this.agreements = agreements;
         this.components = components;
         this.assignments = assignments;
+        this.members = members;
     }
 
     public void resolveAndApply(Long tenantId, Driver driver, LocalDate shiftDate,
@@ -41,9 +45,11 @@ public class ShiftCompensationResolver {
             throw ApiException.badRequest("تعذر تحديد بيانات العامل والتكليف لحساب الأجر.");
         }
 
+        members.findByIdAndTenantIdForUpdate(driver.getWorkforceMemberId(), tenantId)
+                .orElseThrow(() -> ApiException.notFound("العامل المرتبط بالسائق غير موجود."));
+
         List<CompensationAgreement> memberAgreements =
-                agreements.findAllByTenantIdAndWorkforceMemberIdOrderByEffectiveFromDescIdDesc(
-                        tenantId, driver.getWorkforceMemberId());
+                agreements.findAllForWageResolution(tenantId, driver.getWorkforceMemberId());
 
         List<CompensationAgreement> approved = memberAgreements.stream()
                 .filter(a -> a.getStatus() == CompensationAgreementStatus.APPROVED
@@ -64,8 +70,7 @@ public class ShiftCompensationResolver {
         }
 
         List<WorkforceAssignment> effectiveAssignments =
-                assignments.findAllByTenantIdAndWorkforceMemberIdOrderByEffectiveFromDescIdDesc(
-                        tenantId, driver.getWorkforceMemberId()).stream()
+                assignments.findAllForWageResolution(tenantId, driver.getWorkforceMemberId()).stream()
                 .filter(a -> a.getStatus() != WorkforceAssignmentStatus.CANCELLED)
                 .filter(a -> !a.getEffectiveFrom().isAfter(shiftDate)
                         && (a.getEffectiveTo() == null || !a.getEffectiveTo().isBefore(shiftDate)))
@@ -101,8 +106,7 @@ public class ShiftCompensationResolver {
         }
 
         List<CompensationComponent> matching = components
-                .findAllByTenantIdAndCompensationAgreementIdOrderBySortOrderAscIdAsc(
-                        tenantId, selected.getId()).stream()
+                .findAllForWageResolution(tenantId, selected.getId()).stream()
                 .filter(c -> c.getBasis() == CompensationBasis.SHIFT)
                 .filter(c -> c.getShiftType() == CompensationShiftType.valueOf(shiftType.name()))
                 .collect(Collectors.toList());
