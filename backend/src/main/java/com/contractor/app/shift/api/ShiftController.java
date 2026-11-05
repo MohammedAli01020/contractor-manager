@@ -118,10 +118,10 @@ public class ShiftController {
 
     @PreAuthorize("hasAnyRole('ADMIN','OPERATOR')")
     @PostMapping("/{id}/finish")
-    @Operation(summary = "إنهاء وردية شغالة؛ يتطلب actualHours للاتفاقيات بالساعة، ثم يرحّل الأجر مرة واحدة")
+    @Operation(summary = "إنهاء وردية شغالة؛ يتطلب actualHours أو actualQuantity حسب أساس الأجر، ثم يرحّل الأجر مرة واحدة")
     public ShiftResponse finish(@PathVariable Long id, @Valid @RequestBody ShiftVersionRequest request) {
         return service.finish(CurrentUser.tenantId(), id, request.getVersion(),
-                CurrentUser.get().getUserId(), request.getActualHours());
+                CurrentUser.get().getUserId(), request.getActualHours(), request.getActualQuantity());
     }
 
     @PreAuthorize("hasAnyRole('ADMIN','OPERATOR')")
