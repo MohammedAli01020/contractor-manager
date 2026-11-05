@@ -559,8 +559,14 @@ class ShiftCorrectionIntegrationTest extends AbstractShiftIntegrationTest {
         assertThat(snapshot.get("new_compensation_basis")).isEqualTo("SHIFT");
         assertThat(snapshot.get("old_compensation_rate")).isNotNull();
         assertThat(snapshot.get("new_compensation_rate")).isEqualTo(snapshot.get("old_compensation_rate"));
+        assertThat(snapshot.get("old_compensation_calculated_amount"))
+                .isEqualTo(new BigDecimal("150.00"));
         assertThat(snapshot.get("new_compensation_calculated_amount"))
-                .isEqualTo(snapshot.get("old_compensation_calculated_amount"));
+                .isEqualTo(new BigDecimal("180.00"));
+        assertThat(jdbc.queryForObject(
+                "SELECT compensation_calculated_amount FROM shifts WHERE tenant_id=? AND id=?",
+                BigDecimal.class, tenantId, shiftId))
+                .isEqualByComparingTo("180.00");
         assertThat(snapshot.get("old_actual_hours")).isNull();
         assertThat(snapshot.get("new_actual_hours")).isNull();
         assertThat(snapshot.get("old_actual_quantity")).isNull();
