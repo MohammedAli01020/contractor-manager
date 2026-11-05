@@ -141,6 +141,7 @@ public class ShiftService {
         String wageSource = null;
         String compensationBasis = null;
         BigDecimal compensationRate = null;
+        String compensationUnitCode = null;
         if (driver != null) {
             if (siteId != null) {
                 LocalDate date = shiftDate == null ? today() : shiftDate;
@@ -148,7 +149,9 @@ public class ShiftService {
                 compensationResolver.resolveAndApply(tenantId, driver, date, siteId, type, null, preview);
                 compensationBasis = preview.getCompensationBasis();
                 compensationRate = preview.getCompensationRate();
-                suggestedWage = "HOUR".equals(compensationBasis) ? null : preview.getDriverWage();
+                compensationUnitCode = preview.getCompensationUnitCode();
+                suggestedWage = ("HOUR".equals(compensationBasis) || "QUANTITY".equals(compensationBasis))
+                        ? null : preview.getDriverWage();
                 wageSource = preview.getWageSource();
             } else {
                 // Without a site/date there is no safe way to resolve an assignment-scoped agreement.
@@ -160,6 +163,7 @@ public class ShiftService {
                 wageSource,
                 compensationBasis,
                 compensationRate,
+                compensationUnitCode,
                 item == null ? null : Money.scale(item.getDefaultShiftPrice()),
                 item == null ? null : Money.scale(item.getOperatingCostPerShift()));
     }
