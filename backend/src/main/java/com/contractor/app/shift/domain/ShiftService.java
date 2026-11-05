@@ -290,6 +290,12 @@ public class ShiftService {
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public ShiftResponse finish(Long tenantId, Long id, Long version, Long actorUserId, BigDecimal actualHours) {
+        return finish(tenantId, id, version, actorUserId, actualHours, null);
+    }
+
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public ShiftResponse finish(Long tenantId, Long id, Long version, Long actorUserId,
+                                BigDecimal actualHours, BigDecimal actualQuantity) {
         Shift shift = findForUpdate(tenantId, id);
         if (shift.getStatus() != ShiftStatus.IN_PROGRESS) {
             throw ApiException.conflict("الوردية ليست شغالة.");
@@ -299,6 +305,9 @@ public class ShiftService {
             throw ApiException.unauthorized("تعذر تحديد المستخدم المنفّذ للترحيل المالي.");
         }
         if ("HOUR".equals(shift.getCompensationBasis())) {
+            if (actualQuantity != null) {
+                throw ApiException.badRequest("لا ترسل كمية مع وردية تُحسب بالساعة.");
+            }
             if (actualHours == null) {
                 throw ApiException.badRequest("عدد ساعات العمل الفعلية مطلوب لإنهاء هذه الوردية.");
             }
@@ -314,8 +323,27 @@ public class ShiftService {
             }
             BigDecimal calculated = Money.scale(shift.getCompensationRate().multiply(normalizedHours));
             shift.applyHourlyCalculation(normalizedHours, calculated);
-        } else if (actualHours != null) {
-            throw ApiException.badRequest("لا ترسل عدد ساعات مع وردية لا تُحسب بالساعة.");
+        } else if ("QUANTITY".equals(shift.getCompensationBasis())) {
+            if (actualHours != null) {
+                throw ApiException.badRequest("لا ترسل ساعات مع وردية تُحسب بالكمية.");
+            }
+            if (actualQuantity == null) {
+                throw ApiException.badRequest("الكمية الفعلية مطلوبة لإنهاء هذه الوردية.");
+            }
+            if (actualQuantity.signum() <= 0 || actualQuantity.scale() > 3
+                    || actualQuantity.precision() - actualQuantity.scale() > 9) {
+                throw ApiException.badRequest("الكمية يجب أن تكون أكبر من صفر وبحد أقصى ثلاث خانات عشرية.");
+            }
+            BigDecimal normalizedQuantity;
+            try {
+                normalizedQuantity = actualQuantity.setScale(3, java.math.RoundingMode.UNNECESSARY);
+            } catch (ArithmeticException ex) {
+                throw ApiException.badRequest("الكمية تقبل حتى ثلاث خانات عشرية فقط.");
+            }
+            BigDecimal calculated = Money.scale(shift.getCompensationRate().multiply(normalizedQuantity));
+            shift.applyQuantityCalculation(normalizedQuantity, calculated);
+        } else if (actualHours != null || actualQuantity != null) {
+            throw ApiException.badRequest("لا ترسل ساعات أو كمية مع وردية لا تستخدم القياس الفعلي.");
         }
         if (shift.getDriverWage() == null || shift.getDriverWage().signum() < 0) {
             throw ApiException.conflict("لا يمكن إكمال الوردية قبل تحديد أجر صالح للسائق.");
