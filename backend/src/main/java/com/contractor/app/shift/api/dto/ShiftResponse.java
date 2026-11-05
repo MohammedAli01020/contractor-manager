@@ -77,7 +77,8 @@ public class ShiftResponse {
         this.compensationUnitCode = s.getCompensationUnitCode();
         this.actualQuantity = s.getActualQuantity();
         // الإيراد ناقص أجر السائق (قبل المصروفات الفعلية). تكلفة تشغيل المعدة مؤشر فقط ولا تدخل هنا.
-        this.priceAfterWage = "HOUR".equals(s.getCompensationBasis())
+        this.priceAfterWage = ("HOUR".equals(s.getCompensationBasis())
+                || "QUANTITY".equals(s.getCompensationBasis()))
                 && s.getStatus() == com.contractor.app.shift.domain.ShiftStatus.IN_PROGRESS
                 ? null : s.getPrice().subtract(s.getDriverWage());
         this.notes = s.getNotes();
