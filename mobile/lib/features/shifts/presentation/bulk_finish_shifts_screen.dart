@@ -53,7 +53,7 @@ class _BulkFinishShiftsScreenState extends State<BulkFinishShiftsScreen> {
 
   Future<void> _finishSelected() async {
     final selected = _shifts
-        .where((shift) => _selectedIds.contains(shift.id) && shift.compensationBasis != 'HOUR')
+        .where((shift) => _selectedIds.contains(shift.id) && shift.compensationBasis != 'HOUR' && shift.compensationBasis != 'QUANTITY')
         .toList();
     if (selected.isEmpty || _working) return;
 
@@ -219,7 +219,7 @@ class _BulkFinishShiftsScreenState extends State<BulkFinishShiftsScreen> {
                           child: Text(
                             'تم تحميل ${_shifts.length} وردية نشطة. '
                             'لا يتم إنهاء أي وردية تلقائيًا؛ اختر الورديات ثم أكّد كل واحدة على حدة. '
-                            'الورديات بنظام الساعة تُنهى منفردة لإدخال ساعات العمل الفعلية.',
+                            'الورديات بنظام الساعة أو الكمية تُنهى منفردة لإدخال القياس الفعلي.',
                           ),
                         ),
                         Expanded(
@@ -233,7 +233,7 @@ class _BulkFinishShiftsScreenState extends State<BulkFinishShiftsScreen> {
                               return Card(
                                 child: CheckboxListTile(
                                   value: selected,
-                                  onChanged: _working || shift.compensationBasis == 'HOUR'
+                                  onChanged: _working || shift.compensationBasis == 'HOUR' || shift.compensationBasis == 'QUANTITY'
                                       ? null
                                       : (checked) {
                                           setState(() {
