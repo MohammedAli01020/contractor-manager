@@ -58,3 +58,14 @@ WF-06 adds the `HOUR` compensation basis to the existing shift lifecycle:
 ## Explicit boundaries
 
 No merge is performed by this phase without separate user approval. No changes are made to `main`, and no production migration is run.
+
+
+## Completed SHIFT correction and zero wages
+
+The approved WF-05 zero-wage rule also applies to audited correction of a completed SHIFT:
+- Corrected wages may be zero, but never negative.
+- A positive old wage is reversed through its posted journal and earning ledger row.
+- A positive replacement wage is posted through a replacement journal and earning row.
+- A zero side has no zero-value journal or driver-ledger row; the shift wage-journal pointer remains null.
+- The audited correction record supports positive→positive, positive→zero, zero→positive, and zero→zero transitions.
+- Database triggers enforce the conditional financial references. HOUR remains blocked from this SHIFT-only correction endpoint.
