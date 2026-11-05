@@ -579,7 +579,7 @@ class ShiftCorrectionIntegrationTest extends AbstractShiftIntegrationTest {
                 "UPDATE shift_corrections SET old_compensation_rate=old_compensation_rate+1 "
                         + "WHERE tenant_id=? AND id=?", tenantId, correctionId))
                 .isInstanceOf(UncategorizedSQLException.class)
-                .hasMessageContaining("SHIFT_CORRECTION_COMPENSATION_SNAPSHOT_IMMUTABLE");
+                .hasMessageContaining("SHIFT_CORRECTION_AUDIT_IMMUTABLE");
     }
 
 
