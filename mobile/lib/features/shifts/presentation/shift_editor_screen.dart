@@ -35,6 +35,8 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
   bool _defaultsLoaded = false;
   bool _contractualWage = false;
   bool _hourlyCompensation = false;
+  bool _quantityCompensation = false;
+  String _compensationUnitCode = '';
   int _defaultsRequestId = 0;
   String? _error;
 
@@ -49,9 +51,11 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
     _siteId = shift?.siteId;
     _price.text = shift?.price.toStringAsFixed(2) ?? '';
     _hourlyCompensation = shift?.compensationBasis == 'HOUR';
+    _quantityCompensation = shift?.compensationBasis == 'QUANTITY';
+    _compensationUnitCode = shift?.compensationUnitCode ?? '';
     _wage.text = shift == null
         ? ''
-        : (_hourlyCompensation
+        : (_hourlyCompensation || _quantityCompensation
             ? shift.compensationRate.toStringAsFixed(2)
             : shift.driverWage.toStringAsFixed(2));
     _contractualWage = shift?.wageSource == 'AGREEMENT';
@@ -104,8 +108,10 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
       setState(() {
         _contractualWage = data['wageSource'] == 'AGREEMENT';
         _hourlyCompensation = data['compensationBasis'] == 'HOUR';
+        _quantityCompensation = data['compensationBasis'] == 'QUANTITY';
+        _compensationUnitCode = (data['compensationUnitCode'] ?? '').toString();
         if (_driverId != null) {
-          final suggestedWage = _hourlyCompensation
+          final suggestedWage = (_hourlyCompensation || _quantityCompensation)
               ? data['compensationRate']
               : data['driverWage'];
           if (suggestedWage != null) {
@@ -133,7 +139,9 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
     return value.toString();
   }
 
-  bool get _isZeroWage => !_hourlyCompensation && double.tryParse(_wage.text.trim()) == 0;
+  bool get _isZeroWage =>
+      !_hourlyCompensation && !_quantityCompensation &&
+      double.tryParse(_wage.text.trim()) == 0;
 
   Future<bool> _confirmZeroWage(String action) async {
     final confirmed = await showDialog<bool>(
@@ -216,7 +224,7 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
         'driverId': _driverId,
         'equipmentId': _equipmentId,
         'price': _price.text.trim().isEmpty ? null : double.parse(_price.text.trim()),
-        if (!_hourlyCompensation)
+        if (!_hourlyCompensation && !_quantityCompensation)
           'driverWage': _wage.text.trim().isEmpty ? null : double.parse(_wage.text.trim()),
         'notes': _notes.text.trim(),
       };
@@ -339,12 +347,18 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
                         keyboardType: const TextInputType.numberWithOptions(decimal: true),
                         readOnly: _contractualWage,
                         decoration: InputDecoration(
-                          labelText: _hourlyCompensation ? 'سعر الساعة بالجنيه' : 'أجر السائق بالجنيه',
+                          labelText: _hourlyCompensation
+                              ? 'سعر الساعة بالجنيه'
+                              : _quantityCompensation
+                                  ? 'سعر الوحدة بالجنيه'
+                                  : 'أجر السائق بالجنيه',
                           helperText: _hourlyCompensation
                               ? 'سعر الساعة من الاتفاقية المعتمدة؛ أدخل الساعات الفعلية عند إنهاء الوردية'
-                              : _contractualWage
-                                  ? 'أجر الاتفاقية المعتمدة؛ لا يمكن تغييره من نموذج الوردية'
-                              : 'يتحدد تلقائيًا عند اختيار الموقع والسائق ونوع الوردية، ويمكن تعديله للعامل بنظام الأجر القديم',
+                              : _quantityCompensation
+                                  ? 'سعر الوحدة (${_compensationUnitCode.isEmpty ? 'وحدة الاتفاقية' : _compensationUnitCode}) من الاتفاقية؛ أدخل الكمية الفعلية عند إنهاء الوردية'
+                                  : _contractualWage
+                                      ? 'أجر الاتفاقية المعتمدة؛ لا يمكن تغييره من نموذج الوردية'
+                                      : 'يتحدد تلقائيًا عند اختيار الموقع والسائق ونوع الوردية، ويمكن تعديله للعامل بنظام الأجر القديم',
                         ),
                         validator: _moneyValidator,
                         onChanged: (_) => setState(() {}),
