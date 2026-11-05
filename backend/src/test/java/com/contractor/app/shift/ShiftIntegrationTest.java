@@ -127,6 +127,117 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
         return agreementId;
     }
 
+    private long createQuantityAgreement(String unitRate, String unitCode) throws Exception {
+        Long memberId = jdbcTemplate.queryForObject(
+                "select workforce_member_id from drivers where id = ?", Long.class, driverId);
+        JsonNode roles = body(getJson("/api/v1/workforce/roles", token).andExpect(status().isOk()));
+        long driverRoleId = 0L;
+        for (JsonNode role : roles) {
+            if ("DRIVER".equals(role.path("code").asText())) {
+                driverRoleId = role.path("id").asLong();
+                break;
+            }
+        }
+        assertThat(driverRoleId).isPositive();
+
+        Map<String, Object> assignmentBody = new HashMap<>();
+        assignmentBody.put("roleId", driverRoleId);
+        assignmentBody.put("siteId", siteId);
+        assignmentBody.put("effectiveFrom", day(30).toString());
+        JsonNode assignment = body(postJson("/api/v1/workforce/members/" + memberId + "/assignments",
+                assignmentBody, token).andExpect(status().isCreated()));
+
+        Map<String, Object> component = new HashMap<>();
+        component.put("componentCode", "QUANTITY_RATE");
+        component.put("displayName", "Quantity wage");
+        component.put("basis", "QUANTITY");
+        component.put("rate", new BigDecimal(unitRate));
+        component.put("unitCode", unitCode);
+        component.put("sortOrder", 0);
+        Map<String, Object> agreementBody = new HashMap<>();
+        agreementBody.put("workforceAssignmentId", assignment.path("id").asLong());
+        agreementBody.put("effectiveFrom", day(30).toString());
+        agreementBody.put("currencyCode", "EGP");
+        agreementBody.put("components", java.util.Collections.singletonList(component));
+        JsonNode agreement = body(postJson("/api/v1/workforce/members/" + memberId
+                + "/compensation-agreements", agreementBody, token).andExpect(status().isCreated()));
+        long agreementId = agreement.path("id").asLong();
+        postJson("/api/v1/workforce/members/" + memberId + "/compensation-agreements/"
+                + agreementId + "/approve", java.util.Collections.emptyMap(), token)
+                .andExpect(status().isOk());
+        return agreementId;
+    }
+
+    @Test
+    void quantityShiftRequiresMeasuredQuantityAndPostsCalculatedWageOnce() throws Exception {
+        createQuantityAgreement("10.01", "TON");
+        JsonNode started = startShift(token,
+                shiftBody(siteId, driverId, equipmentId, day(1), "MORNING"));
+
+        assertThat(started.path("compensationBasis").asText()).isEqualTo("QUANTITY");
+        assertThat(started.path("compensationUnitCode").asText()).isEqualTo("TON");
+        assertThat(started.path("compensationRate").decimalValue()).isEqualByComparingTo("10.01");
+        assertThat(started.path("actualQuantity").isNull()).isTrue();
+        assertThat(started.path("driverWage").decimalValue()).isEqualByComparingTo("0.00");
+        assertThat(started.path("priceAfterWage").isNull()).isTrue();
+
+        long shiftId = started.path("id").asLong();
+        postJson("/api/v1/shifts/" + shiftId + "/finish",
+                versionBody(started.path("version").asLong()), token)
+                .andExpect(status().isBadRequest());
+
+        Map<String, Object> invalid = versionBody(started.path("version").asLong());
+        invalid.put("actualQuantity", new BigDecimal("0"));
+        postJson("/api/v1/shifts/" + shiftId + "/finish", invalid, token)
+                .andExpect(status().isBadRequest());
+        invalid.put("actualQuantity", new BigDecimal("-1"));
+        postJson("/api/v1/shifts/" + shiftId + "/finish", invalid, token)
+                .andExpect(status().isBadRequest());
+        invalid.put("actualQuantity", new BigDecimal("1.2345"));
+        postJson("/api/v1/shifts/" + shiftId + "/finish", invalid, token)
+                .andExpect(status().isBadRequest());
+
+        Map<String, Object> finishBody = versionBody(started.path("version").asLong());
+        finishBody.put("actualQuantity", new BigDecimal("2.345"));
+        JsonNode finished = body(postJson("/api/v1/shifts/" + shiftId + "/finish",
+                finishBody, token).andExpect(status().isOk()));
+
+        assertThat(finished.path("status").asText()).isEqualTo("COMPLETED");
+        assertThat(finished.path("actualQuantity").decimalValue()).isEqualByComparingTo("2.345");
+        assertThat(finished.path("compensationCalculatedAmount").decimalValue()).isEqualByComparingTo("23.47");
+        assertThat(finished.path("driverWage").decimalValue()).isEqualByComparingTo("23.47");
+        assertThat(finished.path("driverWageJournalEntryId").asLong()).isPositive();
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from driver_ledger_entries where tenant_id = ? and shift_id = ? and transaction_type = 'EARNING'",
+                Integer.class, tenantId, shiftId)).isEqualTo(1);
+        postJson("/api/v1/shifts/" + shiftId + "/finish", finishBody, token)
+                .andExpect(status().isConflict());
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from driver_ledger_entries where tenant_id = ? and shift_id = ? and transaction_type = 'EARNING'",
+                Integer.class, tenantId, shiftId)).isEqualTo(1);
+    }
+
+    @Test
+    void zeroRateQuantityShiftCompletesWithoutZeroValueFinancialEntries() throws Exception {
+        createQuantityAgreement("0.00", "LOAD");
+        JsonNode started = startShift(token,
+                shiftBody(siteId, driverId, equipmentId, day(1), "MORNING"));
+        Map<String, Object> finishBody = versionBody(started.path("version").asLong());
+        finishBody.put("actualQuantity", new BigDecimal("3.500"));
+        JsonNode finished = body(postJson("/api/v1/shifts/" + started.path("id").asLong()
+                + "/finish", finishBody, token).andExpect(status().isOk()));
+
+        assertThat(finished.path("status").asText()).isEqualTo("COMPLETED");
+        assertThat(finished.path("driverWage").decimalValue()).isEqualByComparingTo("0.00");
+        assertThat(finished.path("driverWageJournalEntryId").isNull()).isTrue();
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from driver_ledger_entries where tenant_id = ? and shift_id = ? and transaction_type in ('EARNING', 'ADVANCE_RECOVERY')",
+                Integer.class, tenantId, started.path("id").asLong())).isZero();
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from journal_entries where tenant_id = ? and source_type = 'SHIFT_WAGE' and source_id = ?",
+                Integer.class, tenantId, started.path("id").asLong())).isZero();
+    }
+
     @Test
     void hourlyShiftRequiresMeasuredHoursAndCalculatesWageOnlyAtFinish() throws Exception {
         createHourlyAgreement("100.01");
