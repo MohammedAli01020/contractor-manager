@@ -93,6 +93,10 @@ public class Shift extends BaseTenantEntity {
     @Column(name = "actual_hours", precision = 8, scale = 2)
     private BigDecimal actualHours;
 
+    /** Explicit measured quantity entered when a quantity-compensated shift is completed. */
+    @Column(name = "actual_quantity", precision = 12, scale = 3)
+    private BigDecimal actualQuantity;
+
     @Column(length = 500)
     private String notes;
 
@@ -223,6 +227,7 @@ public class Shift extends BaseTenantEntity {
     public BigDecimal getCompensationRate() { return compensationRate; }
     public BigDecimal getCompensationCalculatedAmount() { return compensationCalculatedAmount; }
     public BigDecimal getActualHours() { return actualHours; }
+    public BigDecimal getActualQuantity() { return actualQuantity; }
 
     public void applyCompensationSnapshot(String source, Long agreementId, Long componentId,
             String agreementReference, String componentCode, String componentName,
@@ -250,6 +255,7 @@ public class Shift extends BaseTenantEntity {
         this.compensationCalculatedAmount = amount;
         this.driverWage = amount;
         this.actualHours = null;
+        this.actualQuantity = null;
     }
 
     /** Finalize an hourly calculation from explicitly measured hours. */
@@ -259,6 +265,18 @@ public class Shift extends BaseTenantEntity {
             throw new IllegalArgumentException("Invalid hourly shift calculation");
         }
         this.actualHours = hours;
+        this.compensationCalculatedAmount = amount;
+        this.driverWage = amount;
+    }
+
+    /** Finalize a quantity calculation from an explicitly measured positive quantity. */
+    public void applyQuantityCalculation(BigDecimal quantity, BigDecimal amount) {
+        if (!"QUANTITY".equals(this.compensationBasis) || quantity == null || quantity.signum() <= 0
+                || amount == null || amount.signum() < 0 || this.compensationRate == null
+                || this.compensationUnitCode == null || this.compensationUnitCode.trim().isEmpty()) {
+            throw new IllegalArgumentException("Invalid quantity shift calculation");
+        }
+        this.actualQuantity = quantity;
         this.compensationCalculatedAmount = amount;
         this.driverWage = amount;
     }
