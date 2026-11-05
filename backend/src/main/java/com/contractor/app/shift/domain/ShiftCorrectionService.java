@@ -205,13 +205,14 @@ public class ShiftCorrectionService {
                     && Objects.equals(original.getSourceId(), shiftId)
                     && Objects.equals(original.getPostingKey(), "shift-wage-" + shiftId);
             boolean priorCorrectionJournal = false;
+            final Long originalSourceId = original.getSourceId();
             if ("SHIFT_WAGE_CORRECTION".equals(original.getSourceType())
-                    && original.getSourceId() != null
-                    && Objects.equals(original.getPostingKey(), "shift-wage-correction-" + original.getSourceId())) {
+                    && originalSourceId != null
+                    && Objects.equals(original.getPostingKey(), "shift-wage-correction-" + originalSourceId)) {
                 priorCorrectionJournal = corrections.findByTenantIdAndShiftIdAndReplacementWageJournalEntryId(
                         tenantId, shiftId, original.getId())
                         .map(previous -> "APPLIED".equals(previous.getStatus())
-                                && Objects.equals(previous.getId(), original.getSourceId()))
+                                && Objects.equals(previous.getId(), originalSourceId))
                         .orElse(false);
             }
             if ((!initialWageJournal && !priorCorrectionJournal)
