@@ -71,6 +71,36 @@ public class ShiftCorrection extends BaseTenantEntity {
     @Column(name = "new_equipment_operating_cost", nullable = false, precision = 15, scale = 2, updatable = false)
     private BigDecimal newEquipmentOperatingCost;
 
+    // Frozen compensation inputs and measured values captured with the correction audit row.
+    @Column(name = "old_compensation_basis", length = 20, updatable = false)
+    private String oldCompensationBasis;
+    @Column(name = "new_compensation_basis", length = 20, updatable = false)
+    private String newCompensationBasis;
+    @Column(name = "old_compensation_rate", precision = 15, scale = 2, updatable = false)
+    private BigDecimal oldCompensationRate;
+    @Column(name = "new_compensation_rate", precision = 15, scale = 2, updatable = false)
+    private BigDecimal newCompensationRate;
+    @Column(name = "old_compensation_unit_code", length = 30, updatable = false)
+    private String oldCompensationUnitCode;
+    @Column(name = "new_compensation_unit_code", length = 30, updatable = false)
+    private String newCompensationUnitCode;
+    @Column(name = "old_compensation_currency_code", length = 3, updatable = false)
+    private String oldCompensationCurrencyCode;
+    @Column(name = "new_compensation_currency_code", length = 3, updatable = false)
+    private String newCompensationCurrencyCode;
+    @Column(name = "old_compensation_calculated_amount", precision = 15, scale = 2, updatable = false)
+    private BigDecimal oldCompensationCalculatedAmount;
+    @Column(name = "new_compensation_calculated_amount", precision = 15, scale = 2, updatable = false)
+    private BigDecimal newCompensationCalculatedAmount;
+    @Column(name = "old_actual_hours", precision = 8, scale = 2, updatable = false)
+    private BigDecimal oldActualHours;
+    @Column(name = "new_actual_hours", precision = 8, scale = 2, updatable = false)
+    private BigDecimal newActualHours;
+    @Column(name = "old_actual_quantity", precision = 12, scale = 3, updatable = false)
+    private BigDecimal oldActualQuantity;
+    @Column(name = "new_actual_quantity", precision = 12, scale = 3, updatable = false)
+    private BigDecimal newActualQuantity;
+
     @Column(name = "old_notes", length = 500, updatable = false)
     private String oldNotes;
     @Column(name = "new_notes", length = 500, updatable = false)
@@ -123,6 +153,20 @@ public class ShiftCorrection extends BaseTenantEntity {
         this.oldEquipmentOperatingCost = shift.getEquipmentOperatingCost();
         this.newEquipmentOperatingCost = newEquipmentOperatingCost;
         this.oldNotes = shift.getNotes();
+        this.oldCompensationBasis = shift.getCompensationBasis();
+        this.newCompensationBasis = shift.getCompensationBasis();
+        this.oldCompensationRate = shift.getCompensationRate();
+        this.newCompensationRate = shift.getCompensationRate();
+        this.oldCompensationUnitCode = shift.getCompensationUnitCode();
+        this.newCompensationUnitCode = shift.getCompensationUnitCode();
+        this.oldCompensationCurrencyCode = shift.getCompensationCurrencyCode();
+        this.newCompensationCurrencyCode = shift.getCompensationCurrencyCode();
+        this.oldCompensationCalculatedAmount = shift.getCompensationCalculatedAmount();
+        this.newCompensationCalculatedAmount = shift.getCompensationCalculatedAmount();
+        this.oldActualHours = shift.getActualHours();
+        this.newActualHours = shift.getActualHours();
+        this.oldActualQuantity = shift.getActualQuantity();
+        this.newActualQuantity = shift.getActualQuantity();
         this.newNotes = newNotes;
         this.oldWageJournalEntryId = shift.getDriverWageJournalEntryId();
         this.oldWageJournalEntryId = shift.getDriverWageJournalEntryId();
@@ -150,6 +194,20 @@ public class ShiftCorrection extends BaseTenantEntity {
     public BigDecimal getNewPrice() { return newPrice; }
     public BigDecimal getOldEquipmentOperatingCost() { return oldEquipmentOperatingCost; }
     public BigDecimal getNewEquipmentOperatingCost() { return newEquipmentOperatingCost; }
+    public String getOldCompensationBasis() { return oldCompensationBasis; }
+    public String getNewCompensationBasis() { return newCompensationBasis; }
+    public BigDecimal getOldCompensationRate() { return oldCompensationRate; }
+    public BigDecimal getNewCompensationRate() { return newCompensationRate; }
+    public String getOldCompensationUnitCode() { return oldCompensationUnitCode; }
+    public String getNewCompensationUnitCode() { return newCompensationUnitCode; }
+    public String getOldCompensationCurrencyCode() { return oldCompensationCurrencyCode; }
+    public String getNewCompensationCurrencyCode() { return newCompensationCurrencyCode; }
+    public BigDecimal getOldCompensationCalculatedAmount() { return oldCompensationCalculatedAmount; }
+    public BigDecimal getNewCompensationCalculatedAmount() { return newCompensationCalculatedAmount; }
+    public BigDecimal getOldActualHours() { return oldActualHours; }
+    public BigDecimal getNewActualHours() { return newActualHours; }
+    public BigDecimal getOldActualQuantity() { return oldActualQuantity; }
+    public BigDecimal getNewActualQuantity() { return newActualQuantity; }
     public String getOldNotes() { return oldNotes; }
     public String getNewNotes() { return newNotes; }
     public Long getOldWageJournalEntryId() { return oldWageJournalEntryId; }
