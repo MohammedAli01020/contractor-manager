@@ -181,19 +181,48 @@ class ShiftCorrectionIntegrationTest extends AbstractShiftIntegrationTest {
     }
 
     @Test
-    void correctionRejectsZeroWageAtRequestBoundary() throws Exception {
-        JsonNode started = startShift(token,
-                shiftBody(siteId, driverId, equipmentId, today().minusDays(1), "MORNING"));
-        JsonNode completed = finishShift(token, started);
-        Map<String, Object> request = correctionBody(completed, "zero-" + UUID.randomUUID());
-        request.put("driverWage", BigDecimal.ZERO);
+    void correctionSupportsZeroWageWithoutZeroValueFinancialEntries() throws Exception {
+        JsonNode completed = finishShift(token,
+                startShift(token, shiftBody(siteId, driverId, equipmentId, today().minusDays(1), "MORNING")));
+        long shiftId = completed.path("id").asLong();
+        Long originalJournalId = completed.path("driverWageJournalEntryId").asLong();
+        Map<String, Object> toZero = correctionBody(completed, "zero-" + UUID.randomUUID());
+        toZero.put("driverWage", BigDecimal.ZERO);
 
-        postJson("/api/v1/shifts/" + completed.path("id").asLong() + "/corrections", request, token)
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+        JsonNode zeroed = body(postJson("/api/v1/shifts/" + shiftId + "/corrections", toZero, token)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.driverWage").value(0.00)));
+        assertThat(zeroed.path("driverWageJournalEntryId").isNull()).isTrue();
         assertThat(jdbc.queryForObject(
-                "SELECT COUNT(*) FROM shift_corrections WHERE tenant_id=?",
+                "SELECT driver_wage_journal_entry_id FROM shifts WHERE tenant_id=? AND id=?",
+                Long.class, tenantId, shiftId)).isNull();
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM journal_entries WHERE tenant_id=? AND reversal_of_entry_id=?",
+                Integer.class, tenantId, originalJournalId)).isEqualTo(1);
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM journal_entries WHERE tenant_id=? AND source_type='SHIFT_WAGE_CORRECTION'",
                 Integer.class, tenantId)).isZero();
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM driver_ledger_entries WHERE tenant_id=? AND shift_id=? "
+                        + "AND transaction_type='CORRECTION_REVERSAL'",
+                Integer.class, tenantId, shiftId)).isEqualTo(1);
+        assertThat(ledger.sumBalance(tenantId, driverId)).isEqualByComparingTo("0.00");
+
+        // A later correction can restore a positive wage from the valid zero-wage snapshot.
+        Map<String, Object> backToPositive = correctionBody(zeroed, "positive-" + UUID.randomUUID());
+        backToPositive.put("driverWage", new BigDecimal("190.00"));
+        JsonNode restored = body(postJson("/api/v1/shifts/" + shiftId + "/corrections",
+                backToPositive, token).andExpect(status().isOk())
+                .andExpect(jsonPath("$.driverWage").value(190.00)));
+        assertThat(restored.path("driverWageJournalEntryId").asLong()).isPositive();
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM journal_entries WHERE tenant_id=? AND source_type='SHIFT_WAGE_CORRECTION'",
+                Integer.class, tenantId)).isEqualTo(1);
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM driver_ledger_entries WHERE tenant_id=? AND shift_id=? "
+                        + "AND transaction_type='EARNING' AND amount=190.00 AND balance_effect=190.00",
+                Integer.class, tenantId, shiftId)).isEqualTo(1);
+        assertThat(ledger.sumBalance(tenantId, driverId)).isEqualByComparingTo("190.00");
     }
 
 
