@@ -126,8 +126,8 @@ public class ShiftCorrectionService {
         if (request.getShiftDate() == null || request.getShiftDate().isAfter(LocalDate.now(businessZone))) {
             throw ApiException.badRequest("تاريخ الوردية مطلوب ولا يمكن أن يكون في المستقبل.");
         }
-        if (request.getDriverWage() == null || request.getDriverWage().signum() <= 0) {
-            throw ApiException.badRequest("أجر الوردية المصحح يجب أن يكون أكبر من صفر.");
+        if (request.getDriverWage() == null || request.getDriverWage().signum() < 0) {
+            throw ApiException.badRequest("أجر الوردية المصحح لا يمكن أن يكون أقل من صفر.");
         }
         if (request.getPrice() == null || request.getEquipmentOperatingCost() == null) {
             throw ApiException.badRequest("السعر وتكلفة تشغيل المعدة مطلوبان.");
@@ -180,99 +180,124 @@ public class ShiftCorrectionService {
             throw ApiException.conflict("لا يمكن التصحيح لوجود صرف مستحقات أو سلفة من المستحقات أو استرداد سلفة لاحق للسائق. يلزم إجراء تسوية مستقل.");
         }
 
-        if (shift.getDriverWageJournalEntryId() == null) {
-            throw ApiException.conflict("لا يوجد قيد أجر أصلي مرتبط بالوردية.");
+        BigDecimal oldWage = money(shift.getDriverWage());
+        if (oldWage.signum() < 0) {
+            throw ApiException.conflict("لقطة أجر الوردية الحالية غير صالحة ولا يمكن تصحيحها بأمان.");
         }
-        JournalEntry original = journals.findByIdAndTenantId(shift.getDriverWageJournalEntryId(), tenantId)
-                .orElseThrow(() -> ApiException.conflict("قيد أجر الوردية الأصلي غير موجود."));
-        boolean initialWageJournal = "SHIFT_WAGE".equals(original.getSourceType())
-                && Objects.equals(original.getSourceId(), shiftId)
-                && Objects.equals(original.getPostingKey(), "shift-wage-" + shiftId);
-        boolean priorCorrectionJournal = false;
-        if ("SHIFT_WAGE_CORRECTION".equals(original.getSourceType())
-                && original.getSourceId() != null
-                && Objects.equals(original.getPostingKey(), "shift-wage-correction-" + original.getSourceId())) {
-            priorCorrectionJournal = corrections.findByTenantIdAndShiftIdAndReplacementWageJournalEntryId(
-                    tenantId, shiftId, original.getId())
-                    .map(previous -> "APPLIED".equals(previous.getStatus())
-                            && Objects.equals(previous.getId(), original.getSourceId()))
-                    .orElse(false);
-        }
-        if ((!initialWageJournal && !priorCorrectionJournal)
-                || !"POSTED".equals(original.getStatus().name())
-                || original.getReversalOfEntryId() != null) {
-            throw ApiException.conflict("قيد أجر الوردية الحالي غير مطابق ولا يمكن تصحيحه بأمان.");
-        }
-        DriverLedgerEntry oldEarning = ledger.findByTenantIdAndJournalEntryId(tenantId, original.getId())
-                .orElseThrow(() -> ApiException.conflict("حركة استحقاق السائق الحالية غير موجودة."));
-        if (!"EARNING".equals(oldEarning.getTransactionType())
-                || !Objects.equals(oldEarning.getShiftId(), shiftId)
-                || !Objects.equals(oldEarning.getJournalEntryId(), original.getId())
-                || oldEarning.getAmount().compareTo(shift.getDriverWage()) != 0
-                || oldEarning.getBalanceEffect().compareTo(shift.getDriverWage()) != 0) {
-            throw ApiException.conflict("حركة دفتر السائق الأصلية غير متطابقة ولا يمكن تصحيحها بأمان.");
-        }
+        JournalEntry original = null;
+        DriverLedgerEntry oldEarning = null;
+        List<JournalLine> originalLines = new ArrayList<>();
+        ChartAccount wageExpense = null;
+        ChartAccount driverPayable = null;
 
-        List<JournalLine> originalLines = journalLines.findByTenantIdAndJournalEntryIdOrderByLineNumberAsc(
-                tenantId, original.getId());
-        ChartAccount wageExpense = defaultAccounts.requireSystemAccount(
-                tenantId, SystemAccountCode.DRIVER_WAGE_EXPENSE);
-        ChartAccount driverPayable = defaultAccounts.requireSystemAccount(
-                tenantId, SystemAccountCode.DRIVER_PAYABLE);
-        if (originalLines.size() != 2
-                || !Objects.equals(originalLines.get(0).getAccountId(), wageExpense.getId())
-                || originalLines.get(0).getDebit().compareTo(shift.getDriverWage()) != 0
-                || originalLines.get(0).getCredit().signum() != 0
-                || !Objects.equals(originalLines.get(0).getDriverId(), shift.getDriverId())
-                || !Objects.equals(originalLines.get(1).getAccountId(), driverPayable.getId())
-                || originalLines.get(1).getDebit().signum() != 0
-                || originalLines.get(1).getCredit().compareTo(shift.getDriverWage()) != 0
-                || !Objects.equals(originalLines.get(1).getDriverId(), shift.getDriverId())) {
-            throw ApiException.conflict("سطور قيد أجر الوردية الأصلي لا تطابق الترحيل القياسي؛ يلزم فحص محاسبي.");
+        if (oldWage.signum() == 0) {
+            // WF-05 zero-wage shifts intentionally have no wage journal or EARNING row.
+            if (shift.getDriverWageJournalEntryId() != null) {
+                throw ApiException.conflict("الوردية ذات الأجر الصفري مرتبطة بقيد أجر غير متوقع؛ يلزم فحص محاسبي.");
+            }
+        } else {
+            if (shift.getDriverWageJournalEntryId() == null) {
+                throw ApiException.conflict("لا يوجد قيد أجر أصلي مرتبط بالوردية.");
+            }
+            original = journals.findByIdAndTenantId(shift.getDriverWageJournalEntryId(), tenantId)
+                    .orElseThrow(() -> ApiException.conflict("قيد أجر الوردية الأصلي غير موجود."));
+            boolean initialWageJournal = "SHIFT_WAGE".equals(original.getSourceType())
+                    && Objects.equals(original.getSourceId(), shiftId)
+                    && Objects.equals(original.getPostingKey(), "shift-wage-" + shiftId);
+            boolean priorCorrectionJournal = false;
+            if ("SHIFT_WAGE_CORRECTION".equals(original.getSourceType())
+                    && original.getSourceId() != null
+                    && Objects.equals(original.getPostingKey(), "shift-wage-correction-" + original.getSourceId())) {
+                priorCorrectionJournal = corrections.findByTenantIdAndShiftIdAndReplacementWageJournalEntryId(
+                        tenantId, shiftId, original.getId())
+                        .map(previous -> "APPLIED".equals(previous.getStatus())
+                                && Objects.equals(previous.getId(), original.getSourceId()))
+                        .orElse(false);
+            }
+            if ((!initialWageJournal && !priorCorrectionJournal)
+                    || !"POSTED".equals(original.getStatus().name())
+                    || original.getReversalOfEntryId() != null) {
+                throw ApiException.conflict("قيد أجر الوردية الحالي غير مطابق ولا يمكن تصحيحه بأمان.");
+            }
+            oldEarning = ledger.findByTenantIdAndJournalEntryId(tenantId, original.getId())
+                    .orElseThrow(() -> ApiException.conflict("حركة استحقاق السائق الحالية غير موجودة."));
+            if (!"EARNING".equals(oldEarning.getTransactionType())
+                    || !Objects.equals(oldEarning.getShiftId(), shiftId)
+                    || !Objects.equals(oldEarning.getJournalEntryId(), original.getId())
+                    || oldEarning.getAmount().compareTo(oldWage) != 0
+                    || oldEarning.getBalanceEffect().compareTo(oldWage) != 0) {
+                throw ApiException.conflict("حركة دفتر السائق الأصلية غير متطابقة ولا يمكن تصحيحها بأمان.");
+            }
+            originalLines = journalLines.findByTenantIdAndJournalEntryIdOrderByLineNumberAsc(
+                    tenantId, original.getId());
+            wageExpense = defaultAccounts.requireSystemAccount(
+                    tenantId, SystemAccountCode.DRIVER_WAGE_EXPENSE);
+            driverPayable = defaultAccounts.requireSystemAccount(
+                    tenantId, SystemAccountCode.DRIVER_PAYABLE);
+            if (originalLines.size() != 2
+                    || !Objects.equals(originalLines.get(0).getAccountId(), wageExpense.getId())
+                    || originalLines.get(0).getDebit().compareTo(oldWage) != 0
+                    || originalLines.get(0).getCredit().signum() != 0
+                    || !Objects.equals(originalLines.get(0).getDriverId(), shift.getDriverId())
+                    || !Objects.equals(originalLines.get(1).getAccountId(), driverPayable.getId())
+                    || originalLines.get(1).getDebit().signum() != 0
+                    || originalLines.get(1).getCredit().compareTo(oldWage) != 0
+                    || !Objects.equals(originalLines.get(1).getDriverId(), shift.getDriverId())) {
+                throw ApiException.conflict("سطور قيد أجر الوردية الأصلي لا تطابق الترحيل القياسي؛ يلزم فحص محاسبي.");
+            }
+        }
+        if (newWage.signum() > 0 && wageExpense == null) {
+            wageExpense = defaultAccounts.requireSystemAccount(tenantId, SystemAccountCode.DRIVER_WAGE_EXPENSE);
+            driverPayable = defaultAccounts.requireSystemAccount(tenantId, SystemAccountCode.DRIVER_PAYABLE);
         }
 
         ShiftCorrection correction = new ShiftCorrection(tenantId, shiftId, key, reason, actorId,
                 request.getExpectedVersion(), shift, request.getShiftDate(), request.getShiftType(),
                 request.getSiteId(), shift.getDriverId(), request.getEquipmentId(), newWage, newPrice,
                 newOperatingCost, newNotes);
-        correction.setOldEarningLedgerEntryId(oldEarning.getId());
+        if (oldEarning != null) correction.setOldEarningLedgerEntryId(oldEarning.getId());
         corrections.saveAndFlush(correction);
 
-        List<JournalLineRequest> reversalLines = new ArrayList<>();
-        for (JournalLine line : originalLines) {
-            reversalLines.add(new JournalLineRequest(line.getAccountId(), "عكس: " + line.getDescription(),
-                    line.getCredit(), line.getDebit(), line.getDriverId(), line.getEquipmentId()));
+        // Reverse a previously recognized wage only when the old snapshot was positive.
+        if (original != null) {
+            List<JournalLineRequest> reversalLines = new ArrayList<>();
+            for (JournalLine line : originalLines) {
+                reversalLines.add(new JournalLineRequest(line.getAccountId(), "عكس: " + line.getDescription(),
+                        line.getCredit(), line.getDebit(), line.getDriverId(), line.getEquipmentId()));
+            }
+            JournalEntry reversal = posting.post(tenantId, actorId, new JournalPostingRequest(
+                    "shift-wage-correction-reversal-" + correction.getId(),
+                    "SHIFT_WAGE_CORRECTION_REVERSAL", correction.getId(), shift.getShiftDate(),
+                    "عكس أجر الوردية رقم " + shiftId + " بسبب التصحيح رقم " + correction.getId(),
+                    original.getId(), reversalLines));
+            correction.setWageReversalJournalEntryId(reversal.getId());
+            DriverLedgerEntry reversedEarning = ledger.saveAndFlush(new DriverLedgerEntry(
+                    tenantId, shift.getDriverId(), "CORRECTION_REVERSAL", shift.getShiftDate(),
+                    oldWage, oldWage.negate(),
+                    "عكس استحقاق الوردية رقم " + shiftId + " (تصحيح " + correction.getId() + ")",
+                    "shift-wage-correction-reversal-" + correction.getId(),
+                    shiftId, reversal.getId(), actorId));
+            correction.setReversedEarningLedgerEntryId(reversedEarning.getId());
         }
-        JournalEntry reversal = posting.post(tenantId, actorId, new JournalPostingRequest(
-                "shift-wage-correction-reversal-" + correction.getId(),
-                "SHIFT_WAGE_CORRECTION_REVERSAL", correction.getId(), shift.getShiftDate(),
-                "عكس أجر الوردية رقم " + shiftId + " بسبب التصحيح رقم " + correction.getId(),
-                original.getId(), reversalLines));
-        correction.setWageReversalJournalEntryId(reversal.getId());
 
-        JournalEntry replacement = posting.post(tenantId, actorId, new JournalPostingRequest(
-                "shift-wage-correction-" + correction.getId(), "SHIFT_WAGE_CORRECTION",
-                correction.getId(), request.getShiftDate(),
-                "أجر الوردية المصحح رقم " + shiftId + " (تصحيح " + correction.getId() + ")", null,
-                java.util.Arrays.asList(
-                    new JournalLineRequest(wageExpense.getId(), "مصروف أجر الوردية المصحح",
-                            newWage, BigDecimal.ZERO, shift.getDriverId(), null),
-                    new JournalLineRequest(driverPayable.getId(), "مستحق السائق بعد التصحيح",
-                            BigDecimal.ZERO, newWage, shift.getDriverId(), null))));
-        correction.setReplacementWageJournalEntryId(replacement.getId());
-
-        DriverLedgerEntry reversedEarning = ledger.saveAndFlush(new DriverLedgerEntry(
-                tenantId, shift.getDriverId(), "CORRECTION_REVERSAL", shift.getShiftDate(),
-                shift.getDriverWage(), shift.getDriverWage().negate(),
-                "عكس استحقاق الوردية رقم " + shiftId + " (تصحيح " + correction.getId() + ")",
-                "shift-wage-correction-reversal-" + correction.getId(), shiftId, reversal.getId(), actorId));
-        correction.setReversedEarningLedgerEntryId(reversedEarning.getId());
-
-        DriverLedgerEntry replacementEarning = ledger.saveAndFlush(new DriverLedgerEntry(
-                tenantId, shift.getDriverId(), "EARNING", request.getShiftDate(), newWage, newWage,
-                "أجر الوردية المصحح رقم " + shiftId + " (تصحيح " + correction.getId() + ")",
-                "shift-wage-correction-" + correction.getId(), shiftId, replacement.getId(), actorId));
-        correction.setReplacementEarningLedgerEntryId(replacementEarning.getId());
+        // Zero is represented by no replacement journal and no zero-value ledger row.
+        if (newWage.signum() > 0) {
+            JournalEntry replacement = posting.post(tenantId, actorId, new JournalPostingRequest(
+                    "shift-wage-correction-" + correction.getId(), "SHIFT_WAGE_CORRECTION",
+                    correction.getId(), request.getShiftDate(),
+                    "أجر الوردية المصحح رقم " + shiftId + " (تصحيح " + correction.getId() + ")", null,
+                    java.util.Arrays.asList(
+                        new JournalLineRequest(wageExpense.getId(), "مصروف أجر الوردية المصحح",
+                                newWage, BigDecimal.ZERO, shift.getDriverId(), null),
+                        new JournalLineRequest(driverPayable.getId(), "مستحق السائق بعد التصحيح",
+                                BigDecimal.ZERO, newWage, shift.getDriverId(), null))));
+            correction.setReplacementWageJournalEntryId(replacement.getId());
+            DriverLedgerEntry replacementEarning = ledger.saveAndFlush(new DriverLedgerEntry(
+                    tenantId, shift.getDriverId(), "EARNING", request.getShiftDate(), newWage, newWage,
+                    "أجر الوردية المصحح رقم " + shiftId + " (تصحيح " + correction.getId() + ")",
+                    "shift-wage-correction-" + correction.getId(), shiftId, replacement.getId(), actorId));
+            correction.setReplacementEarningLedgerEntryId(replacementEarning.getId());
+        }
         corrections.saveAndFlush(correction);
 
         AuditService.ChangeSet changes = new AuditService.ChangeSet()
@@ -292,7 +317,7 @@ public class ShiftCorrectionService {
         shift.setDriverWage(newWage);
         shift.setEquipmentOperatingCost(newOperatingCost);
         shift.setNotes(newNotes);
-        shift.setDriverWageJournalEntryId(replacement.getId());
+        shift.setDriverWageJournalEntryId(correction.getReplacementWageJournalEntryId());
         shifts.saveAndFlush(shift);
 
         entityManager.refresh(correction);
