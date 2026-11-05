@@ -52,7 +52,7 @@ BEGIN
                         WHERE c.tenant_id = NEW.tenant_id
                           AND c.shift_id = NEW.id
                           AND c.status = 'APPLIED'
-                          AND c.replacement_wage_journal_entry_id = NEW.driver_wage_journal_entry_id
+                          AND (c.replacement_wage_journal_entry_id <=> NEW.driver_wage_journal_entry_id)
                           AND j.source_type = 'SHIFT_WAGE_CORRECTION'
                           AND j.source_id = c.id
                           AND j.posting_key = CONCAT('shift-wage-correction-', c.id)
@@ -124,8 +124,8 @@ BEGIN
            AND c.new_equipment_operating_cost = NEW.equipment_operating_cost
            AND (c.old_notes <=> OLD.notes)
            AND (c.new_notes <=> NEW.notes)
-           AND c.old_wage_journal_entry_id = OLD.driver_wage_journal_entry_id
-           AND c.replacement_wage_journal_entry_id = NEW.driver_wage_journal_entry_id
+           AND (c.old_wage_journal_entry_id <=> OLD.driver_wage_journal_entry_id)
+           AND (c.replacement_wage_journal_entry_id <=> NEW.driver_wage_journal_entry_id)
            AND (
                (c.old_driver_wage = 0
                 AND c.old_wage_journal_entry_id IS NULL
@@ -134,7 +134,7 @@ BEGIN
                 AND c.reversed_earning_ledger_entry_id IS NULL)
                OR
                (c.old_driver_wage > 0
-                AND c.old_wage_journal_entry_id = OLD.driver_wage_journal_entry_id
+                AND (c.old_wage_journal_entry_id <=> OLD.driver_wage_journal_entry_id)
                 AND c.wage_reversal_journal_entry_id IS NOT NULL
                 AND c.old_earning_ledger_entry_id IS NOT NULL
                 AND c.reversed_earning_ledger_entry_id IS NOT NULL
@@ -169,7 +169,7 @@ BEGIN
                 AND c.replacement_earning_ledger_entry_id IS NULL)
                OR
                (c.new_driver_wage > 0
-                AND c.replacement_wage_journal_entry_id = NEW.driver_wage_journal_entry_id
+                AND (c.replacement_wage_journal_entry_id <=> NEW.driver_wage_journal_entry_id)
                 AND c.replacement_earning_ledger_entry_id IS NOT NULL
                 AND EXISTS (SELECT 1 FROM driver_ledger_entries replacement_earning
                      WHERE replacement_earning.id = c.replacement_earning_ledger_entry_id
