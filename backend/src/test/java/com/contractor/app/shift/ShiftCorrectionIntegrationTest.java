@@ -572,6 +572,18 @@ class ShiftCorrectionIntegrationTest extends AbstractShiftIntegrationTest {
         assertThat(snapshot.get("old_actual_quantity")).isNull();
         assertThat(snapshot.get("new_actual_quantity")).isNull();
 
+        // Completed compensation metadata cannot be changed outside the audited correction path.
+        assertThatThrownBy(() -> jdbc.update(
+                "UPDATE shifts SET compensation_rate=compensation_rate+1 WHERE tenant_id=? AND id=?",
+                tenantId, shiftId))
+                .isInstanceOf(UncategorizedSQLException.class)
+                .hasMessageContaining("COMPLETED_SHIFT_COMPENSATION_IMMUTABLE");
+        assertThatThrownBy(() -> jdbc.update(
+                "UPDATE shifts SET compensation_calculated_amount=compensation_calculated_amount+1 "
+                        + "WHERE tenant_id=? AND id=?", tenantId, shiftId))
+                .isInstanceOf(UncategorizedSQLException.class)
+                .hasMessageContaining("COMPLETED_SHIFT_COMPENSATION_IMMUTABLE");
+
         Long correctionId = jdbc.queryForObject(
                 "SELECT id FROM shift_corrections WHERE tenant_id=? AND shift_id=?",
                 Long.class, tenantId, shiftId);
