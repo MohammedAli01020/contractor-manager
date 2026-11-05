@@ -537,4 +537,44 @@ class ShiftCorrectionIntegrationTest extends AbstractShiftIntegrationTest {
         assertThat(ledger.sumBalance(tenantId, driverId)).isEqualByComparingTo("180.00");
     }
 
+
+    @Test
+    void correctionPersistsFrozenCompensationSnapshotAndDatabaseRejectsTampering() throws Exception {
+        JsonNode completed = finishShift(token,
+                startShift(token, shiftBody(siteId, driverId, equipmentId, today().minusDays(1), "MORNING")));
+        long shiftId = completed.path("id").asLong();
+        Map<String, Object> request = correctionBody(completed, "snapshot-" + UUID.randomUUID());
+
+        postJson("/api/v1/shifts/" + shiftId + "/corrections", request, token)
+                .andExpect(status().isOk());
+
+        Map<String, Object> snapshot = jdbc.queryForMap(
+                "SELECT old_compensation_basis, new_compensation_basis, "
+                        + "old_compensation_rate, new_compensation_rate, "
+                        + "old_compensation_calculated_amount, new_compensation_calculated_amount, "
+                        + "old_actual_hours, new_actual_hours, old_actual_quantity, new_actual_quantity "
+                        + "FROM shift_corrections WHERE tenant_id=? AND shift_id=?",
+                tenantId, shiftId);
+        assertThat(snapshot.get("old_compensation_basis")).isEqualTo("SHIFT");
+        assertThat(snapshot.get("new_compensation_basis")).isEqualTo("SHIFT");
+        assertThat(snapshot.get("old_compensation_rate")).isNotNull();
+        assertThat(snapshot.get("new_compensation_rate")).isEqualTo(snapshot.get("old_compensation_rate"));
+        assertThat(snapshot.get("new_compensation_calculated_amount"))
+                .isEqualTo(snapshot.get("old_compensation_calculated_amount"));
+        assertThat(snapshot.get("old_actual_hours")).isNull();
+        assertThat(snapshot.get("new_actual_hours")).isNull();
+        assertThat(snapshot.get("old_actual_quantity")).isNull();
+        assertThat(snapshot.get("new_actual_quantity")).isNull();
+
+        Long correctionId = jdbc.queryForObject(
+                "SELECT id FROM shift_corrections WHERE tenant_id=? AND shift_id=?",
+                Long.class, tenantId, shiftId);
+        assertThatThrownBy(() -> jdbc.update(
+                "UPDATE shift_corrections SET old_compensation_rate=old_compensation_rate+1 "
+                        + "WHERE tenant_id=? AND id=?", tenantId, correctionId))
+                .isInstanceOf(UncategorizedSQLException.class)
+                .hasMessageContaining("SHIFT_CORRECTION_COMPENSATION_SNAPSHOT_IMMUTABLE");
+    }
+
+
 }
