@@ -120,8 +120,9 @@ public class ShiftCorrectionService {
             throw ApiException.conflict("التصحيح متاح للورديات المكتملة فقط.");
         }
         shift.requireVersion(request.getExpectedVersion());
-        if ("HOUR".equals(shift.getCompensationBasis())) {
-            throw ApiException.conflict("تصحيح الورديات بالساعة غير متاح في هذا الإصدار؛ لا يمكن تغيير الأجر دون تصحيح الساعات ولقطة الحساب مع عكس القيد.");
+        if ("HOUR".equals(shift.getCompensationBasis())
+                || "QUANTITY".equals(shift.getCompensationBasis())) {
+            throw ApiException.conflict("تصحيح الورديات بالساعة أو الكمية غير متاح في هذا الإصدار؛ لا يمكن تغيير الأجر دون تصحيح القياس الفعلي ولقطة الحساب مع عكس القيد.");
         }
         if (request.getShiftDate() == null || request.getShiftDate().isAfter(LocalDate.now(businessZone))) {
             throw ApiException.badRequest("تاريخ الوردية مطلوب ولا يمكن أن يكون في المستقبل.");
