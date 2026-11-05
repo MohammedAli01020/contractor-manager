@@ -162,7 +162,11 @@ public class ShiftCorrection extends BaseTenantEntity {
         this.oldCompensationCurrencyCode = shift.getCompensationCurrencyCode();
         this.newCompensationCurrencyCode = shift.getCompensationCurrencyCode();
         this.oldCompensationCalculatedAmount = shift.getCompensationCalculatedAmount();
-        this.newCompensationCalculatedAmount = shift.getCompensationCalculatedAmount();
+        // Shift.setDriverWage updates the calculated amount for a SHIFT-basis correction.
+        // Agreement rates remain frozen; legacy driver-rate snapshots track the corrected wage.
+        this.newCompensationCalculatedAmount = newDriverWage;
+        this.newCompensationRate = "LEGACY_DRIVER_RATE".equals(shift.getWageSource())
+                ? newDriverWage : shift.getCompensationRate();
         this.oldActualHours = shift.getActualHours();
         this.newActualHours = shift.getActualHours();
         this.oldActualQuantity = shift.getActualQuantity();
