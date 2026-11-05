@@ -79,8 +79,9 @@ void main() {
     verifyNever(() => api.correctShift(any(), any()));
   });
 
-  testWidgets('rejects a zero driver wage before sending a correction',
+  testWidgets('allows a zero driver wage and submits the correction',
       (tester) async {
+    when(() => api.correctShift(41, any())).thenAnswer((_) async => shift);
     await tester.pumpWidget(MaterialApp(
       home: ShiftCorrectionScreen(shift: shift, api: api),
     ));
@@ -108,7 +109,13 @@ void main() {
     await tester.tap(submitButton);
     await tester.pumpAndSettle();
 
-    expect(find.text('أجر السائق يجب أن يكون أكبر من صفر'), findsOneWidget);
-    verifyNever(() => api.correctShift(any(), any()));
+    expect(find.text('تأكيد تصحيح الوردية'), findsOneWidget);
+    await tester.tap(find.text('تأكيد التصحيح'));
+    await tester.pumpAndSettle();
+
+    verify(() => api.correctShift(41, any(that: predicate<Map<String, dynamic>>(
+      (payload) => payload['driverWage'] == 0.0,
+    )))).called(1);
+    expect(find.text('أجر السائق يجب أن يكون أكبر من صفر'), findsNothing);
   });
 }
