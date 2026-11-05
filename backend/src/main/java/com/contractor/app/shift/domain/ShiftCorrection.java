@@ -173,7 +173,6 @@ public class ShiftCorrection extends BaseTenantEntity {
         this.newActualQuantity = shift.getActualQuantity();
         this.newNotes = newNotes;
         this.oldWageJournalEntryId = shift.getDriverWageJournalEntryId();
-        this.oldWageJournalEntryId = shift.getDriverWageJournalEntryId();
     }
 
     public Long getShiftId() { return shiftId; }
