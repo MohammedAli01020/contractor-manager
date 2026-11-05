@@ -1260,7 +1260,7 @@ class _ShiftDetailsScreenState extends State<_ShiftDetailsScreen> {
                     if (shift.status == 'COMPLETED')
                       _DetailMoneyLine(label: 'إجمالي أجر السائق', value: shift.driverWage),
                   ] else if (shift.compensationBasis == 'QUANTITY') ...[
-                    _DetailMoneyLine(label: 'سعر الوحدة', value: shift.compensationRate),
+                    _DetailMoneyLine(label: 'سعر الوحدة (${shift.compensationUnitCode})', value: shift.compensationRate),
                     if (shift.actualQuantity != null)
                       _DetailMoneyLine(label: 'الكمية الفعلية', value: shift.actualQuantity!),
                     if (shift.status == 'COMPLETED')
