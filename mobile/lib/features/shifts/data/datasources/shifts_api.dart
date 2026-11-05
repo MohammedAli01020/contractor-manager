@@ -156,12 +156,14 @@ class ShiftsApi {
   Future<ShiftModel> finishShift(
     ShiftModel shift, {
     double? actualHours,
+    double? actualQuantity,
   }) async {
     final response = await _dio.post<Map<String, dynamic>>(
       '/shifts/${shift.id}/finish',
       data: {
         'version': shift.version,
         if (actualHours != null) 'actualHours': actualHours,
+        if (actualQuantity != null) 'actualQuantity': actualQuantity,
       },
     );
     if (response.data == null) {
