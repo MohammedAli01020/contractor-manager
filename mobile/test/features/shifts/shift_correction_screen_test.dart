@@ -120,6 +120,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('تأكيد تصحيح الوردية'), findsOneWidget);
+    expect(find.textContaining('سيتم عكس قيد الأجر واستحقاق العامل الحالي.'), findsOneWidget);
+    expect(find.textContaining('لن يتم إنشاء قيد أجر أو حركة استحقاق جديدة بقيمة صفر.'), findsOneWidget);
     await tester.tap(find.text('تأكيد التصحيح'));
     await tester.pumpAndSettle();
 
