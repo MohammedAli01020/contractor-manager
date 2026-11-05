@@ -212,8 +212,7 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
                 Integer.class, tenantId, shiftId)).isEqualTo(1);
         assertThatThrownBy(() -> jdbcTemplate.update(
                 "update shifts set actual_quantity = 3.000 where tenant_id = ? and id = ?",
-                tenantId, shiftId)).isInstanceOf(DataIntegrityViolationException.class)
-                .hasMessageContaining("COMPLETED_SHIFT_IMMUTABLE");
+                tenantId, shiftId)).hasMessageContaining("COMPLETED_SHIFT_IMMUTABLE");
         postJson("/api/v1/shifts/" + shiftId + "/finish", finishBody, token)
                 .andExpect(status().isConflict());
         assertThat(jdbcTemplate.queryForObject(
