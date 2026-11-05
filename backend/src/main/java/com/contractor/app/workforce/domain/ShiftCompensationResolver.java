@@ -119,21 +119,24 @@ public class ShiftCompensationResolver {
                 .findAllForWageResolution(tenantId, selected.getId()).stream()
                 .filter(c -> c.getBasis() == CompensationBasis.HOUR
                         ? "HOUR".equals(c.getUnitCode())
-                        : c.getBasis() == CompensationBasis.SHIFT
-                            && c.getShiftType() == CompensationShiftType.valueOf(shiftType.name()))
+                        : c.getBasis() == CompensationBasis.QUANTITY
+                            ? c.getUnitCode() != null && !c.getUnitCode().trim().isEmpty()
+                            : c.getBasis() == CompensationBasis.SHIFT
+                                && c.getShiftType() == CompensationShiftType.valueOf(shiftType.name()))
                 .collect(Collectors.toList());
 
         if (matching.size() != 1) {
-            throw ApiException.conflict("الاتفاقية المعتمدة لا تحتوي على مكوّن أجر واحد مطابق للوردية. يجب وجود مكوّن SHIFT مطابق أو مكوّن HOUR بوحدة HOUR واحد فقط.");
+            throw ApiException.conflict("الاتفاقية المعتمدة لا تحتوي على مكوّن أجر واحد مطابق للوردية. يجب وجود مكوّن SHIFT مطابق أو مكوّن HOUR أو QUANTITY واحد فقط.");
         }
 
         CompensationComponent component = matching.get(0);
         if (component.getRate() == null || component.getRate().signum() < 0) {
             throw ApiException.conflict("قيمة الأجر في الاتفاقية غير صالحة.");
         }
-        if (component.getBasis() == CompensationBasis.HOUR) {
+        if (component.getBasis() == CompensationBasis.HOUR
+                || component.getBasis() == CompensationBasis.QUANTITY) {
             if (requestedWage != null) {
-                throw ApiException.conflict("أجر الساعة محدد بالاتفاقية ولا يمكن تغييره من نموذج الوردية.");
+                throw ApiException.conflict("سعر الوحدة محدد بالاتفاقية ولا يمكن تغييره من نموذج الوردية.");
             }
             shift.applyCompensationSnapshot("AGREEMENT", selected.getId(), component.getId(),
                     selected.getAgreementReference(), component.getComponentCode(), component.getDisplayName(),
