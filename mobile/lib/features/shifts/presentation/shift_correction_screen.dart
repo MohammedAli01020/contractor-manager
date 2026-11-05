@@ -150,6 +150,19 @@ class _ShiftCorrectionScreenState extends State<ShiftCorrectionScreen> {
     });
   }
 
+  String _confirmationMessage() {
+    final oldWage = widget.shift.driverWage;
+    final newWage = double.tryParse(_wage.text.trim()) ?? 0;
+    final oldSide = oldWage > 0
+        ? 'سيتم عكس قيد الأجر واستحقاق العامل الحالي.'
+        : 'الوردية الحالية لا تحتوي على قيد أجر أو استحقاق عامل.';
+    final newSide = newWage == 0
+        ? 'لن يتم إنشاء قيد أجر أو حركة استحقاق جديدة بقيمة صفر.'
+        : 'سيتم إنشاء قيد أجر وحركة استحقاق بالقيمة المصححة.';
+    return 'سيتم حفظ التصحيح في سجل التدقيق. $oldSide $newSide '
+        'لا يمكن التراجع عن ذلك بتعديل عادي.';
+  }
+
   Future<void> _submit() async {
     if (_saving || !_formKey.currentState!.validate()) return;
     if (_siteId == null || _equipmentId == null) {
@@ -167,9 +180,7 @@ class _ShiftCorrectionScreenState extends State<ShiftCorrectionScreen> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('تأكيد تصحيح الوردية'),
-        content: const Text(
-          'سيتم عكس القيد المحاسبي الحالي وإنشاء قيد جديد وتحديث استحقاق السائق. لا يمكن التراجع عن ذلك بتعديل عادي.',
-        ),
+        content: Text(_confirmationMessage()),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
