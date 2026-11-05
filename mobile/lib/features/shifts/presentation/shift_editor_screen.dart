@@ -140,8 +140,7 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
   }
 
   bool get _isZeroWage =>
-      !_hourlyCompensation && !_quantityCompensation &&
-      double.tryParse(_wage.text.trim()) == 0;
+      !_hourlyCompensation && double.tryParse(_wage.text.trim()) == 0;
 
   Future<bool> _confirmZeroWage(String action) async {
     final confirmed = await showDialog<bool>(
