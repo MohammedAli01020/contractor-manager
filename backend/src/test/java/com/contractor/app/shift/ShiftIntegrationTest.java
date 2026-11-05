@@ -240,6 +240,9 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
         assertThat(jdbcTemplate.queryForObject(
                 "select count(*) from journal_entries where tenant_id = ? and source_type = 'SHIFT_WAGE' and source_id = ?",
                 Integer.class, tenantId, started.path("id").asLong())).isZero();
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from journal_entries where tenant_id = ? and source_type = 'DRIVER_ADVANCE_RECOVERY' and source_id = ?",
+                Integer.class, tenantId, started.path("id").asLong())).isZero();
     }
 
     @Test
