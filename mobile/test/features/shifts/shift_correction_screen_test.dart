@@ -92,10 +92,9 @@ void main() {
       300,
       scrollable: find.byType(Scrollable).first,
     );
-    final wageField = find.byWidgetPredicate(
-      (widget) =>
-          widget is TextFormField &&
-          widget.decoration.labelText == 'أجر السائق (جنيه)',
+    final wageField = find.ancestor(
+      of: find.text('أجر السائق (جنيه)'),
+      matching: find.byType(TextFormField),
     );
     expect(wageField, findsOneWidget);
     await tester.enterText(wageField, '0');
@@ -105,10 +104,9 @@ void main() {
       300,
       scrollable: find.byType(Scrollable).first,
     );
-    final reasonField = find.byWidgetPredicate(
-      (widget) =>
-          widget is TextFormField &&
-          widget.decoration.labelText == 'سبب التصحيح (إلزامي)',
+    final reasonField = find.ancestor(
+      of: find.text('سبب التصحيح (إلزامي)'),
+      matching: find.byType(TextFormField),
     );
     await tester.enterText(reasonField, 'تصحيح الأجر بعد مراجعة المستندات');
 
