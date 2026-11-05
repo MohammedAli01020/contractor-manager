@@ -19,6 +19,7 @@ on:
       - feature/accounting-api-foundation
       - fix/treasury-concurrency-hardening
       - integration/stabilization-2026-11
+      - feature/wf08a-correction-snapshots
     paths:
       - "backend/**"
       - "docs/architecture/workforce-pr-wf-*.md"
