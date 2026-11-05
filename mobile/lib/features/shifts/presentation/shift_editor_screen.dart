@@ -148,8 +148,11 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
       builder: (dialogContext) => AlertDialog(
         title: const Text('تنبيه: أجر الوردية صفر'),
         content: Text(
-          'أجر السائق لهذه الوردية 0.00 جنيه. $action بهذه القيمة؟ '
-          'عند إنهاء الوردية لن يُسجل قيد أجر أو استحقاق، ولن تُسترد أي سلفة من أجر هذه الوردية.',
+          (_quantityCompensation
+                  ? 'سعر وحدة الاتفاقية صفر جنيه؛ وبالتالي سيكون إجمالي الأجر صفرًا مهما كانت الكمية. '
+                  : 'أجر السائق لهذه الوردية 0.00 جنيه. ') +
+              '$action بهذه القيمة؟ عند إنهاء الوردية لن يُسجل قيد أجر أو استحقاق، '
+              'ولن تُسترد أي سلفة من أجر هذه الوردية.',
         ),
         actions: [
           TextButton(
