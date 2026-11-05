@@ -139,8 +139,7 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
     return value.toString();
   }
 
-  bool get _isZeroWage =>
-      !_hourlyCompensation && double.tryParse(_wage.text.trim()) == 0;
+  bool get _isZeroWage => double.tryParse(_wage.text.trim()) == 0;
 
   Future<bool> _confirmZeroWage(String action) async {
     final confirmed = await showDialog<bool>(
@@ -150,7 +149,9 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
         content: Text(
           (_quantityCompensation
                   ? 'سعر وحدة الاتفاقية صفر جنيه؛ وبالتالي سيكون إجمالي الأجر صفرًا مهما كانت الكمية. '
-                  : 'أجر السائق لهذه الوردية 0.00 جنيه. ') +
+                  : _hourlyCompensation
+                      ? 'سعر الساعة في الاتفاقية صفر جنيه؛ وبالتالي سيكون إجمالي الأجر صفرًا مهما كانت ساعات العمل. '
+                      : 'أجر السائق لهذه الوردية 0.00 جنيه. ') +
               '$action بهذه القيمة؟ عند إنهاء الوردية لن يُسجل قيد أجر أو استحقاق، '
               'ولن تُسترد أي سلفة من أجر هذه الوردية.',
         ),
