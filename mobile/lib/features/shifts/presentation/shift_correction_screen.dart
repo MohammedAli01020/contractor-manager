@@ -354,7 +354,7 @@ class _ShiftCorrectionScreenState extends State<ShiftCorrectionScreen> {
                       labelText: 'أجر السائق (جنيه)',
                       border: OutlineInputBorder(),
                     ),
-                    validator: (value) => _moneyValidator(value, positive: true),
+                    validator: (value) => _moneyValidator(value, positive: false),
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
