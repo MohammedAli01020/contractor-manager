@@ -26,4 +26,13 @@ public class ShiftVersionRequest {
     public BigDecimal getActualHours() { return actualHours; }
 
     public void setActualHours(BigDecimal actualHours) { this.actualHours = actualHours; }
+
+    /** Required only for QUANTITY compensation; measured explicitly at finish. */
+    @DecimalMin(value = "0.001", message = "الكمية الفعلية يجب أن تكون أكبر من صفر")
+    @Digits(integer = 9, fraction = 3, message = "الكمية تقبل حتى ثلاث خانات عشرية")
+    private BigDecimal actualQuantity;
+
+    public BigDecimal getActualQuantity() { return actualQuantity; }
+
+    public void setActualQuantity(BigDecimal actualQuantity) { this.actualQuantity = actualQuantity; }
 }
