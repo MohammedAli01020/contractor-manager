@@ -394,14 +394,14 @@ class _ShiftsView extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (isHourly) ...[
+                if (isMeasured) ...[
                   Text('${isHourly ? 'سعر الساعة' : 'سعر الوحدة'} المعتمد: ${shift.compensationRate.toStringAsFixed(2)} جنيه'),
                   const SizedBox(height: 12),
                   TextField(
                     controller: controller,
                     autofocus: true,
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: isHourly ? 'ساعات العمل الفعلية' : 'الكمية الفعلية',
                       hintText: isHourly ? 'مثال: 7.5 أو 8.25' : 'أدخل الكمية المنفذة',
                       suffixText: unitLabel,
