@@ -1,6 +1,6 @@
 # WF-08A — Audited Compensation Correction Snapshot
 
-Status: design checkpoint on `feature/wf08a-correction-snapshots`.
+Status: implementation in progress on `feature/wf08a-correction-snapshots`; not approved for merge or production.
 Base: `integration/stabilization-2026-11`.
 This phase is schema and database-authorization work only. It does not enable HOUR or QUANTITY corrections in the API.
 
@@ -8,7 +8,9 @@ This phase is schema and database-authorization work only. It does not enable HO
 
 - `SHIFT` corrections retain the existing audited correction path.
 - `HOUR` and `QUANTITY` corrections are enabled only after WF-08A database protection and WF-08B transactional posting are complete.
-- A completed shift's compensation basis, contractual rate, unit, currency, measured value, and calculated amount are frozen snapshots.
+- A completed shift's compensation basis, contractual rate, unit, currency, measured value, and calculated amount are captured in immutable before/after correction snapshots.
+- For the existing `SHIFT` wage-override path, `Shift.setDriverWage` updates `compensation_calculated_amount`; it updates `compensation_rate` only when `wage_source = LEGACY_DRIVER_RATE`. Agreement-backed contractual rates and identity remain frozen.
+- For future `HOUR`/`QUANTITY` corrections, the contractual rate, unit, and currency remain frozen; only the applicable measured value and server-calculated amount may change.
 - The correction request supplies the new measured value, not a client-calculated wage.
 - The server calculates the replacement amount from the shift's frozen rate and rounds money to two decimal places using the same established policy as shift completion.
 - A zero frozen rate is valid. A measured value must remain positive. A zero calculated wage completes without zero-value journal or worker-ledger entries.
@@ -39,7 +41,7 @@ Add nullable old/new pairs to `shift_corrections` for backwards compatibility wi
 | Actual hours | `old_actual_hours` | `new_actual_hours` |
 | Actual quantity | `old_actual_quantity` | `new_actual_quantity` |
 
-Use the same SQL precision/scale as the corresponding `shifts` columns. Preserve NULL for the non-applicable measurement (hours for non-HOUR; quantity for non-QUANTITY). Keep rate and unit/currency frozen: correction changes the measured value, not the historical contract.
+Use the same SQL precision/scale as the corresponding `shifts` columns. Preserve NULL for the non-applicable measurement (hours for non-HOUR; quantity for non-QUANTITY). The existing SHIFT override is a separate compatibility rule: a legacy driver-rate snapshot follows the corrected wage, while an agreement-backed rate stays frozen.
 
 ## Database authorization requirements
 
@@ -60,6 +62,15 @@ Use the same SQL precision/scale as the corresponding `shifts` columns. Preserve
    - Zero rate is valid; measurement must be positive; no zero-value journal or ledger row.
 7. The trigger must require the matching posted reversal for a positive old wage and matching posted replacement for a positive new wage. Zero sides must have NULL journal/ledger references.
 8. Preserve the existing SHIFT correction behavior and zero-wage rules.
+
+## Current implementation on WF-08A
+
+- V47 adds nullable old/new compensation snapshot columns.
+- V48 adds snapshot insert validation and immutable snapshot update protection.
+- V49 tightens SHIFT snapshot semantics and explicitly blocks HOUR/QUANTITY correction rows.
+- V50 protects completed-shift compensation metadata from direct SQL changes unless the exact APPLYING correction snapshot authorizes the update.
+- The integration test verifies old/new SHIFT wage snapshots and rejects direct changes to completed compensation rate/calculated amount.
+- Backend CI is still running on the latest commit. This branch is not ready to merge until the full required MySQL integration suite passes and the migration behavior is reviewed.
 
 ## Implementation sequence and release gate
 
