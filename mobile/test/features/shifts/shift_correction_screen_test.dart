@@ -100,6 +100,18 @@ void main() {
     expect(wageField, findsOneWidget);
     await tester.enterText(wageField, '0');
 
+    await tester.scrollUntilVisible(
+      find.text('سبب التصحيح (إلزامي)'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    final reasonField = find.byWidgetPredicate(
+      (widget) =>
+          widget is TextFormField &&
+          widget.decoration.labelText == 'سبب التصحيح (إلزامي)',
+    );
+    await tester.enterText(reasonField, 'تصحيح الأجر بعد مراجعة المستندات');
+
     final submitButton = find.text('مراجعة وتأكيد التصحيح');
     await tester.scrollUntilVisible(
       submitButton,
