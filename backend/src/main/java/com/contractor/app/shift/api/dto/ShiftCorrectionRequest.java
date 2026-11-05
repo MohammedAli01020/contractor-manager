@@ -36,7 +36,7 @@ public class ShiftCorrectionRequest {
     private Long equipmentId;
 
     @NotNull
-    @DecimalMin(value = "0.01")
+    @DecimalMin(value = "0")
     @Digits(integer = 13, fraction = 2)
     private BigDecimal driverWage;
 
