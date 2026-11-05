@@ -15,6 +15,8 @@ class ShiftModel {
     this.compensationRate = 0.0,
     this.compensationCalculatedAmount = 0.0,
     this.actualHours,
+    this.compensationUnitCode = '',
+    this.actualQuantity,
     required this.priceAfterWage,
     required this.notes,
     this.siteId,
@@ -44,6 +46,8 @@ class ShiftModel {
       compensationRate: _numberValue(json['compensationRate']),
       compensationCalculatedAmount: _numberValue(json['compensationCalculatedAmount']),
       actualHours: json['actualHours'] == null ? null : _numberValue(json['actualHours']),
+      compensationUnitCode: _stringValue(json['compensationUnitCode'], ''),
+      actualQuantity: json['actualQuantity'] == null ? null : _numberValue(json['actualQuantity']),
       equipmentOperatingCost: _numberValue(json['equipmentOperatingCost']),
       priceAfterWage: _numberValue(json['priceAfterWage']),
       notes: _stringValue(json['notes'], ''),
@@ -72,6 +76,8 @@ class ShiftModel {
   final double compensationRate;
   final double compensationCalculatedAmount;
   final double? actualHours;
+  final String compensationUnitCode;
+  final double? actualQuantity;
   final double equipmentOperatingCost;
   final double priceAfterWage;
   final String notes;
