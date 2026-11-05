@@ -44,6 +44,7 @@ Implementation checkpoint on `integration/stabilization-2026-11`. This phase ext
 - [x] Protect completed actual measurements from direct database updates.
 - [x] Add backend integration tests for missing/zero/negative/over-precision quantity, calculation, positive posting once, and zero-rate financial suppression.
 - [x] Add mobile quantity input, preview, finish payload, details, and bulk exclusion.
-- [ ] Run the latest backend and Flutter CI after the mobile widget-test additions and resolve any failures.
+- [x] Backend CI passed: 242 tests, 0 failures/errors (run `42034869202`).
+- [x] Flutter 3.3.3 CI passed: full Flutter test suite and analyzer step (run `42036432428`; analyzer reported informational lints only, no blocking errors).
 - [x] Add focused Flutter widget tests for quantity finish, zero-result warning, and invalid measurement precision.
 
