@@ -13,6 +13,9 @@ import com.contractor.app.accounting.domain.JournalPostingRequest;
 import com.contractor.app.accounting.domain.JournalPostingService;
 import com.contractor.app.accounting.infra.ChartAccountRepository;
 import com.contractor.app.driver.infra.DriverLedgerEntryRepository;
+import com.contractor.app.shift.domain.Shift;
+import com.contractor.app.shift.domain.ShiftCorrection;
+import com.contractor.app.shift.domain.ShiftType;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.HashMap;
@@ -537,6 +540,46 @@ class ShiftCorrectionIntegrationTest extends AbstractShiftIntegrationTest {
         assertThat(ledger.sumBalance(tenantId, driverId)).isEqualByComparingTo("180.00");
     }
 
+
+    @Test
+    void compensationCorrectionSnapshotKeepsAgreementRateFrozenButUpdatesLegacyRate() {
+        LocalDate shiftDate = LocalDate.now().minusDays(1);
+
+        Shift agreementShift = new Shift(1L, shiftDate, ShiftType.MORNING, 10L, 20L, 30L);
+        agreementShift.setPrice(new BigDecimal("500.00"));
+        agreementShift.setEquipmentOperatingCost(new BigDecimal("25.00"));
+        agreementShift.applyCompensationSnapshot("AGREEMENT", 40L, 50L,
+                "AGR-40", "STANDARD_SHIFT", "Standard shift",
+                "SHIFT", "EGP", "SHIFT", new BigDecimal("150.00"), new BigDecimal("150.00"));
+
+        ShiftCorrection agreementCorrection = new ShiftCorrection(1L, 60L, "agreement-snapshot",
+                "approved wage override", 70L, 0L, agreementShift,
+                shiftDate, ShiftType.MORNING, 10L, 20L, 30L,
+                new BigDecimal("180.00"), new BigDecimal("500.00"),
+                new BigDecimal("25.00"), null);
+
+        assertThat(agreementCorrection.getOldCompensationRate()).isEqualByComparingTo("150.00");
+        assertThat(agreementCorrection.getNewCompensationRate()).isEqualByComparingTo("150.00");
+        assertThat(agreementCorrection.getOldCompensationCalculatedAmount()).isEqualByComparingTo("150.00");
+        assertThat(agreementCorrection.getNewCompensationCalculatedAmount()).isEqualByComparingTo("180.00");
+
+        Shift legacyShift = new Shift(1L, shiftDate, ShiftType.MORNING, 10L, 20L, 30L);
+        legacyShift.setPrice(new BigDecimal("500.00"));
+        legacyShift.setEquipmentOperatingCost(new BigDecimal("25.00"));
+        legacyShift.applyCompensationSnapshot("LEGACY_DRIVER_RATE", null, null,
+                null, "LEGACY_DRIVER_RATE", "Legacy driver rate",
+                "SHIFT", null, null, new BigDecimal("150.00"), new BigDecimal("150.00"));
+
+        ShiftCorrection legacyCorrection = new ShiftCorrection(1L, 61L, "legacy-snapshot",
+                "approved wage override", 70L, 0L, legacyShift,
+                shiftDate, ShiftType.MORNING, 10L, 20L, 30L,
+                new BigDecimal("180.00"), new BigDecimal("500.00"),
+                new BigDecimal("25.00"), null);
+
+        assertThat(legacyCorrection.getOldCompensationRate()).isEqualByComparingTo("150.00");
+        assertThat(legacyCorrection.getNewCompensationRate()).isEqualByComparingTo("180.00");
+        assertThat(legacyCorrection.getNewCompensationCalculatedAmount()).isEqualByComparingTo("180.00");
+    }
 
     @Test
     void correctionPersistsFrozenCompensationSnapshotAndDatabaseRejectsTampering() throws Exception {
