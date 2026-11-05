@@ -318,14 +318,15 @@ class _ShiftsView extends StatelessWidget {
       return;
     }
     if (choice == 'finish') {
-      final actualHours = await _requestFinishConfirmation(context, shift);
-      if (actualHours != null) {
+      final actualMeasurement = await _requestFinishConfirmation(context, shift);
+      if (actualMeasurement != null) {
         await _runShiftAction(
           context,
           bloc,
           () => getIt<ShiftsApi>().finishShift(
             shift,
-            actualHours: shift.compensationBasis == 'HOUR' ? actualHours : null,
+            actualHours: shift.compensationBasis == 'HOUR' ? actualMeasurement : null,
+            actualQuantity: shift.compensationBasis == 'QUANTITY' ? actualMeasurement : null,
           ),
           successMessage: 'تم إنهاء الوردية بنجاح.',
           canCorrectCompletedShifts: canCorrectCompletedShifts,
@@ -369,6 +370,9 @@ class _ShiftsView extends StatelessWidget {
     ShiftModel shift,
   ) async {
     final isHourly = shift.compensationBasis == 'HOUR';
+    final isQuantity = shift.compensationBasis == 'QUANTITY';
+    final isMeasured = isHourly || isQuantity;
+    final unitLabel = isHourly ? 'ساعة' : shift.compensationUnitCode;
     final controller = TextEditingController();
     final result = await showDialog<double?>(
       context: context,
@@ -389,16 +393,16 @@ class _ShiftsView extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (isHourly) ...[
-                  Text('سعر الساعة المعتمد: ${shift.compensationRate.toStringAsFixed(2)} جنيه'),
+                  Text('${isHourly ? 'سعر الساعة' : 'سعر الوحدة'} المعتمد: ${shift.compensationRate.toStringAsFixed(2)} جنيه'),
                   const SizedBox(height: 12),
                   TextField(
                     controller: controller,
                     autofocus: true,
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
                     decoration: const InputDecoration(
-                      labelText: 'ساعات العمل الفعلية',
-                      hintText: 'مثال: 7.5 أو 8.25',
-                      suffixText: 'ساعة',
+                      labelText: isHourly ? 'ساعات العمل الفعلية' : 'الكمية الفعلية',
+                      hintText: isHourly ? 'مثال: 7.5 أو 8.25' : 'أدخل الكمية المنفذة',
+                      suffixText: unitLabel,
                       border: OutlineInputBorder(),
                     ),
                     onChanged: (_) => setDialogState(() {}),
@@ -406,7 +410,7 @@ class _ShiftsView extends StatelessWidget {
                   const SizedBox(height: 12),
                   Text(
                     preview == null
-                        ? 'أدخل عدد الساعات لعرض إجمالي الأجر.'
+                        ? (isHourly ? 'أدخل عدد الساعات لعرض إجمالي الأجر.' : 'أدخل الكمية لعرض إجمالي الأجر.')
                         : 'إجمالي الأجر: ${preview.toStringAsFixed(2)} جنيه',
                     style: Theme.of(dialogContext).textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.bold,
@@ -419,7 +423,9 @@ class _ShiftsView extends StatelessWidget {
                     ),
                   ],
                   const SizedBox(height: 8),
-                  const Text('لن يتم حساب الساعات من وقت بداية الوردية ونهايتها.'),
+                  Text(isHourly
+                      ? 'لن يتم حساب الساعات من وقت بداية الوردية ونهايتها.'
+                      : 'سيتم حساب الأجر من الكمية المدخلة وسعر الوحدة المحفوظ في الاتفاقية.'),
                 ] else
                   Text(
                     shift.driverWage == 0
@@ -434,11 +440,11 @@ class _ShiftsView extends StatelessWidget {
                 child: const Text('رجوع'),
               ),
               ElevatedButton(
-                onPressed: isHourly && !validHours
+                onPressed: isMeasured && !validHours
                     ? null
                     : () => Navigator.pop(
                           dialogContext,
-                          isHourly ? parsedHours : 0.0,
+                          isMeasured ? parsedHours : 0.0,
                         ),
                 child: const Text('تأكيد الإنهاء'),
               ),
@@ -1303,6 +1309,12 @@ class _ShiftDetailsScreenState extends State<_ShiftDetailsScreen> {
                     _DetailMoneyLine(label: 'سعر الساعة', value: shift.compensationRate),
                     if (shift.actualHours != null)
                       _DetailMoneyLine(label: 'الساعات الفعلية', value: shift.actualHours!),
+                    if (shift.status == 'COMPLETED')
+                      _DetailMoneyLine(label: 'إجمالي أجر السائق', value: shift.driverWage),
+                  ] else if (shift.compensationBasis == 'QUANTITY') ...[
+                    _DetailMoneyLine(label: 'سعر الوحدة', value: shift.compensationRate),
+                    if (shift.actualQuantity != null)
+                      _DetailMoneyLine(label: 'الكمية الفعلية', value: shift.actualQuantity!),
                     if (shift.status == 'COMPLETED')
                       _DetailMoneyLine(label: 'إجمالي أجر السائق', value: shift.driverWage),
                   ] else
