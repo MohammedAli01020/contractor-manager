@@ -9,6 +9,7 @@ import '../../../core/error/app_failure.dart';
 import '../../../core/widgets/loading_view.dart';
 import '../data/datasources/shifts_api.dart';
 import 'shift_editor_screen.dart';
+import 'shift_finish_measurement_dialog.dart';
 import 'shift_correction_screen.dart';
 import 'bulk_finish_shifts_screen.dart';
 import '../data/models/shift_model.dart';
@@ -371,92 +372,37 @@ class _ShiftsView extends StatelessWidget {
     BuildContext context,
     ShiftModel shift,
   ) async {
-    final isHourly = shift.compensationBasis == 'HOUR';
-    final isQuantity = shift.compensationBasis == 'QUANTITY';
-    final isMeasured = isHourly || isQuantity;
-    final unitLabel = isHourly ? 'ساعة' : shift.compensationUnitCode;
-    final controller = TextEditingController();
-    final result = await showDialog<double?>(
+    final isMeasured = shift.compensationBasis == 'HOUR' ||
+        shift.compensationBasis == 'QUANTITY';
+    if (!isMeasured) {
+      return showDialog<double?>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) => AlertDialog(
+          title: Text('إنهاء الوردية #${shift.id}؟'),
+          content: Text(
+            shift.driverWage == 0
+                ? 'أجر السائق لهذه الوردية صفر جنيه. سيتم إنهاؤها دون قيد أجر أو استحقاق، ولن تُسترد أي سلفة من أجر هذه الوردية. هل تؤكد؟'
+                : 'سيتم تغيير حالة الوردية إلى منتهية وترحيل أجر السائق المستحق.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('رجوع'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(dialogContext, 0.0),
+              child: const Text('تأكيد الإنهاء'),
+            ),
+          ],
+        ),
+      );
+    }
+    return showDialog<double?>(
       context: context,
       barrierDismissible: false,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (dialogContext, setDialogState) {
-          final parsedHours = double.tryParse(
-            controller.text.trim().replaceAll(',', '.'),
-          );
-          final validHours = parsedHours != null && parsedHours > 0;
-          final preview = validHours
-              ? (shift.compensationRate * parsedHours * 100).round() / 100
-              : null;
-          return AlertDialog(
-            title: Text('إنهاء الوردية #${shift.id}؟'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (isMeasured) ...[
-                  Text('${isHourly ? 'سعر الساعة' : 'سعر الوحدة'} المعتمد: ${shift.compensationRate.toStringAsFixed(2)} جنيه'),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: controller,
-                    autofocus: true,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: InputDecoration(
-                      labelText: isHourly ? 'ساعات العمل الفعلية' : 'الكمية الفعلية',
-                      hintText: isHourly ? 'مثال: 7.5 أو 8.25' : 'أدخل الكمية المنفذة',
-                      suffixText: unitLabel,
-                      border: OutlineInputBorder(),
-                    ),
-                    onChanged: (_) => setDialogState(() {}),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    preview == null
-                        ? (isHourly ? 'أدخل عدد الساعات لعرض إجمالي الأجر.' : 'أدخل الكمية لعرض إجمالي الأجر.')
-                        : 'إجمالي الأجر: ${preview.toStringAsFixed(2)} جنيه',
-                    style: Theme.of(dialogContext).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  if (preview == 0) ...[
-                    const SizedBox(height: 8),
-                    const Text(
-                      'تنبيه: الإجمالي صفر؛ لن يُنشأ قيد أجر أو استحقاق، ولن تُسترد سلفة من هذه الوردية.',
-                    ),
-                  ],
-                  const SizedBox(height: 8),
-                  Text(isHourly
-                      ? 'لن يتم حساب الساعات من وقت بداية الوردية ونهايتها.'
-                      : 'سيتم حساب الأجر من الكمية المدخلة وسعر الوحدة المحفوظ في الاتفاقية.'),
-                ] else
-                  Text(
-                    shift.driverWage == 0
-                        ? 'أجر السائق لهذه الوردية صفر جنيه. سيتم إنهاؤها دون قيد أجر أو استحقاق، ولن تُسترد أي سلفة من أجر هذه الوردية. هل تؤكد؟'
-                        : 'سيتم تغيير حالة الوردية إلى منتهية وترحيل أجر السائق المستحق.',
-                  ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext),
-                child: const Text('رجوع'),
-              ),
-              ElevatedButton(
-                onPressed: isMeasured && !validHours
-                    ? null
-                    : () => Navigator.pop(
-                          dialogContext,
-                          isMeasured ? parsedHours : 0.0,
-                        ),
-                child: const Text('تأكيد الإنهاء'),
-              ),
-            ],
-          );
-        },
-      ),
+      builder: (_) => ShiftFinishMeasurementDialog(shift: shift),
     );
-    controller.dispose();
-    return result;
   }
 
   Future<void> _showHistory(BuildContext context, int shiftId) async {
