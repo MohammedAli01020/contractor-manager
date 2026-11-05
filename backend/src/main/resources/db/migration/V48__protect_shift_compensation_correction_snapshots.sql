@@ -17,6 +17,8 @@ BEGIN
       FROM shifts s
      WHERE s.tenant_id = NEW.tenant_id
        AND s.id = NEW.shift_id
+       -- WF-08A permits only non-measured compensation corrections.
+       AND s.compensation_basis NOT IN ('HOUR', 'QUANTITY')
        -- The before snapshot must be an exact copy of the locked shift.
        AND NEW.old_compensation_basis <=> s.compensation_basis
        AND NEW.old_compensation_rate <=> s.compensation_rate
