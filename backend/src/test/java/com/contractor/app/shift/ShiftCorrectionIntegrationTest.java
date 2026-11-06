@@ -601,11 +601,11 @@ class ShiftCorrectionIntegrationTest extends AbstractShiftIntegrationTest {
                             + "actual_hours=NULL, actual_quantity=NULL WHERE tenant_id=? AND id=?",
                     basis, basis.equals("HOUR") ? "HOUR" : "UNIT", tenantId, shiftId);
 
-            BigDecimal currentRate = jdbc.queryForObject(
-                    "SELECT compensation_rate FROM shifts WHERE tenant_id=? AND id=?",
+            BigDecimal expectedNewRate = jdbc.queryForObject(
+                    "SELECT driver_wage FROM shifts WHERE tenant_id=? AND id=?",
                     BigDecimal.class, tenantId, shiftId);
             assertThatThrownBy(() -> insertCorrectionSnapshotDirectly(
-                    shiftId, "forged-" + basis.toLowerCase() + "-" + UUID.randomUUID(), currentRate))
+                    shiftId, "forged-" + basis.toLowerCase() + "-" + UUID.randomUUID(), expectedNewRate))
                     .isInstanceOf(UncategorizedSQLException.class)
                     .hasMessageContaining("SHIFT_CORRECTION_COMPENSATION_SNAPSHOT_MISMATCH");
         }
