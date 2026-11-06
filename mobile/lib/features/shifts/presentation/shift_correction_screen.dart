@@ -328,8 +328,10 @@ class _ShiftCorrectionScreenState extends State<ShiftCorrectionScreen> {
                   _currentLine('الموقع', widget.shift.siteName),
                   _currentLine('المعدة',
                       '${widget.shift.equipmentCode} ${widget.shift.equipmentName}'),
-                  _currentLine('أجر السائق',
-                      '${widget.shift.driverWage.toStringAsFixed(2)} جنيه'),
+                  _currentLine(
+                    _isMeasuredBasis ? 'الأجر المحسوب' : 'أجر السائق',
+                    '${widget.shift.driverWage.toStringAsFixed(2)} جنيه',
+                  ),
                   const Divider(height: 28),
                   Text('البيانات بعد التصحيح',
                       style: Theme.of(context).textTheme.titleMedium),
