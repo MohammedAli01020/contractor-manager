@@ -116,11 +116,8 @@ void main() {
     await tester.pumpAndSettle();
 
     final submit = find.text('مراجعة وتأكيد التصحيح');
-    await tester.scrollUntilVisible(
-      submit,
-      400,
-      scrollable: find.byType(Scrollable).first,
-    );
+    await tester.ensureVisible(submit);
+    await tester.pumpAndSettle();
     await tester.tap(submit);
     await tester.pumpAndSettle();
     expect(find.text('تأكيد تصحيح الوردية'), findsOneWidget);
@@ -195,11 +192,8 @@ void main() {
     await tester.pumpAndSettle();
 
     final submit = find.text('مراجعة وتأكيد التصحيح');
-    await tester.scrollUntilVisible(
-      submit,
-      400,
-      scrollable: find.byType(Scrollable).first,
-    );
+    await tester.ensureVisible(submit);
+    await tester.pumpAndSettle();
     await tester.tap(submit);
     await tester.pumpAndSettle();
     expect(find.text('تأكيد تصحيح الوردية'), findsOneWidget);
