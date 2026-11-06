@@ -46,6 +46,7 @@ on:
       - feature/trial-balance-reconciliation
     paths:
       - "backend/**"
+      - "docs/phases/PHASE-WF-08A-CORRECTION-SNAPSHOT.md"
       - "docs/architecture/workforce-pr-wf-*.md"
       - ".github/workflows/backend-ci.yml"
       - "docs/ACCOUNTING-TREASURY-CONCURRENCY-2026-10-31.md"
