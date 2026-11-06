@@ -100,7 +100,7 @@ BEGIN
            AND c.old_compensation_basis <=> OLD.compensation_basis
            AND c.new_compensation_basis <=> NEW.compensation_basis
            AND c.old_compensation_rate <=> OLD.compensation_rate
-           AND c.new_compensation_rate <=> OLD.compensation_rate
+           AND c.new_compensation_rate <=> NEW.compensation_rate
            AND c.old_compensation_unit_code <=> OLD.compensation_unit_code
            AND c.new_compensation_unit_code <=> OLD.compensation_unit_code
            AND c.old_compensation_currency_code <=> OLD.compensation_currency_code
@@ -125,7 +125,8 @@ BEGIN
                 AND NEW.compensation_rate <=> (
                     CASE WHEN OLD.wage_source = 'LEGACY_DRIVER_RATE'
                          THEN NEW.driver_wage ELSE OLD.compensation_rate END
-                ))
+                )
+                AND c.new_compensation_rate <=> NEW.compensation_rate)
                OR
                (OLD.compensation_basis = 'HOUR'
                 AND OLD.actual_hours > 0
