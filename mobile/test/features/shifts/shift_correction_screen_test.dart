@@ -112,6 +112,8 @@ void main() {
       scrollable: find.byType(Scrollable).first,
     );
     await tester.enterText(reason, 'تصحيح ساعات التشغيل من سجل المعدة');
+    tester.testTextInput.hide();
+    await tester.pumpAndSettle();
 
     final submit = find.text('مراجعة وتأكيد التصحيح');
     await tester.scrollUntilVisible(
@@ -189,6 +191,8 @@ void main() {
       scrollable: find.byType(Scrollable).first,
     );
     await tester.enterText(reason, 'تصحيح كمية الإنتاج من كشف الموقع');
+    tester.testTextInput.hide();
+    await tester.pumpAndSettle();
 
     final submit = find.text('مراجعة وتأكيد التصحيح');
     await tester.scrollUntilVisible(
