@@ -398,6 +398,8 @@ jobs:
               "hourlyCorrectionRecalculatesFromFrozenRateAndReversesFinancialEntries",
               "quantityCorrectionRecalculatesFromFrozenUnitRate",
               "zeroRateHourlyCorrectionCreatesNoZeroFinancialEntries",
+              "hourlyCorrectionRejectsMissingOrConflictingMeasurementAndClientWage",
+              "zeroRateQuantityCorrectionCreatesNoZeroFinancialEntries",
           }
           print(f"WF-08B ShiftCorrectionIntegrationTest: {totals}")
           missing = required.difference(names)
