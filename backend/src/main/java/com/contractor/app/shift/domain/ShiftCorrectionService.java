@@ -375,13 +375,17 @@ public class ShiftCorrectionService {
                             || prior.getNewDriverWage().compareTo(request.getDriverWage()) != 0))
                     || (!"SHIFT".equals(prior.getNewCompensationBasis())
                         && request.getDriverWage() != null))
-                || !Objects.equals(prior.getNewActualHours(), request.getActualHours())
-                || !Objects.equals(prior.getNewActualQuantity(), request.getActualQuantity())
+                || !sameDecimal(prior.getNewActualHours(), request.getActualHours())
+                || !sameDecimal(prior.getNewActualQuantity(), request.getActualQuantity())
                 || prior.getNewPrice().compareTo(request.getPrice()) != 0
                 || prior.getNewEquipmentOperatingCost().compareTo(request.getEquipmentOperatingCost()) != 0
                 || !Objects.equals(prior.getNewNotes(), Texts.blankToNull(request.getNotes()))) {
             throw ApiException.conflict("مفتاح التصحيح مستخدم لطلب مختلف.");
         }
+    }
+
+    private boolean sameDecimal(BigDecimal left, BigDecimal right) {
+        return left == null ? right == null : right != null && left.compareTo(right) == 0;
     }
 
     private BigDecimal measured(BigDecimal value, int fractionDigits, int integerDigits, String label) {
