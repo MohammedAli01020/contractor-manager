@@ -70,9 +70,10 @@ Use the same SQL precision/scale as the corresponding `shifts` columns. Preserve
 - V49 tightens SHIFT snapshot semantics and explicitly blocks HOUR/QUANTITY correction rows.
 - V50 protects completed-shift compensation metadata from direct SQL changes unless the exact APPLYING correction snapshot authorizes the update.
 - The integration test verifies old/new SHIFT wage snapshots and rejects direct changes to completed compensation rate/calculated amount.
-- Backend CI run `42081692565` completed successfully on commit `bf7d080a49b8358fc1f0615e396efbf4adfa3793`, including the required MySQL integration and migration gates.
-- PR #41 is open for review only; no merge or production migration is authorized.
-- Remaining review gate: verify trigger interaction/order and historical-row compatibility, and expand migration-level negative tests before approval.
+- Latest-head backend CI completed successfully on commit `fa54bccc6b7781cbf0598fbdcd646cfb62166c37` in both push run `42223135429` and PR run `42223141907`. Both runs completed with `conclusion=success`; all required MySQL integration and migration execution gates passed, including the WF-08A historical migration test.
+- Direct database integration coverage now rejects a forged SHIFT snapshot rate and direct HOUR/QUANTITY correction inserts. The migration test also preserves legacy correction rows across V47–V50 and verifies all three expected triggers are installed.
+- PR #41 remains open and unmerged for review. No merge, `main` change, WF-08B start, or production migration is authorized by this phase.
+- Remaining approval gate: complete a focused review of V46/V48/V49/V50 trigger interaction and authorization boundaries; CI success is necessary but is not itself approval.
 
 ## Implementation sequence and release gate
 
