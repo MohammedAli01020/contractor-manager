@@ -13,6 +13,9 @@ import com.contractor.app.accounting.domain.JournalPostingRequest;
 import com.contractor.app.accounting.domain.JournalPostingService;
 import com.contractor.app.accounting.infra.ChartAccountRepository;
 import com.contractor.app.driver.infra.DriverLedgerEntryRepository;
+import com.contractor.app.shift.domain.Shift;
+import com.contractor.app.shift.domain.ShiftCorrection;
+import com.contractor.app.shift.domain.ShiftType;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.HashMap;
@@ -536,5 +539,174 @@ class ShiftCorrectionIntegrationTest extends AbstractShiftIntegrationTest {
                 Integer.class, tenantId)).isEqualTo(1);
         assertThat(ledger.sumBalance(tenantId, driverId)).isEqualByComparingTo("180.00");
     }
+
+
+    @Test
+    void compensationCorrectionSnapshotKeepsAgreementRateFrozenButUpdatesLegacyRate() {
+        LocalDate shiftDate = LocalDate.now().minusDays(1);
+
+        Shift agreementShift = new Shift(1L, shiftDate, ShiftType.MORNING, 10L, 20L, 30L);
+        agreementShift.setPrice(new BigDecimal("500.00"));
+        agreementShift.setEquipmentOperatingCost(new BigDecimal("25.00"));
+        agreementShift.applyCompensationSnapshot("AGREEMENT", 40L, 50L,
+                "AGR-40", "STANDARD_SHIFT", "Standard shift",
+                "SHIFT", "EGP", "SHIFT", new BigDecimal("150.00"), new BigDecimal("150.00"));
+
+        ShiftCorrection agreementCorrection = new ShiftCorrection(1L, 60L, "agreement-snapshot",
+                "approved wage override", 70L, 0L, agreementShift,
+                shiftDate, ShiftType.MORNING, 10L, 20L, 30L,
+                new BigDecimal("180.00"), new BigDecimal("500.00"),
+                new BigDecimal("25.00"), null);
+
+        assertThat(agreementCorrection.getOldCompensationRate()).isEqualByComparingTo("150.00");
+        assertThat(agreementCorrection.getNewCompensationRate()).isEqualByComparingTo("150.00");
+        assertThat(agreementCorrection.getOldCompensationCalculatedAmount()).isEqualByComparingTo("150.00");
+        assertThat(agreementCorrection.getNewCompensationCalculatedAmount()).isEqualByComparingTo("180.00");
+
+        Shift legacyShift = new Shift(1L, shiftDate, ShiftType.MORNING, 10L, 20L, 30L);
+        legacyShift.setPrice(new BigDecimal("500.00"));
+        legacyShift.setEquipmentOperatingCost(new BigDecimal("25.00"));
+        legacyShift.applyCompensationSnapshot("LEGACY_DRIVER_RATE", null, null,
+                null, "LEGACY_DRIVER_RATE", "Legacy driver rate",
+                "SHIFT", null, null, new BigDecimal("150.00"), new BigDecimal("150.00"));
+
+        ShiftCorrection legacyCorrection = new ShiftCorrection(1L, 61L, "legacy-snapshot",
+                "approved wage override", 70L, 0L, legacyShift,
+                shiftDate, ShiftType.MORNING, 10L, 20L, 30L,
+                new BigDecimal("180.00"), new BigDecimal("500.00"),
+                new BigDecimal("25.00"), null);
+
+        assertThat(legacyCorrection.getOldCompensationRate()).isEqualByComparingTo("150.00");
+        assertThat(legacyCorrection.getNewCompensationRate()).isEqualByComparingTo("180.00");
+        assertThat(legacyCorrection.getNewCompensationCalculatedAmount()).isEqualByComparingTo("180.00");
+    }
+
+    @Test
+    void databaseRejectsMalformedAndMeasuredBasisCorrectionSnapshots() throws Exception {
+        JsonNode shiftResponse = startShift(token,
+                shiftBody(siteId, driverId, equipmentId, today().minusDays(1), "MORNING"));
+        long shiftId = shiftResponse.path("id").asLong();
+
+        // A SHIFT snapshot with a forged new rate must fail even when inserted outside the service.
+        assertThatThrownBy(() -> insertCorrectionSnapshotDirectly(
+                tenantId, shiftId, "forged-shift-snapshot-" + UUID.randomUUID(), new BigDecimal("999.00")))
+                .isInstanceOf(UncategorizedSQLException.class)
+                .hasMessageContaining("SHIFT_CORRECTION_COMPENSATION_SNAPSHOT_MISMATCH");
+
+        // A snapshot copied from a real shift must still be rejected if its tenant_id
+        // is changed to another tenant. This exercises the tenant predicate in the DB guard.
+        JsonNode otherTenant = registerTenant("Other Correction Co", uniqueName("other-correction"));
+        long otherTenantId = otherTenant.path("user").path("tenantId").asLong();
+        assertThat(otherTenantId).isNotEqualTo(tenantId);
+        assertThatThrownBy(() -> insertCorrectionSnapshotDirectly(
+                otherTenantId, shiftId, "cross-tenant-snapshot-" + UUID.randomUUID(),
+                new BigDecimal("150.00")))
+                .isInstanceOf(UncategorizedSQLException.class);
+
+        // Build otherwise matching in-progress HOUR and QUANTITY snapshots. The DB guard
+        // must reject the compensation basis itself until the WF-08B workflow exists.
+        for (String basis : new String[] {"HOUR", "QUANTITY"}) {
+            jdbc.update("UPDATE shifts SET compensation_basis=?, compensation_unit_code=?, "
+                            + "compensation_rate=10.00, compensation_calculated_amount=0.00, "
+                            + "actual_hours=NULL, actual_quantity=NULL WHERE tenant_id=? AND id=?",
+                    basis, basis.equals("HOUR") ? "HOUR" : "UNIT", tenantId, shiftId);
+
+            BigDecimal expectedNewRate = jdbc.queryForObject(
+                    "SELECT driver_wage FROM shifts WHERE tenant_id=? AND id=?",
+                    BigDecimal.class, tenantId, shiftId);
+            assertThatThrownBy(() -> insertCorrectionSnapshotDirectly(
+                    tenantId, shiftId, "forged-" + basis.toLowerCase() + "-" + UUID.randomUUID(), expectedNewRate))
+                    .isInstanceOf(UncategorizedSQLException.class)
+                    .hasMessageContaining("SHIFT_CORRECTION_COMPENSATION_SNAPSHOT_MISMATCH");
+        }
+    }
+
+    private void insertCorrectionSnapshotDirectly(long correctionTenantId, long shiftId,
+                                                   String idempotencyKey, BigDecimal newCompensationRate) {
+        jdbc.update(
+                "INSERT INTO shift_corrections (tenant_id, shift_id, idempotency_key, reason, status, "
+                        + "actor_user_id, expected_shift_version, old_shift_date, new_shift_date, "
+                        + "old_shift_type, new_shift_type, old_site_id, new_site_id, old_driver_id, "
+                        + "new_driver_id, old_equipment_id, new_equipment_id, old_driver_wage, "
+                        + "new_driver_wage, old_price, new_price, old_equipment_operating_cost, "
+                        + "new_equipment_operating_cost, old_compensation_basis, new_compensation_basis, "
+                        + "old_compensation_rate, new_compensation_rate, old_compensation_unit_code, "
+                        + "new_compensation_unit_code, old_compensation_currency_code, "
+                        + "new_compensation_currency_code, old_compensation_calculated_amount, "
+                        + "new_compensation_calculated_amount, old_actual_hours, new_actual_hours, "
+                        + "old_actual_quantity, new_actual_quantity, created_at, updated_at) "
+                        + "SELECT ?, id, ?, 'direct database guard test', 'APPLYING', ?, version, "
+                        + "shift_date, shift_date, shift_type, shift_type, site_id, site_id, driver_id, "
+                        + "driver_id, equipment_id, equipment_id, driver_wage, driver_wage, price, price, "
+                        + "equipment_operating_cost, equipment_operating_cost, compensation_basis, "
+                        + "compensation_basis, compensation_rate, ?, compensation_unit_code, "
+                        + "compensation_unit_code, compensation_currency_code, compensation_currency_code, "
+                        + "compensation_calculated_amount, driver_wage, actual_hours, actual_hours, "
+                        + "actual_quantity, actual_quantity, UTC_TIMESTAMP(6), UTC_TIMESTAMP(6) "
+                        + "FROM shifts WHERE tenant_id=? AND id=?",
+                correctionTenantId, idempotencyKey, actorUserId, newCompensationRate, tenantId, shiftId);
+    }
+
+    @Test
+    void correctionPersistsFrozenCompensationSnapshotAndDatabaseRejectsTampering() throws Exception {
+        JsonNode completed = finishShift(token,
+                startShift(token, shiftBody(siteId, driverId, equipmentId, today().minusDays(1), "MORNING")));
+        long shiftId = completed.path("id").asLong();
+        Map<String, Object> request = correctionBody(completed, "snapshot-" + UUID.randomUUID());
+
+        postJson("/api/v1/shifts/" + shiftId + "/corrections", request, token)
+                .andExpect(status().isOk());
+
+        Map<String, Object> snapshot = jdbc.queryForMap(
+                "SELECT old_compensation_basis, new_compensation_basis, "
+                        + "old_compensation_rate, new_compensation_rate, "
+                        + "old_compensation_calculated_amount, new_compensation_calculated_amount, "
+                        + "old_actual_hours, new_actual_hours, old_actual_quantity, new_actual_quantity "
+                        + "FROM shift_corrections WHERE tenant_id=? AND shift_id=?",
+                tenantId, shiftId);
+        assertThat(snapshot.get("old_compensation_basis")).isEqualTo("SHIFT");
+        assertThat(snapshot.get("new_compensation_basis")).isEqualTo("SHIFT");
+        assertThat(snapshot.get("old_compensation_rate")).isEqualTo(new BigDecimal("150.00"));
+        assertThat(snapshot.get("new_compensation_rate")).isEqualTo(new BigDecimal("180.00"));
+        assertThat(snapshot.get("old_compensation_calculated_amount"))
+                .isEqualTo(new BigDecimal("150.00"));
+        assertThat(snapshot.get("new_compensation_calculated_amount"))
+                .isEqualTo(new BigDecimal("180.00"));
+        assertThat(jdbc.queryForObject(
+                "SELECT compensation_calculated_amount FROM shifts WHERE tenant_id=? AND id=?",
+                BigDecimal.class, tenantId, shiftId))
+                .isEqualByComparingTo("180.00");
+        assertThat(snapshot.get("old_actual_hours")).isNull();
+        assertThat(snapshot.get("new_actual_hours")).isNull();
+        assertThat(snapshot.get("old_actual_quantity")).isNull();
+        assertThat(snapshot.get("new_actual_quantity")).isNull();
+
+        // Completed shift wage and compensation metadata cannot be changed outside the audited correction path.
+        assertThatThrownBy(() -> jdbc.update(
+                "UPDATE shifts SET driver_wage=driver_wage+1 WHERE tenant_id=? AND id=?",
+                tenantId, shiftId))
+                .isInstanceOf(UncategorizedSQLException.class)
+                .hasMessageContaining("COMPLETED_SHIFT_IMMUTABLE");
+        assertThatThrownBy(() -> jdbc.update(
+                "UPDATE shifts SET compensation_rate=compensation_rate+1 WHERE tenant_id=? AND id=?",
+                tenantId, shiftId))
+                .isInstanceOf(UncategorizedSQLException.class)
+                .hasMessageContaining("COMPLETED_SHIFT_COMPENSATION_IMMUTABLE");
+        assertThatThrownBy(() -> jdbc.update(
+                "UPDATE shifts SET compensation_calculated_amount=compensation_calculated_amount+1 "
+                        + "WHERE tenant_id=? AND id=?", tenantId, shiftId))
+                .isInstanceOf(UncategorizedSQLException.class)
+                .hasMessageContaining("COMPLETED_SHIFT_COMPENSATION_IMMUTABLE");
+
+        Long correctionId = jdbc.queryForObject(
+                "SELECT id FROM shift_corrections WHERE tenant_id=? AND shift_id=?",
+                Long.class, tenantId, shiftId);
+        assertThatThrownBy(() -> jdbc.update(
+                "UPDATE shift_corrections SET old_compensation_rate=old_compensation_rate+1 "
+                        + "WHERE tenant_id=? AND id=?", tenantId, correctionId))
+                .isInstanceOf(UncategorizedSQLException.class)
+                .hasMessageContaining("SHIFT_CORRECTION_AUDIT_IMMUTABLE");
+    }
+
 
 }
