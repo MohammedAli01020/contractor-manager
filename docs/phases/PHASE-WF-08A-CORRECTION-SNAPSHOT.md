@@ -1,6 +1,6 @@
 # WF-08A — Audited Compensation Correction Snapshot
 
-Status: implementation in progress on `feature/wf08a-correction-snapshots`; not approved for merge or production.
+Status: PR #41 is open for review from `feature/wf08a-correction-snapshots` into `integration/stabilization-2026-11`; not merged and not approved for production.
 Base: `integration/stabilization-2026-11`.
 This phase is schema and database-authorization work only. It does not enable HOUR or QUANTITY corrections in the API.
 
@@ -24,8 +24,8 @@ This phase is schema and database-authorization work only. It does not enable HO
 - `shift_corrections` currently snapshots business fields and wage/journal/ledger references, but does not snapshot compensation basis/rate/unit/currency/calculated amount or old/new actual measurements.
 - The current service explicitly rejects `HOUR` and `QUANTITY`.
 - The current request accepts `driverWage`; that must not be reused as the source of truth for measured-basis corrections.
-- V46 protects completed measurements by rejecting direct changes. It must be extended only to authorize a fully matched APPLYING correction row.
-- The correction audit guard (introduced in V44 and further adjusted by later migrations) must also make every new snapshot column immutable after insertion, apart from the explicitly permitted financial-reference/status transition.
+- V46 protects completed business/measurement fields and authorizes only a fully matched APPLYING correction row for the existing SHIFT correction path.
+- V48 adds immutable snapshot-update protection; V49 replaces the snapshot-insert validator with the final SHIFT-only semantics. The existing V44 audit guard still controls the APPLYING-to-APPLIED transition and financial-reference population.
 
 ## Required snapshot columns
 
@@ -70,13 +70,15 @@ Use the same SQL precision/scale as the corresponding `shifts` columns. Preserve
 - V49 tightens SHIFT snapshot semantics and explicitly blocks HOUR/QUANTITY correction rows.
 - V50 protects completed-shift compensation metadata from direct SQL changes unless the exact APPLYING correction snapshot authorizes the update.
 - The integration test verifies old/new SHIFT wage snapshots and rejects direct changes to completed compensation rate/calculated amount.
-- Backend CI is still running on the latest commit. This branch is not ready to merge until the full required MySQL integration suite passes and the migration behavior is reviewed.
+- Backend CI run `42081692565` completed successfully on commit `bf7d080a49b8358fc1f0615e396efbf4adfa3793`, including the required MySQL integration and migration gates.
+- PR #41 is open for review only; no merge or production migration is authorized.
+- Remaining review gate: verify trigger interaction/order and historical-row compatibility, and expand migration-level negative tests before approval.
 
 ## Implementation sequence and release gate
 
 - First add the snapshot columns and map them in `ShiftCorrection`.
-- Then extend the correction insert path to capture the old snapshot and the proposed new measurement while retaining frozen rate/unit/currency.
-- Replace the V46 protection trigger in a new migration with an exact APPLYING-row authorization. Extend the audit guard in a new migration so the new snapshot cannot be edited after insertion.
-- Add migration tests against a clean database and an upgraded V46 database. Verify trigger creation, historical row compatibility, direct-SQL rejection, tenant isolation, and zero-wage behavior.
+- The current constructor captures old/new SHIFT snapshots; measured-basis correction input and posting remain disabled.
+- V48–V50 add snapshot validation, immutability and completed-shift compensation protection without editing V1–V46.
+- Before approval, add/confirm migration tests against a clean database and an upgraded V46 database for trigger creation, historical row compatibility, malformed snapshot insertion, tenant isolation and zero-wage behavior.
 - Do not remove the service's HOUR/QUANTITY rejection in WF-08A. Enable those bases only in WF-08B after journal/ledger correction tests pass.
 - No production migration or merge is authorized by this phase.
