@@ -582,6 +582,62 @@ class ShiftCorrectionIntegrationTest extends AbstractShiftIntegrationTest {
     }
 
     @Test
+    void databaseRejectsMalformedAndMeasuredBasisCorrectionSnapshots() throws Exception {
+        JsonNode shiftResponse = startShift(token,
+                shiftBody(siteId, driverId, equipmentId, today().minusDays(1), "MORNING"));
+        long shiftId = shiftResponse.path("id").asLong();
+
+        // A SHIFT snapshot with a forged new rate must fail even when inserted outside the service.
+        assertThatThrownBy(() -> insertCorrectionSnapshotDirectly(
+                shiftId, "forged-shift-snapshot-" + UUID.randomUUID(), new BigDecimal("999.00")))
+                .isInstanceOf(UncategorizedSQLException.class)
+                .hasMessageContaining("SHIFT_CORRECTION_COMPENSATION_SNAPSHOT_MISMATCH");
+
+        // Build otherwise matching in-progress HOUR and QUANTITY snapshots. The DB guard
+        // must reject the compensation basis itself until the WF-08B workflow exists.
+        for (String basis : new String[] {"HOUR", "QUANTITY"}) {
+            jdbc.update("UPDATE shifts SET compensation_basis=?, compensation_unit_code=?, "
+                            + "compensation_rate=10.00, compensation_calculated_amount=0.00, "
+                            + "actual_hours=NULL, actual_quantity=NULL WHERE tenant_id=? AND id=?",
+                    basis, basis.equals("HOUR") ? "HOUR" : "UNIT", tenantId, shiftId);
+
+            BigDecimal currentRate = jdbc.queryForObject(
+                    "SELECT compensation_rate FROM shifts WHERE tenant_id=? AND id=?",
+                    BigDecimal.class, tenantId, shiftId);
+            assertThatThrownBy(() -> insertCorrectionSnapshotDirectly(
+                    shiftId, "forged-" + basis.toLowerCase() + "-" + UUID.randomUUID(), currentRate))
+                    .isInstanceOf(UncategorizedSQLException.class)
+                    .hasMessageContaining("SHIFT_CORRECTION_COMPENSATION_SNAPSHOT_MISMATCH");
+        }
+    }
+
+    private void insertCorrectionSnapshotDirectly(long shiftId, String idempotencyKey,
+                                                   BigDecimal newCompensationRate) {
+        jdbc.update(
+                "INSERT INTO shift_corrections (tenant_id, shift_id, idempotency_key, reason, status, "
+                        + "actor_user_id, expected_shift_version, old_shift_date, new_shift_date, "
+                        + "old_shift_type, new_shift_type, old_site_id, new_site_id, old_driver_id, "
+                        + "new_driver_id, old_equipment_id, new_equipment_id, old_driver_wage, "
+                        + "new_driver_wage, old_price, new_price, old_equipment_operating_cost, "
+                        + "new_equipment_operating_cost, old_compensation_basis, new_compensation_basis, "
+                        + "old_compensation_rate, new_compensation_rate, old_compensation_unit_code, "
+                        + "new_compensation_unit_code, old_compensation_currency_code, "
+                        + "new_compensation_currency_code, old_compensation_calculated_amount, "
+                        + "new_compensation_calculated_amount, old_actual_hours, new_actual_hours, "
+                        + "old_actual_quantity, new_actual_quantity, created_at, updated_at) "
+                        + "SELECT tenant_id, id, ?, 'direct database guard test', 'APPLYING', ?, version, "
+                        + "shift_date, shift_date, shift_type, shift_type, site_id, site_id, driver_id, "
+                        + "driver_id, equipment_id, equipment_id, driver_wage, driver_wage, price, price, "
+                        + "equipment_operating_cost, equipment_operating_cost, compensation_basis, "
+                        + "compensation_basis, compensation_rate, ?, compensation_unit_code, "
+                        + "compensation_unit_code, compensation_currency_code, compensation_currency_code, "
+                        + "compensation_calculated_amount, driver_wage, actual_hours, actual_hours, "
+                        + "actual_quantity, actual_quantity, UTC_TIMESTAMP(6), UTC_TIMESTAMP(6) "
+                        + "FROM shifts WHERE tenant_id=? AND id=?",
+                idempotencyKey, actorUserId, newCompensationRate, tenantId, shiftId);
+    }
+
+    @Test
     void correctionPersistsFrozenCompensationSnapshotAndDatabaseRejectsTampering() throws Exception {
         JsonNode completed = finishShift(token,
                 startShift(token, shiftBody(siteId, driverId, equipmentId, today().minusDays(1), "MORNING")));
