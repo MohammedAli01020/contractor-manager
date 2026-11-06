@@ -27,6 +27,8 @@ BEGIN
        AND NEW.old_compensation_currency_code <=> s.compensation_currency_code
        AND NEW.new_compensation_currency_code <=> s.compensation_currency_code
        AND NEW.old_compensation_calculated_amount <=> s.compensation_calculated_amount
+       AND NEW.old_driver_wage <=> s.driver_wage
+       AND s.compensation_rate >= 0
        AND NEW.old_actual_hours <=> s.actual_hours
        AND NEW.old_actual_quantity <=> s.actual_quantity
        AND NEW.new_compensation_calculated_amount <=> NEW.new_driver_wage
@@ -42,6 +44,8 @@ BEGIN
            (s.compensation_basis = 'HOUR'
             AND s.actual_hours > 0
             AND s.actual_quantity IS NULL
+            AND s.compensation_unit_code IS NOT NULL
+            AND TRIM(s.compensation_unit_code) <> ''
             AND NEW.new_actual_hours > 0
             AND NEW.new_actual_quantity IS NULL
             AND NEW.new_compensation_rate <=> s.compensation_rate
