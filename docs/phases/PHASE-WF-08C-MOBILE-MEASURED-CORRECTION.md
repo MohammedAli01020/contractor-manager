@@ -1,6 +1,6 @@
 # WF-08C — Mobile measured-basis correction
 
-Status: implementation in progress; stacked on WF-08B and not merged.
+Status: implementation complete; automated CI passed on the current implementation head; manual Android device validation remains; stacked on WF-08B and not merged.
 Parent: `feature/wf08b-measured-correction` at `3b090e4b3eafdc1d0db790c56c4a3e76ed404468`.
 Branch: `feature/wf08c-measured-correction-mobile`.
 
@@ -23,7 +23,8 @@ Expose the WF-08B measured correction API in the existing Flutter completed-shif
 
 - Widget tests cover HOUR and QUANTITY payloads and assert that no client-supplied `driverWage` or irrelevant measurement is sent.
 - Existing SHIFT tests continue to cover zero wages and required correction reason.
-- Flutter CI runs with Flutter 3.3.3, full test suite, and analyzer on this branch and its stacked PR base.
+- Flutter CI on the implementation head `ce224a99e13227f487982bd74a976f30d5bb8a72` passed for both push run [42254959722](https://github.com/MohammedAli01020/contractor-manager/actions/runs/42254959722) and PR run [42254969635](https://github.com/MohammedAli01020/contractor-manager/actions/runs/42254969635): Flutter 3.3.3 setup, dependency resolution, full test suite, and analyzer all succeeded.
+- Manual Android device validation remains before phase acceptance.
 - No offline-first implementation is included; this remains a future stage after core stabilization.
 
 ## Safety
