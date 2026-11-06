@@ -88,6 +88,8 @@ void main() {
       home: ShiftCorrectionScreen(shift: hourly, api: api),
     ));
     await tester.pumpAndSettle();
+    expect(find.text('أجر السائق (جنيه)'), findsNothing);
+    expect(find.text('سعر الساعة'), findsOneWidget);
 
     final measurement = find.ancestor(
       of: find.text('الساعات الفعلية الجديدة'),
@@ -162,6 +164,9 @@ void main() {
       home: ShiftCorrectionScreen(shift: quantity, api: api),
     ));
     await tester.pumpAndSettle();
+    expect(find.text('أجر السائق (جنيه)'), findsNothing);
+    expect(find.textContaining('سعر الوحدة'), findsNothing);
+    expect(find.text('3.25 جنيه / TON'), findsOneWidget);
 
     final measurement = find.ancestor(
       of: find.text('الكمية الفعلية الجديدة'),
