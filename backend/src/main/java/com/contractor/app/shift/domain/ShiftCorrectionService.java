@@ -120,20 +120,39 @@ public class ShiftCorrectionService {
             throw ApiException.conflict("التصحيح متاح للورديات المكتملة فقط.");
         }
         shift.requireVersion(request.getExpectedVersion());
-        if ("HOUR".equals(shift.getCompensationBasis())
-                || "QUANTITY".equals(shift.getCompensationBasis())) {
-            throw ApiException.conflict("تصحيح الورديات بالساعة أو الكمية غير متاح في هذا الإصدار؛ لا يمكن تغيير الأجر دون تصحيح القياس الفعلي ولقطة الحساب مع عكس القيد.");
-        }
         if (request.getShiftDate() == null || request.getShiftDate().isAfter(LocalDate.now(businessZone))) {
             throw ApiException.badRequest("تاريخ الوردية مطلوب ولا يمكن أن يكون في المستقبل.");
-        }
-        if (request.getDriverWage() == null || request.getDriverWage().signum() < 0) {
-            throw ApiException.badRequest("أجر الوردية المصحح لا يمكن أن يكون أقل من صفر.");
         }
         if (request.getPrice() == null || request.getEquipmentOperatingCost() == null) {
             throw ApiException.badRequest("السعر وتكلفة تشغيل المعدة مطلوبان.");
         }
-        BigDecimal newWage = money(request.getDriverWage());
+        String basis = shift.getCompensationBasis();
+        BigDecimal correctedHours = null;
+        BigDecimal correctedQuantity = null;
+        BigDecimal newWage;
+        if ("SHIFT".equals(basis)) {
+            if (request.getDriverWage() == null || request.getDriverWage().signum() < 0
+                    || request.getActualHours() != null || request.getActualQuantity() != null) {
+                throw ApiException.badRequest("تصحيح وردية SHIFT يتطلب أجرًا مصححًا فقط دون ساعات أو كمية.");
+            }
+            newWage = money(request.getDriverWage());
+        } else if ("HOUR".equals(basis)) {
+            if (request.getDriverWage() != null || request.getActualHours() == null
+                    || request.getActualQuantity() != null) {
+                throw ApiException.badRequest("تصحيح وردية الساعة يتطلب actualHours فقط، ويُحسب الأجر تلقائيًا.");
+            }
+            correctedHours = measured(request.getActualHours(), 2, 6, "عدد الساعات");
+            newWage = Money.scale(shift.getCompensationRate().multiply(correctedHours));
+        } else if ("QUANTITY".equals(basis)) {
+            if (request.getDriverWage() != null || request.getActualQuantity() == null
+                    || request.getActualHours() != null) {
+                throw ApiException.badRequest("تصحيح وردية الكمية يتطلب actualQuantity فقط، ويُحسب الأجر تلقائيًا.");
+            }
+            correctedQuantity = measured(request.getActualQuantity(), 3, 9, "الكمية");
+            newWage = Money.scale(shift.getCompensationRate().multiply(correctedQuantity));
+        } else {
+            throw ApiException.conflict("أساس التعويض المسجل للوردية غير مدعوم للتصحيح.");
+        }
         BigDecimal newPrice = money(request.getPrice());
         BigDecimal newOperatingCost = money(request.getEquipmentOperatingCost());
         String newNotes = Texts.blankToNull(request.getNotes());
@@ -143,6 +162,8 @@ public class ShiftCorrectionService {
                 || !Objects.equals(shift.getSiteId(), request.getSiteId())
                 || !Objects.equals(shift.getEquipmentId(), request.getEquipmentId())
                 || shift.getDriverWage().compareTo(newWage) != 0
+                || !Objects.equals(shift.getActualHours(), correctedHours)
+                || !Objects.equals(shift.getActualQuantity(), correctedQuantity)
                 || shift.getPrice().compareTo(newPrice) != 0
                 || shift.getEquipmentOperatingCost().compareTo(newOperatingCost) != 0;
         if (!protectedFieldsChanged) {
@@ -256,7 +277,7 @@ public class ShiftCorrectionService {
         ShiftCorrection correction = new ShiftCorrection(tenantId, shiftId, key, reason, actorId,
                 request.getExpectedVersion(), shift, request.getShiftDate(), request.getShiftType(),
                 request.getSiteId(), shift.getDriverId(), request.getEquipmentId(), newWage, newPrice,
-                newOperatingCost, newNotes);
+                newOperatingCost, newNotes, correctedHours, correctedQuantity);
         if (oldEarning != null) correction.setOldEarningLedgerEntryId(oldEarning.getId());
         corrections.saveAndFlush(correction);
 
@@ -309,6 +330,9 @@ public class ShiftCorrectionService {
                 .track("equipmentId", shift.getEquipmentId(), request.getEquipmentId())
                 .track("price", shift.getPrice(), newPrice)
                 .track("driverWage", shift.getDriverWage(), newWage)
+                .track("actualHours", shift.getActualHours(), correctedHours)
+                .track("actualQuantity", shift.getActualQuantity(), correctedQuantity)
+                .track("compensationCalculatedAmount", shift.getCompensationCalculatedAmount(), newWage)
                 .track("equipmentOperatingCost", shift.getEquipmentOperatingCost(), newOperatingCost)
                 .track("notes", shift.getNotes(), newNotes);
         shift.setShiftDate(request.getShiftDate());
@@ -316,7 +340,11 @@ public class ShiftCorrectionService {
         shift.setSiteId(request.getSiteId());
         shift.setEquipmentId(request.getEquipmentId());
         shift.setPrice(newPrice);
-        shift.setDriverWage(newWage);
+        if ("SHIFT".equals(basis)) {
+            shift.setDriverWage(newWage);
+        } else {
+            shift.applyMeasuredCorrection(correctedHours, correctedQuantity, newWage);
+        }
         shift.setEquipmentOperatingCost(newOperatingCost);
         shift.setNotes(newNotes);
         shift.setDriverWageJournalEntryId(correction.getReplacementWageJournalEntryId());
@@ -342,11 +370,30 @@ public class ShiftCorrectionService {
                 || !Objects.equals(prior.getNewSiteId(), request.getSiteId())
                 || !Objects.equals(prior.getNewDriverId(), prior.getOldDriverId())
                 || !Objects.equals(prior.getNewEquipmentId(), request.getEquipmentId())
-                || prior.getNewDriverWage().compareTo(request.getDriverWage()) != 0
+                || (("SHIFT".equals(prior.getNewCompensationBasis())
+                        && (request.getDriverWage() == null
+                            || prior.getNewDriverWage().compareTo(request.getDriverWage()) != 0))
+                    || (!"SHIFT".equals(prior.getNewCompensationBasis())
+                        && request.getDriverWage() != null))
+                || !Objects.equals(prior.getNewActualHours(), request.getActualHours())
+                || !Objects.equals(prior.getNewActualQuantity(), request.getActualQuantity())
                 || prior.getNewPrice().compareTo(request.getPrice()) != 0
                 || prior.getNewEquipmentOperatingCost().compareTo(request.getEquipmentOperatingCost()) != 0
                 || !Objects.equals(prior.getNewNotes(), Texts.blankToNull(request.getNotes()))) {
             throw ApiException.conflict("مفتاح التصحيح مستخدم لطلب مختلف.");
+        }
+    }
+
+    private BigDecimal measured(BigDecimal value, int fractionDigits, int integerDigits, String label) {
+        if (value == null || value.signum() <= 0 || value.scale() > fractionDigits
+                || value.precision() - value.scale() > integerDigits) {
+            throw ApiException.badRequest(label + " يجب أن تكون أكبر من صفر وبدقة لا تتجاوز "
+                    + fractionDigits + " خانات عشرية.");
+        }
+        try {
+            return value.setScale(fractionDigits, RoundingMode.UNNECESSARY);
+        } catch (ArithmeticException ex) {
+            throw ApiException.badRequest(label + " تحتوي على دقة غير مسموح بها.");
         }
     }
 
