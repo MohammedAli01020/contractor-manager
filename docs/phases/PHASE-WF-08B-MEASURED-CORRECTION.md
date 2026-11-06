@@ -36,14 +36,18 @@ WF-08A is technically accepted for progression to WF-08B based on focused trigge
    - Add HOUR/QUANTITY calculation and positive-measurement validation.
    - Populate the immutable old/new compensation snapshots on the correction row.
    - Reuse the established journal reversal/replacement and worker-ledger reversal/replacement patterns, preserving zero-side behavior and existing post-payment/recovery guards.
+   - Add a measured-correction domain operation that updates the applicable measurement and calculated wage without changing the frozen contractual rate (do not call the legacy `setDriverWage` path if it would rewrite a legacy rate).
    - Ensure the shift update, correction status transition, journal postings, ledger rows and audit records commit or roll back together.
 3. Database authorization
    - Add a forward-only V51 migration; do not edit V1–V50.
-   - Extend the correction-insert validator to allow measured bases only when old/new basis, frozen rate/unit/currency, old/new measurements and calculated wage are exact and valid.
-   - Enforce positive new measurement and exact server rounding in SQL.
-   - Extend completed-shift protection so only the matching tenant/shift/version/APPLYING snapshot authorizes changing the applicable measurement and calculated amount; basis, rate, unit, currency, agreement identity, wage source and worker identity stay frozen.
-   - Preserve immutable audit snapshots and existing V44/V46 financial-reference authorization.
-   - Require matching reversal/replacement evidence for positive sides and NULL references for zero sides.
+   - V51 must replace/recreate the relevant completed-shift authorization triggers, not merely add a new side trigger:
+     - V46 `trg_shifts_protect_completed` currently authorizes completed business fields, `driver_wage`, measurements, wage journal linkage, and exact journal/ledger evidence. Extend its APPLYING-row match to authorize only the applicable measured-value change and server-calculated `driver_wage`, while preserving its financial evidence checks.
+     - V49 `trg_shift_corrections_compensation_snapshot_insert` currently blocks HOUR/QUANTITY. Extend it to validate measured-basis old/new snapshots, frozen rate/unit/currency, positive new measurement, and exact rounded wage.
+     - V50 `trg_shifts_protect_completed_compensation` currently requires old/new measurements to match. Extend its exact snapshot match for the applicable new measurement and calculated amount while freezing basis, rate, unit, currency, wage source and agreement/component identity.
+   - Preserve V48 snapshot update immutability and V44 APPLYING-to-APPLIED / financial-reference authorization. Do not weaken either guard.
+   - Ensure V46 and V50 authorize the same single correction row and the same old/new measurement and wage values; reject missing, duplicate, cross-tenant, stale-version, or partially matching authorization.
+   - Enforce exact SQL rounding consistency: HOUR uses `ROUND(old_compensation_rate * new_actual_hours, 2)`; QUANTITY uses `ROUND(old_compensation_rate * new_actual_quantity, 2)`.
+   - Require matching reversal/replacement journal and ledger evidence for positive sides; zero sides require NULL references. Preserve all existing SHIFT semantics.
 4. Tests
    - HOUR positive-to-positive correction: exact calculation, reversal, replacement, ledger, snapshots.
    - QUANTITY positive-to-positive correction: same guarantees.
@@ -59,7 +63,7 @@ WF-08A is technically accepted for progression to WF-08B based on focused trigge
 5. CI/review
    - Require the new measured-basis integration tests to execute (not skip) on MySQL in CI.
    - Run backend CI on exact latest head for both push and PR events.
-   - Review V51 interaction with V44, V46 and V48–V50 before requesting phase acceptance.
+   - Review V51 interaction with V44, V46, and V48–V50 before requesting phase acceptance.
 
 ## Explicit exclusions
 
