@@ -196,8 +196,13 @@ class _ShiftCorrectionScreenState extends State<ShiftCorrectionScreen> {
     final newSide = newWage == 0
         ? 'لن يتم إنشاء قيد أجر أو حركة استحقاق جديدة بقيمة صفر.'
         : 'سيتم إنشاء قيد أجر وحركة استحقاق بالقيمة المصححة.';
+    final measuredExplanation = _isMeasuredBasis
+        ? ' السعر المحفوظ ${widget.shift.compensationRate.toStringAsFixed(2)} جنيه '
+            'والقياس الجديد ${_correctedMeasurement ?? 0}.'
+        : '';
     return 'سيتم حفظ التصحيح في سجل التدقيق. $oldSide $newSide '
-        'لا يمكن التراجع عن ذلك بتعديل عادي.';
+        'الأجر الجديد المتوقع ${newWage.toStringAsFixed(2)} جنيه.'
+        '$measuredExplanation لا يمكن التراجع عن ذلك بتعديل عادي.';
   }
 
   Future<void> _submit() async {
