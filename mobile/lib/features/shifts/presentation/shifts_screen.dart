@@ -247,9 +247,7 @@ class _ShiftsView extends StatelessWidget {
       actions['history'] = 'عرض سجل التعديلات';
     } else {
       if (shift.status == 'COMPLETED') {
-        if (canCorrectCompletedShifts &&
-            shift.compensationBasis != 'HOUR' &&
-            shift.compensationBasis != 'QUANTITY') {
+        if (canCorrectCompletedShifts) {
           actions['correct'] = 'تصحيح الوردية المكتملة';
         }
         actions['edit'] = 'تعديل ملاحظات الوردية فقط';

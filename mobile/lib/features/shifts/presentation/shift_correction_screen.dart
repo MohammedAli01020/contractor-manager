@@ -22,6 +22,7 @@ class _ShiftCorrectionScreenState extends State<ShiftCorrectionScreen> {
   final _formKey = GlobalKey<FormState>();
   final _reason = TextEditingController();
   final _wage = TextEditingController();
+  final _actualMeasurement = TextEditingController();
   final _price = TextEditingController();
   final _operatingCost = TextEditingController();
   final _notes = TextEditingController();
@@ -49,6 +50,12 @@ class _ShiftCorrectionScreenState extends State<ShiftCorrectionScreen> {
     _shiftDate = shift.shiftDate;
     _shiftType = shift.shiftType;
     _wage.text = shift.driverWage.toStringAsFixed(2);
+    final existingMeasurement = shift.compensationBasis == 'HOUR'
+        ? shift.actualHours
+        : shift.actualQuantity;
+    _actualMeasurement.text = existingMeasurement == null
+        ? ''
+        : existingMeasurement.toString();
     _price.text = shift.price.toStringAsFixed(2);
     _operatingCost.text = shift.equipmentOperatingCost.toStringAsFixed(2);
     _notes.text = shift.notes;
@@ -123,6 +130,37 @@ class _ShiftCorrectionScreenState extends State<ShiftCorrectionScreen> {
     return null;
   }
 
+  bool get _isMeasuredBasis =>
+      widget.shift.compensationBasis == 'HOUR' ||
+      widget.shift.compensationBasis == 'QUANTITY';
+
+  String? _measurementValidator(String? value) {
+    final parsed = double.tryParse((value ?? '').trim());
+    if (parsed == null || parsed.isNaN || parsed.isInfinite || parsed <= 0) {
+      return widget.shift.compensationBasis == 'HOUR'
+          ? 'أدخل عدد ساعات أكبر من صفر'
+          : 'أدخل كمية أكبر من صفر';
+    }
+    final isHourly = widget.shift.compensationBasis == 'HOUR';
+    final maxFractionDigits = isHourly ? 2 : 3;
+    final maxValue = isHourly ? 999999.99 : 999999999.999;
+    if (parsed > maxValue) return 'القيمة أكبر من الحد المسموح';
+    final factor = maxFractionDigits == 2 ? 100 : 1000;
+    final scaled = parsed * factor;
+    if ((scaled - scaled.round()).abs() > 0.000001) {
+      return 'عدد الخانات العشرية المسموح بها $maxFractionDigits';
+    }
+    return null;
+  }
+
+  double? get _correctedMeasurement =>
+      double.tryParse(_actualMeasurement.text.trim());
+
+  double get _projectedMeasuredWage =>
+      (widget.shift.compensationRate * (_correctedMeasurement ?? 0) * 100)
+          .roundToDouble() /
+      100;
+
   String _newIdempotencyKey() {
     final random = Random.secure();
     final suffix = List<int>.generate(24, (_) => random.nextInt(16))
@@ -152,15 +190,22 @@ class _ShiftCorrectionScreenState extends State<ShiftCorrectionScreen> {
 
   String _confirmationMessage() {
     final oldWage = widget.shift.driverWage;
-    final newWage = double.tryParse(_wage.text.trim()) ?? 0;
+    final newWage = _isMeasuredBasis
+        ? _projectedMeasuredWage
+        : (double.tryParse(_wage.text.trim()) ?? 0);
     final oldSide = oldWage > 0
         ? 'سيتم عكس قيد الأجر واستحقاق العامل الحالي.'
         : 'الوردية الحالية لا تحتوي على قيد أجر أو استحقاق عامل.';
     final newSide = newWage == 0
         ? 'لن يتم إنشاء قيد أجر أو حركة استحقاق جديدة بقيمة صفر.'
         : 'سيتم إنشاء قيد أجر وحركة استحقاق بالقيمة المصححة.';
+    final measuredExplanation = _isMeasuredBasis
+        ? ' السعر المحفوظ ${widget.shift.compensationRate.toStringAsFixed(2)} جنيه '
+            'والقياس الجديد ${_correctedMeasurement ?? 0}.'
+        : '';
     return 'سيتم حفظ التصحيح في سجل التدقيق. $oldSide $newSide '
-        'لا يمكن التراجع عن ذلك بتعديل عادي.';
+        'الأجر الجديد المتوقع ${newWage.toStringAsFixed(2)} جنيه.'
+        '$measuredExplanation لا يمكن التراجع عن ذلك بتعديل عادي.';
   }
 
   Future<void> _submit() async {
@@ -207,9 +252,17 @@ class _ShiftCorrectionScreenState extends State<ShiftCorrectionScreen> {
         'shiftType': _shiftType,
         'siteId': _siteId,
         'equipmentId': _equipmentId,
-        'driverWage': double.parse(_wage.text.trim()),
-        'price': double.parse(_price.text.trim()),
-        'equipmentOperatingCost': double.parse(_operatingCost.text.trim()),
+        if (!_isMeasuredBasis) 'driverWage': double.parse(_wage.text.trim()),
+        if (widget.shift.compensationBasis == 'HOUR')
+          'actualHours': _correctedMeasurement,
+        if (widget.shift.compensationBasis == 'QUANTITY')
+          'actualQuantity': _correctedMeasurement,
+        'price': _isMeasuredBasis
+            ? widget.shift.price
+            : double.parse(_price.text.trim()),
+        'equipmentOperatingCost': _isMeasuredBasis
+            ? widget.shift.equipmentOperatingCost
+            : double.parse(_operatingCost.text.trim()),
         'notes': _notes.text.trim(),
       };
       final fingerprint = jsonEncode(payload);
@@ -240,6 +293,7 @@ class _ShiftCorrectionScreenState extends State<ShiftCorrectionScreen> {
     _price.dispose();
     _operatingCost.dispose();
     _notes.dispose();
+    _actualMeasurement.dispose();
     super.dispose();
   }
 
@@ -278,8 +332,10 @@ class _ShiftCorrectionScreenState extends State<ShiftCorrectionScreen> {
                   _currentLine('الموقع', widget.shift.siteName),
                   _currentLine('المعدة',
                       '${widget.shift.equipmentCode} ${widget.shift.equipmentName}'),
-                  _currentLine('أجر السائق',
-                      '${widget.shift.driverWage.toStringAsFixed(2)} جنيه'),
+                  _currentLine(
+                    _isMeasuredBasis ? 'الأجر المحسوب' : 'أجر السائق',
+                    '${widget.shift.driverWage.toStringAsFixed(2)} جنيه',
+                  ),
                   const Divider(height: 28),
                   Text('البيانات بعد التصحيح',
                       style: Theme.of(context).textTheme.titleMedium),
@@ -357,35 +413,92 @@ class _ShiftCorrectionScreenState extends State<ShiftCorrectionScreen> {
                         : (value) => setState(() => _equipmentId = value),
                   ),
                   const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _wage,
-                    enabled: !_saving,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(
-                      labelText: 'أجر السائق (جنيه)',
-                      border: OutlineInputBorder(),
+                  if (_isMeasuredBasis) ...[
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              widget.shift.compensationBasis == 'HOUR'
+                                  ? 'تعويض بالساعة'
+                                  : 'تعويض بالكمية',
+                              style: Theme.of(context).textTheme.titleSmall,
+                            ),
+                            const SizedBox(height: 8),
+                            _currentLine(
+                              widget.shift.compensationBasis == 'HOUR' ? 'سعر الساعة' : 'سعر الوحدة',
+                              '${widget.shift.compensationRate.toStringAsFixed(2)} جنيه' +
+                                  (widget.shift.compensationBasis == 'QUANTITY' && widget.shift.compensationUnitCode.isNotEmpty
+                                      ? ' / ${widget.shift.compensationUnitCode}'
+                                      : ''),
+                            ),
+                            _currentLine(
+                              widget.shift.compensationBasis == 'HOUR' ? 'الساعات السابقة' : 'الكمية السابقة',
+                              widget.shift.compensationBasis == 'HOUR'
+                                  ? (widget.shift.actualHours?.toString() ?? 'غير متاحة')
+                                  : (widget.shift.actualQuantity?.toString() ?? 'غير متاحة'),
+                            ),
+                            const SizedBox(height: 12),
+                            TextFormField(
+                              controller: _actualMeasurement,
+                              enabled: !_saving,
+                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                              decoration: InputDecoration(
+                                labelText: widget.shift.compensationBasis == 'HOUR'
+                                    ? 'الساعات الفعلية الجديدة'
+                                    : 'الكمية الفعلية الجديدة',
+                                helperText: widget.shift.compensationBasis == 'HOUR'
+                                    ? 'حتى منزلتين عشريتين'
+                                    : 'حتى 3 منازل عشرية',
+                                border: const OutlineInputBorder(),
+                              ),
+                              onChanged: (_) => setState(() {}),
+                              validator: _measurementValidator,
+                            ),
+                            const SizedBox(height: 8),
+                            _currentLine('الأجر المتوقع', '${_projectedMeasuredWage.toStringAsFixed(2)} جنيه'),
+                            const Text(
+                              'سيحسب النظام الأجر من القياس الجديد والسعر المحفوظ. لا يمكن تعديل سعر الاتفاقية من هذه الشاشة.',
+                              style: TextStyle(fontSize: 12),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
-                    validator: (value) => _moneyValidator(value, positive: false),
-                  ),
+                  ] else
+                    TextFormField(
+                      controller: _wage,
+                      enabled: !_saving,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(
+                        labelText: 'أجر السائق (جنيه)',
+                        border: OutlineInputBorder(),
+                      ),
+                      validator: (value) => _moneyValidator(value, positive: false),
+                    ),
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: _price,
-                    enabled: !_saving,
+                    enabled: !_saving && !_isMeasuredBasis,
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'قيمة الوردية (جنيه)',
-                      border: OutlineInputBorder(),
+                      helperText: _isMeasuredBasis ? 'تظل كما هي في تصحيح قياس أجر العامل' : null,
+                      border: const OutlineInputBorder(),
                     ),
                     validator: (value) => _moneyValidator(value, positive: false),
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: _operatingCost,
-                    enabled: !_saving,
+                    enabled: !_saving && !_isMeasuredBasis,
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'تكلفة تشغيل المعدة (جنيه)',
-                      border: OutlineInputBorder(),
+                      helperText: _isMeasuredBasis ? 'تظل كما هي في تصحيح قياس أجر العامل' : null,
+                      border: const OutlineInputBorder(),
                     ),
                     validator: (value) => _moneyValidator(value, positive: false),
                   ),
