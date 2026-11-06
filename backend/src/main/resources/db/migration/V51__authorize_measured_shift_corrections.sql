@@ -28,6 +28,9 @@ BEGIN
        AND NEW.new_compensation_currency_code <=> s.compensation_currency_code
        AND NEW.old_compensation_calculated_amount <=> s.compensation_calculated_amount
        AND NEW.old_driver_wage <=> s.driver_wage
+       AND NEW.old_driver_wage >= 0
+       AND NEW.new_driver_wage >= 0
+       AND s.compensation_calculated_amount >= 0
        AND s.compensation_rate >= 0
        AND NEW.old_actual_hours <=> s.actual_hours
        AND NEW.old_actual_quantity <=> s.actual_quantity
