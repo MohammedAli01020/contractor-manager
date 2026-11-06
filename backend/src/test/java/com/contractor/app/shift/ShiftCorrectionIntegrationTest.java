@@ -772,6 +772,43 @@ class ShiftCorrectionIntegrationTest extends AbstractShiftIntegrationTest {
                 BigDecimal.class, tenantId, shiftId)).isEqualByComparingTo("4.00");
     }
 
+    @Test
+    void zeroRateQuantityCorrectionCreatesNoZeroFinancialEntries() throws Exception {
+        JsonNode started = startShift(token,
+                shiftBody(siteId, driverId, equipmentId, today().minusDays(1), "MORNING"));
+        long shiftId = started.path("id").asLong();
+        jdbc.update("UPDATE shifts SET compensation_basis='QUANTITY', compensation_unit_code='TON', "
+                + "compensation_rate=0.00, compensation_calculated_amount=0.00 "
+                + "WHERE tenant_id=? AND id=?", tenantId, shiftId);
+
+        Map<String, Object> finish = versionBody(started.path("version").asLong());
+        finish.put("actualQuantity", new BigDecimal("3.000"));
+        JsonNode completed = body(postJson("/api/v1/shifts/" + shiftId + "/finish", finish, token)
+                .andExpect(status().isOk()));
+        assertThat(completed.path("driverWage").decimalValue()).isEqualByComparingTo("0.00");
+
+        Map<String, Object> request = correctionBody(completed, "zero-quantity-correction-" + UUID.randomUUID());
+        request.remove("driverWage");
+        request.put("actualQuantity", new BigDecimal("4.500"));
+        JsonNode corrected = body(postJson("/api/v1/shifts/" + shiftId + "/corrections", request, token)
+                .andExpect(status().isOk()));
+        assertThat(corrected.path("driverWage").decimalValue()).isEqualByComparingTo("0.00");
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM journal_entries WHERE tenant_id=? AND source_type IN "
+                        + "('SHIFT_WAGE_CORRECTION','SHIFT_WAGE_CORRECTION_REVERSAL')",
+                Integer.class, tenantId)).isZero();
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM driver_ledger_entries WHERE tenant_id=? AND shift_id=? "
+                        + "AND transaction_type IN ('EARNING','CORRECTION_REVERSAL')",
+                Integer.class, tenantId, shiftId)).isZero();
+        assertThat(jdbc.queryForObject(
+                "SELECT actual_quantity FROM shifts WHERE tenant_id=? AND id=?",
+                BigDecimal.class, tenantId, shiftId)).isEqualByComparingTo("4.500");
+        assertThat(jdbc.queryForObject(
+                "SELECT compensation_rate FROM shifts WHERE tenant_id=? AND id=?",
+                BigDecimal.class, tenantId, shiftId)).isEqualByComparingTo("0.00");
+    }
+
     private void insertCorrectionSnapshotDirectly(long correctionTenantId, long shiftId,
                                                    String idempotencyKey, BigDecimal newCompensationRate) {
         jdbc.update(
