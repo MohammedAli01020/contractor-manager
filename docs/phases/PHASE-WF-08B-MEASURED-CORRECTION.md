@@ -52,6 +52,7 @@ WF-08A is technically accepted for progression to WF-08B based on focused trigge
    - HOUR positive-to-positive correction: exact calculation, reversal, replacement, ledger, snapshots.
    - QUANTITY positive-to-positive correction: same guarantees.
    - Zero-rate HOUR and QUANTITY: correction applies; no zero journal/ledger rows; advance remains untouched.
+   - HOUR rejects missing/conflicting measurements and client-forged wage; zero-rate QUANTITY has explicit integration coverage.
    - Reject missing, zero, negative, excessive-precision and irrelevant measurements.
    - Reject client-forged wage, basis/rate/unit/currency/agreement/worker changes.
    - Reject direct SQL malformed APPLYING rows and unauthorized completed-shift measurement updates.
@@ -63,6 +64,7 @@ WF-08A is technically accepted for progression to WF-08B based on focused trigge
 5. CI/review
    - Require the new measured-basis integration tests to execute (not skip) on MySQL in CI.
    - Run backend CI on exact latest head for both push and PR events.
+- CI must require the HOUR, QUANTITY, zero-rate HOUR/QUANTITY, and invalid-input integration cases to execute exactly once with zero skips.
    - Review V51 interaction with V44, V46, and V48–V50 before requesting phase acceptance.
 
 ## Explicit exclusions
