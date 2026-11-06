@@ -121,7 +121,7 @@ void main() {
     await tester.tap(submit);
     await tester.pumpAndSettle();
     expect(find.text('تأكيد تصحيح الوردية'), findsOneWidget);
-    expect(find.textContaining('55.00 جنيه'), findsOneWidget);
+    expect(find.text('55.00 جنيه'), findsOneWidget);
     await tester.tap(find.text('تأكيد التصحيح'));
     await tester.pumpAndSettle();
 
@@ -197,7 +197,7 @@ void main() {
     await tester.tap(submit);
     await tester.pumpAndSettle();
     expect(find.text('تأكيد تصحيح الوردية'), findsOneWidget);
-    expect(find.textContaining('26.81 جنيه'), findsOneWidget);
+    expect(find.text('26.81 جنيه'), findsOneWidget);
     await tester.tap(find.text('تأكيد التصحيح'));
     await tester.pumpAndSettle();
 
