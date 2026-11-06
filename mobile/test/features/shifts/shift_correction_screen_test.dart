@@ -89,7 +89,6 @@ void main() {
     ));
     await tester.pumpAndSettle();
     expect(find.text('أجر السائق (جنيه)'), findsNothing);
-    expect(find.text('سعر الساعة'), findsOneWidget);
 
     final measurement = find.ancestor(
       of: find.text('الساعات الفعلية الجديدة'),
@@ -100,6 +99,7 @@ void main() {
       300,
       scrollable: find.byType(Scrollable).first,
     );
+    expect(find.text('سعر الساعة'), findsOneWidget);
     await tester.enterText(measurement, '5.5');
 
     final reason = find.ancestor(
@@ -165,8 +165,6 @@ void main() {
     ));
     await tester.pumpAndSettle();
     expect(find.text('أجر السائق (جنيه)'), findsNothing);
-    expect(find.textContaining('سعر الوحدة'), findsNothing);
-    expect(find.text('3.25 جنيه / TON'), findsOneWidget);
 
     final measurement = find.ancestor(
       of: find.text('الكمية الفعلية الجديدة'),
@@ -177,6 +175,8 @@ void main() {
       300,
       scrollable: find.byType(Scrollable).first,
     );
+    expect(find.text('سعر الوحدة'), findsOneWidget);
+    expect(find.text('3.25 جنيه / TON'), findsOneWidget);
     await tester.enterText(measurement, '8.250');
 
     final reason = find.ancestor(
