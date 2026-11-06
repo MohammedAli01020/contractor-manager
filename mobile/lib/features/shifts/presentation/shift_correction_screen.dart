@@ -257,8 +257,12 @@ class _ShiftCorrectionScreenState extends State<ShiftCorrectionScreen> {
           'actualHours': _correctedMeasurement,
         if (widget.shift.compensationBasis == 'QUANTITY')
           'actualQuantity': _correctedMeasurement,
-        'price': double.parse(_price.text.trim()),
-        'equipmentOperatingCost': double.parse(_operatingCost.text.trim()),
+        'price': _isMeasuredBasis
+            ? widget.shift.price
+            : double.parse(_price.text.trim()),
+        'equipmentOperatingCost': _isMeasuredBasis
+            ? widget.shift.equipmentOperatingCost
+            : double.parse(_operatingCost.text.trim()),
         'notes': _notes.text.trim(),
       };
       final fingerprint = jsonEncode(payload);
@@ -477,22 +481,24 @@ class _ShiftCorrectionScreenState extends State<ShiftCorrectionScreen> {
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: _price,
-                    enabled: !_saving,
+                    enabled: !_saving && !_isMeasuredBasis,
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'قيمة الوردية (جنيه)',
-                      border: OutlineInputBorder(),
+                      helperText: _isMeasuredBasis ? 'تظل كما هي في تصحيح قياس أجر العامل' : null,
+                      border: const OutlineInputBorder(),
                     ),
                     validator: (value) => _moneyValidator(value, positive: false),
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: _operatingCost,
-                    enabled: !_saving,
+                    enabled: !_saving && !_isMeasuredBasis,
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'تكلفة تشغيل المعدة (جنيه)',
-                      border: OutlineInputBorder(),
+                      helperText: _isMeasuredBasis ? 'تظل كما هي في تصحيح قياس أجر العامل' : null,
+                      border: const OutlineInputBorder(),
                     ),
                     validator: (value) => _moneyValidator(value, positive: false),
                   ),
