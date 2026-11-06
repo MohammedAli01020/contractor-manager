@@ -31,3 +31,22 @@ Expose the WF-08B measured correction API in the existing Flutter completed-shif
 
 - This PR is stacked on WF-08B. Do not retarget it to integration until WF-08B is integrated.
 - No PR merge, `main` change, or production migration is authorized.
+
+
+## Manual Android acceptance checklist
+
+Run against an isolated WF-08B/WF-08C test environment and a tenant containing completed shifts. Do not use production data.
+
+- [ ] Open a completed HOUR shift; verify the frozen hourly rate and previous hours are visible.
+- [ ] Enter a valid positive hour value with up to 2 decimal places; verify the preview uses the frozen rate.
+- [ ] Try blank, zero, negative, more than 2 decimal places, and above-maximum values; submission must be blocked with a clear validation message.
+- [ ] Confirm the correction; verify the audit/reversal explanation is readable and the request completes once.
+- [ ] Reopen the shift; verify the new hours and calculated wage are displayed, while the hourly rate remains unchanged.
+- [ ] Repeat for QUANTITY; verify the frozen unit rate and unit code, and allow up to 3 decimal places only.
+- [ ] Verify invalid quantity values are blocked and the new calculated wage matches the server response.
+- [ ] Confirm SHIFT correction still exposes the existing wage field and retains its existing zero-wage behavior.
+- [ ] Verify no measured correction UI exposes editable rate, basis, unit, currency, agreement, or worker identity.
+- [ ] Verify no duplicate correction is created by repeated taps or a retry after a delayed response; confirm the idempotency behavior.
+- [ ] Capture device model, Android version, app build/commit, test tenant, and pass/fail notes. Do not include credentials or personal worker data in evidence.
+
+Phase acceptance requires all applicable checks to pass on the real device. Any mismatch blocks WF-08D progression until fixed and revalidated.
