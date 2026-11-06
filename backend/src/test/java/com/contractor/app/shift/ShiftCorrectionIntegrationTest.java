@@ -589,7 +589,18 @@ class ShiftCorrectionIntegrationTest extends AbstractShiftIntegrationTest {
 
         // A SHIFT snapshot with a forged new rate must fail even when inserted outside the service.
         assertThatThrownBy(() -> insertCorrectionSnapshotDirectly(
-                shiftId, "forged-shift-snapshot-" + UUID.randomUUID(), new BigDecimal("999.00")))
+                tenantId, shiftId, "forged-shift-snapshot-" + UUID.randomUUID(), new BigDecimal("999.00")))
+                .isInstanceOf(UncategorizedSQLException.class)
+                .hasMessageContaining("SHIFT_CORRECTION_COMPENSATION_SNAPSHOT_MISMATCH");
+
+        // A snapshot copied from a real shift must still be rejected if its tenant_id
+        // is changed to another tenant. This exercises the tenant predicate in the DB guard.
+        JsonNode otherTenant = registerTenant("Other Correction Co", uniqueName("other-correction"));
+        long otherTenantId = otherTenant.path("user").path("tenantId").asLong();
+        assertThat(otherTenantId).isNotEqualTo(tenantId);
+        assertThatThrownBy(() -> insertCorrectionSnapshotDirectly(
+                otherTenantId, shiftId, "cross-tenant-snapshot-" + UUID.randomUUID(),
+                new BigDecimal("150.00")))
                 .isInstanceOf(UncategorizedSQLException.class)
                 .hasMessageContaining("SHIFT_CORRECTION_COMPENSATION_SNAPSHOT_MISMATCH");
 
@@ -605,14 +616,14 @@ class ShiftCorrectionIntegrationTest extends AbstractShiftIntegrationTest {
                     "SELECT driver_wage FROM shifts WHERE tenant_id=? AND id=?",
                     BigDecimal.class, tenantId, shiftId);
             assertThatThrownBy(() -> insertCorrectionSnapshotDirectly(
-                    shiftId, "forged-" + basis.toLowerCase() + "-" + UUID.randomUUID(), expectedNewRate))
+                    tenantId, shiftId, "forged-" + basis.toLowerCase() + "-" + UUID.randomUUID(), expectedNewRate))
                     .isInstanceOf(UncategorizedSQLException.class)
                     .hasMessageContaining("SHIFT_CORRECTION_COMPENSATION_SNAPSHOT_MISMATCH");
         }
     }
 
-    private void insertCorrectionSnapshotDirectly(long shiftId, String idempotencyKey,
-                                                   BigDecimal newCompensationRate) {
+    private void insertCorrectionSnapshotDirectly(long correctionTenantId, long shiftId,
+                                                   String idempotencyKey, BigDecimal newCompensationRate) {
         jdbc.update(
                 "INSERT INTO shift_corrections (tenant_id, shift_id, idempotency_key, reason, status, "
                         + "actor_user_id, expected_shift_version, old_shift_date, new_shift_date, "
@@ -625,7 +636,7 @@ class ShiftCorrectionIntegrationTest extends AbstractShiftIntegrationTest {
                         + "new_compensation_currency_code, old_compensation_calculated_amount, "
                         + "new_compensation_calculated_amount, old_actual_hours, new_actual_hours, "
                         + "old_actual_quantity, new_actual_quantity, created_at, updated_at) "
-                        + "SELECT tenant_id, id, ?, 'direct database guard test', 'APPLYING', ?, version, "
+                        + "SELECT ?, id, ?, 'direct database guard test', 'APPLYING', ?, version, "
                         + "shift_date, shift_date, shift_type, shift_type, site_id, site_id, driver_id, "
                         + "driver_id, equipment_id, equipment_id, driver_wage, driver_wage, price, price, "
                         + "equipment_operating_cost, equipment_operating_cost, compensation_basis, "
@@ -634,7 +645,7 @@ class ShiftCorrectionIntegrationTest extends AbstractShiftIntegrationTest {
                         + "compensation_calculated_amount, driver_wage, actual_hours, actual_hours, "
                         + "actual_quantity, actual_quantity, UTC_TIMESTAMP(6), UTC_TIMESTAMP(6) "
                         + "FROM shifts WHERE tenant_id=? AND id=?",
-                idempotencyKey, actorUserId, newCompensationRate, tenantId, shiftId);
+                correctionTenantId, idempotencyKey, actorUserId, newCompensationRate, tenantId, shiftId);
     }
 
     @Test
