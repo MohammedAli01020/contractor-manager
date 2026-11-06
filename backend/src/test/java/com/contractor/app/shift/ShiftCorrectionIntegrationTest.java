@@ -97,8 +97,8 @@ class ShiftCorrectionIntegrationTest extends AbstractShiftIntegrationTest {
                 Integer.class, tenantId, shiftId)).isEqualTo(1);
 
         // A network retry with the same key and payload must replay the completed correction.
-        // Numeric scale is not semantically relevant to an idempotent replay (5.5 == 5.50).
-        request.put("actualHours", new BigDecimal("5.5"));
+        // Numeric scale is not semantically relevant to an idempotent SHIFT wage replay (180.0 == 180.00).
+        request.put("driverWage", new BigDecimal("180.0"));
         JsonNode replay = body(postJson("/api/v1/shifts/" + shiftId + "/corrections", request, token)
                 .andExpect(status().isOk()));
         assertThat(replay.path("driverWage").decimalValue()).isEqualByComparingTo("180.00");
