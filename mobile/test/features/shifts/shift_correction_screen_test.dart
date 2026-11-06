@@ -82,6 +82,7 @@ void main() {
       driverId: 7,
       equipmentId: 9,
       version: 4,
+      equipmentOperatingCost: 100,
     );
     when(() => api.correctShift(42, any())).thenAnswer((_) async => hourly);
     await tester.pumpWidget(MaterialApp(
@@ -128,6 +129,8 @@ void main() {
     verify(() => api.correctShift(42, any(that: predicate<Map<String, dynamic>>(
       (payload) =>
           payload['actualHours'] == 5.5 &&
+          payload['price'] == 1500.0 &&
+          payload['equipmentOperatingCost'] == 100.0 &&
           !payload.containsKey('driverWage') &&
           !payload.containsKey('actualQuantity'),
     )))).called(1);
@@ -157,6 +160,7 @@ void main() {
       driverId: 7,
       equipmentId: 9,
       version: 5,
+      equipmentOperatingCost: 100,
     );
     when(() => api.correctShift(43, any())).thenAnswer((_) async => quantity);
     await tester.pumpWidget(MaterialApp(
@@ -204,6 +208,8 @@ void main() {
     verify(() => api.correctShift(43, any(that: predicate<Map<String, dynamic>>(
       (payload) =>
           payload['actualQuantity'] == 8.25 &&
+          payload['price'] == 1500.0 &&
+          payload['equipmentOperatingCost'] == 100.0 &&
           !payload.containsKey('driverWage') &&
           !payload.containsKey('actualHours'),
     )))).called(1);
