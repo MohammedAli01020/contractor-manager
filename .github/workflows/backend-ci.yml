@@ -22,6 +22,7 @@ on:
       - feature/wf08a-correction-snapshots
     paths:
       - "backend/**"
+      - "docs/phases/PHASE-WF-08A-CORRECTION-SNAPSHOT.md"
       - "docs/architecture/workforce-pr-wf-*.md"
       - ".github/workflows/backend-ci.yml"
       - "docs/ACCOUNTING-TREASURY-CONCURRENCY-2026-10-31.md"
@@ -34,6 +35,7 @@ on:
       - "docs/ACCOUNTING-TRIAL-BALANCE-2026-10-31.md"
   pull_request:
     branches:
+      - integration/stabilization-2026-11
       - feature/platform-owner-activation
       - feature/platform-owner-web
       - feature/platform-owner-totp-2fa
