@@ -141,7 +141,10 @@ class _ShiftCorrectionScreenState extends State<ShiftCorrectionScreen> {
           ? 'أدخل عدد ساعات أكبر من صفر'
           : 'أدخل كمية أكبر من صفر';
     }
-    final maxFractionDigits = widget.shift.compensationBasis == 'HOUR' ? 2 : 3;
+    final isHourly = widget.shift.compensationBasis == 'HOUR';
+    final maxFractionDigits = isHourly ? 2 : 3;
+    final maxValue = isHourly ? 999999.99 : 999999999.999;
+    if (parsed > maxValue) return 'القيمة أكبر من الحد المسموح';
     final factor = maxFractionDigits == 2 ? 100 : 1000;
     final scaled = parsed * factor;
     if ((scaled - scaled.round()).abs() > 0.000001) {
