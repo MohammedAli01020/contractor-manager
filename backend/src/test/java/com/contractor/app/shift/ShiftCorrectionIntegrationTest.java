@@ -97,6 +97,8 @@ class ShiftCorrectionIntegrationTest extends AbstractShiftIntegrationTest {
                 Integer.class, tenantId, shiftId)).isEqualTo(1);
 
         // A network retry with the same key and payload must replay the completed correction.
+        // Numeric scale is not semantically relevant to an idempotent replay (5.5 == 5.50).
+        request.put("actualHours", new BigDecimal("5.5"));
         JsonNode replay = body(postJson("/api/v1/shifts/" + shiftId + "/corrections", request, token)
                 .andExpect(status().isOk()));
         assertThat(replay.path("driverWage").decimalValue()).isEqualByComparingTo("180.00");
@@ -667,6 +669,43 @@ class ShiftCorrectionIntegrationTest extends AbstractShiftIntegrationTest {
         assertThat(jdbc.queryForObject(
                 "SELECT COUNT(*) FROM shift_corrections WHERE tenant_id=? AND shift_id=?",
                 Integer.class, tenantId, shiftId)).isEqualTo(1);
+    }
+
+    @Test
+    void hourlyCorrectionRejectsMissingOrConflictingMeasurementAndClientWage() throws Exception {
+        JsonNode started = startShift(token,
+                shiftBody(siteId, driverId, equipmentId, today().minusDays(1), "MORNING"));
+        long shiftId = started.path("id").asLong();
+        jdbc.update("UPDATE shifts SET compensation_basis='HOUR', compensation_unit_code='HOUR', "
+                + "compensation_rate=10.00, compensation_calculated_amount=0.00 "
+                + "WHERE tenant_id=? AND id=?", tenantId, shiftId);
+        Map<String, Object> finish = versionBody(started.path("version").asLong());
+        finish.put("actualHours", new BigDecimal("4.00"));
+        JsonNode completed = body(postJson("/api/v1/shifts/" + shiftId + "/finish", finish, token)
+                .andExpect(status().isOk()));
+
+        Map<String, Object> missing = correctionBody(completed, "hour-missing-" + UUID.randomUUID());
+        missing.remove("driverWage");
+        postJson("/api/v1/shifts/" + shiftId + "/corrections", missing, token)
+                .andExpect(status().isBadRequest());
+
+        Map<String, Object> forgedWage = correctionBody(completed, "hour-forged-wage-" + UUID.randomUUID());
+        forgedWage.remove("driverWage");
+        forgedWage.put("actualHours", new BigDecimal("5.00"));
+        forgedWage.put("driverWage", new BigDecimal("1.00"));
+        postJson("/api/v1/shifts/" + shiftId + "/corrections", forgedWage, token)
+                .andExpect(status().isBadRequest());
+
+        Map<String, Object> conflictingMeasures = correctionBody(completed, "hour-conflict-" + UUID.randomUUID());
+        conflictingMeasures.remove("driverWage");
+        conflictingMeasures.put("actualHours", new BigDecimal("5.00"));
+        conflictingMeasures.put("actualQuantity", new BigDecimal("2.00"));
+        postJson("/api/v1/shifts/" + shiftId + "/corrections", conflictingMeasures, token)
+                .andExpect(status().isBadRequest());
+
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM shift_corrections WHERE tenant_id=? AND shift_id=?",
+                Integer.class, tenantId, shiftId)).isZero();
     }
 
     @Test
