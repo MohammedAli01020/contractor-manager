@@ -20,9 +20,11 @@ on:
       - fix/treasury-concurrency-hardening
       - integration/stabilization-2026-11
       - feature/wf08a-correction-snapshots
+      - feature/wf08b-measured-correction
     paths:
       - "backend/**"
       - "docs/phases/PHASE-WF-08A-CORRECTION-SNAPSHOT.md"
+      - "docs/phases/PHASE-WF-08B-MEASURED-CORRECTION.md"
       - "docs/architecture/workforce-pr-wf-*.md"
       - ".github/workflows/backend-ci.yml"
       - "docs/ACCOUNTING-TREASURY-CONCURRENCY-2026-10-31.md"
@@ -44,6 +46,7 @@ on:
       - feature/financial-foundation
       - feature/workforce-core-pr-wf-03
       - feature/trial-balance-reconciliation
+      - feature/wf08a-correction-snapshots
     paths:
       - "backend/**"
       - "docs/phases/PHASE-WF-08A-CORRECTION-SNAPSHOT.md"
@@ -373,6 +376,39 @@ jobs:
               sys.exit("WF-08A migration test was skipped; Docker/MySQL must be available in CI.")
           if totals["failures"] != 0 or totals["errors"] != 0:
               sys.exit("WF-08A migration test reported failures or errors.")
+          PY
+
+      - name: Require WF-08B measured shift correction integration tests to execute
+        run: |
+          python3 - <<'PY'
+          import glob
+          import sys
+          import xml.etree.ElementTree as ET
+
+          pattern = "target/surefire-reports/TEST-com.contractor.app.shift.ShiftCorrectionIntegrationTest.xml"
+          reports = glob.glob(pattern)
+          if len(reports) != 1:
+              sys.exit(f"Expected exactly one WF-08B correction integration-test report: {pattern}")
+
+          root = ET.parse(reports[0]).getroot()
+          totals = {key: int(root.attrib.get(key, 0))
+                    for key in ("tests", "failures", "errors", "skipped")}
+          names = [case.attrib.get("name") for case in root.findall(".//testcase")]
+          required = {
+              "hourlyCorrectionRecalculatesFromFrozenRateAndReversesFinancialEntries",
+              "quantityCorrectionRecalculatesFromFrozenUnitRate",
+              "zeroRateHourlyCorrectionCreatesNoZeroFinancialEntries",
+              "hourlyCorrectionRejectsMissingOrConflictingMeasurementAndClientWage",
+              "zeroRateQuantityCorrectionCreatesNoZeroFinancialEntries",
+          }
+          print(f"WF-08B ShiftCorrectionIntegrationTest: {totals}")
+          missing = required.difference(names)
+          if missing:
+              sys.exit(f"Required measured correction tests did not execute: {sorted(missing)}")
+          if any(names.count(name) != 1 for name in required):
+              sys.exit("Each required measured correction integration test must execute exactly once.")
+          if totals["skipped"] != 0 or totals["failures"] != 0 or totals["errors"] != 0:
+              sys.exit("WF-08B measured correction tests were skipped or reported failures/errors.")
           PY
 
       - name: Write test summary

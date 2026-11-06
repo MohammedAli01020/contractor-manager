@@ -35,10 +35,18 @@ public class ShiftCorrectionRequest {
     @NotNull
     private Long equipmentId;
 
-    @NotNull
+    // Required only for SHIFT basis. Measured bases derive the wage on the server.
     @DecimalMin(value = "0")
     @Digits(integer = 13, fraction = 2)
     private BigDecimal driverWage;
+
+    @DecimalMin(value = "0", inclusive = false)
+    @Digits(integer = 6, fraction = 2)
+    private BigDecimal actualHours;
+
+    @DecimalMin(value = "0", inclusive = false)
+    @Digits(integer = 9, fraction = 3)
+    private BigDecimal actualQuantity;
 
     @NotNull
     @DecimalMin(value = "0")
@@ -61,6 +69,8 @@ public class ShiftCorrectionRequest {
     public Long getSiteId() { return siteId; }
     public Long getEquipmentId() { return equipmentId; }
     public BigDecimal getDriverWage() { return driverWage; }
+    public BigDecimal getActualHours() { return actualHours; }
+    public BigDecimal getActualQuantity() { return actualQuantity; }
     public BigDecimal getPrice() { return price; }
     public BigDecimal getEquipmentOperatingCost() { return equipmentOperatingCost; }
     public String getNotes() { return notes; }
@@ -73,6 +83,8 @@ public class ShiftCorrectionRequest {
     public void setSiteId(Long siteId) { this.siteId = siteId; }
     public void setEquipmentId(Long equipmentId) { this.equipmentId = equipmentId; }
     public void setDriverWage(BigDecimal driverWage) { this.driverWage = driverWage; }
+    public void setActualHours(BigDecimal actualHours) { this.actualHours = actualHours; }
+    public void setActualQuantity(BigDecimal actualQuantity) { this.actualQuantity = actualQuantity; }
     public void setPrice(BigDecimal price) { this.price = price; }
     public void setEquipmentOperatingCost(BigDecimal equipmentOperatingCost) { this.equipmentOperatingCost = equipmentOperatingCost; }
     public void setNotes(String notes) { this.notes = notes; }

@@ -17,7 +17,7 @@ import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationVersion;
 
 /**
- * Verifies WF-08A migrations against an upgraded schema containing pre-WF-08A
+ * Verifies WF-08A/WF-08B migrations against an upgraded schema containing pre-WF-08A
  * correction audit rows. The disposable container is isolated from application data.
  */
 class ShiftCorrectionSnapshotMigrationIntegrationTest {
@@ -43,7 +43,7 @@ class ShiftCorrectionSnapshotMigrationIntegrationTest {
     }
 
     @Test
-    void wf08aPreservesHistoricalCorrectionRowsAndInstallsSnapshotGuards() {
+    void wf08aAndWf08bPreserveHistoricalCorrectionRowsAndInstallMeasuredSnapshotGuards() {
         Flyway.configure()
                 .dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
                 .locations("classpath:db/migration")
@@ -93,6 +93,10 @@ class ShiftCorrectionSnapshotMigrationIntegrationTest {
         assertThat(jdbc.queryForObject(
                 "SELECT COUNT(*) FROM shift_corrections WHERE tenant_id=? AND idempotency_key=?",
                 Integer.class, secondTenantId, "legacy-correction-two")).isEqualTo(1);
+
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM flyway_schema_history WHERE version='51' AND success=1",
+                Integer.class)).isEqualTo(1);
     }
 
     private static long insertTenant(JdbcTemplate jdbc, String name) {

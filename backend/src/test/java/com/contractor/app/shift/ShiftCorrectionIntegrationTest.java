@@ -97,6 +97,8 @@ class ShiftCorrectionIntegrationTest extends AbstractShiftIntegrationTest {
                 Integer.class, tenantId, shiftId)).isEqualTo(1);
 
         // A network retry with the same key and payload must replay the completed correction.
+        // Numeric scale is not semantically relevant to an idempotent SHIFT wage replay (180.0 == 180.00).
+        request.put("driverWage", new BigDecimal("180.0"));
         JsonNode replay = body(postJson("/api/v1/shifts/" + shiftId + "/corrections", request, token)
                 .andExpect(status().isOk()));
         assertThat(replay.path("driverWage").decimalValue()).isEqualByComparingTo("180.00");
@@ -619,6 +621,192 @@ class ShiftCorrectionIntegrationTest extends AbstractShiftIntegrationTest {
                     .isInstanceOf(UncategorizedSQLException.class)
                     .hasMessageContaining("SHIFT_CORRECTION_COMPENSATION_SNAPSHOT_MISMATCH");
         }
+    }
+
+    @Test
+    void hourlyCorrectionRecalculatesFromFrozenRateAndReversesFinancialEntries() throws Exception {
+        JsonNode started = startShift(token,
+                shiftBody(siteId, driverId, equipmentId, today().minusDays(1), "MORNING"));
+        long shiftId = started.path("id").asLong();
+        jdbc.update("UPDATE shifts SET compensation_basis='HOUR', compensation_unit_code='HOUR', "
+                + "compensation_rate=10.00, compensation_calculated_amount=0.00 "
+                + "WHERE tenant_id=? AND id=?", tenantId, shiftId);
+
+        Map<String, Object> finish = versionBody(started.path("version").asLong());
+        finish.put("actualHours", new BigDecimal("4.00"));
+        JsonNode completed = body(postJson("/api/v1/shifts/" + shiftId + "/finish", finish, token)
+                .andExpect(status().isOk()));
+        assertThat(completed.path("driverWage").decimalValue()).isEqualByComparingTo("40.00");
+
+        Map<String, Object> request = correctionBody(completed, "hour-correction-" + UUID.randomUUID());
+        request.remove("driverWage");
+        request.put("actualHours", new BigDecimal("5.50"));
+        JsonNode corrected = body(postJson("/api/v1/shifts/" + shiftId + "/corrections", request, token)
+                .andExpect(status().isOk()));
+        assertThat(corrected.path("driverWage").decimalValue()).isEqualByComparingTo("55.00");
+
+        Map<String, Object> snapshot = jdbc.queryForMap(
+                "SELECT old_actual_hours, new_actual_hours, old_compensation_rate, new_compensation_rate, "
+                        + "old_compensation_calculated_amount, new_compensation_calculated_amount "
+                        + "FROM shift_corrections WHERE tenant_id=? AND shift_id=?", tenantId, shiftId);
+        assertThat(snapshot.get("old_actual_hours")).isEqualTo(new BigDecimal("4.00"));
+        assertThat(snapshot.get("new_actual_hours")).isEqualTo(new BigDecimal("5.50"));
+        assertThat(snapshot.get("old_compensation_rate")).isEqualTo(new BigDecimal("10.00"));
+        assertThat(snapshot.get("new_compensation_rate")).isEqualTo(new BigDecimal("10.00"));
+        assertThat(snapshot.get("old_compensation_calculated_amount")).isEqualTo(new BigDecimal("40.00"));
+        assertThat(snapshot.get("new_compensation_calculated_amount")).isEqualTo(new BigDecimal("55.00"));
+        assertThat(jdbc.queryForObject(
+                "SELECT compensation_rate FROM shifts WHERE tenant_id=? AND id=?",
+                BigDecimal.class, tenantId, shiftId)).isEqualByComparingTo("10.00");
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM journal_entries WHERE tenant_id=? AND reversal_of_entry_id IS NOT NULL",
+                Integer.class, tenantId)).isEqualTo(1);
+        assertThat(ledger.sumBalance(tenantId, driverId)).isEqualByComparingTo("55.00");
+
+        JsonNode replay = body(postJson("/api/v1/shifts/" + shiftId + "/corrections", request, token)
+                .andExpect(status().isOk()));
+        assertThat(replay.path("driverWage").decimalValue()).isEqualByComparingTo("55.00");
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM shift_corrections WHERE tenant_id=? AND shift_id=?",
+                Integer.class, tenantId, shiftId)).isEqualTo(1);
+    }
+
+    @Test
+    void hourlyCorrectionRejectsMissingOrConflictingMeasurementAndClientWage() throws Exception {
+        JsonNode started = startShift(token,
+                shiftBody(siteId, driverId, equipmentId, today().minusDays(1), "MORNING"));
+        long shiftId = started.path("id").asLong();
+        jdbc.update("UPDATE shifts SET compensation_basis='HOUR', compensation_unit_code='HOUR', "
+                + "compensation_rate=10.00, compensation_calculated_amount=0.00 "
+                + "WHERE tenant_id=? AND id=?", tenantId, shiftId);
+        Map<String, Object> finish = versionBody(started.path("version").asLong());
+        finish.put("actualHours", new BigDecimal("4.00"));
+        JsonNode completed = body(postJson("/api/v1/shifts/" + shiftId + "/finish", finish, token)
+                .andExpect(status().isOk()));
+
+        Map<String, Object> missing = correctionBody(completed, "hour-missing-" + UUID.randomUUID());
+        missing.remove("driverWage");
+        postJson("/api/v1/shifts/" + shiftId + "/corrections", missing, token)
+                .andExpect(status().isBadRequest());
+
+        Map<String, Object> forgedWage = correctionBody(completed, "hour-forged-wage-" + UUID.randomUUID());
+        forgedWage.remove("driverWage");
+        forgedWage.put("actualHours", new BigDecimal("5.00"));
+        forgedWage.put("driverWage", new BigDecimal("1.00"));
+        postJson("/api/v1/shifts/" + shiftId + "/corrections", forgedWage, token)
+                .andExpect(status().isBadRequest());
+
+        Map<String, Object> conflictingMeasures = correctionBody(completed, "hour-conflict-" + UUID.randomUUID());
+        conflictingMeasures.remove("driverWage");
+        conflictingMeasures.put("actualHours", new BigDecimal("5.00"));
+        conflictingMeasures.put("actualQuantity", new BigDecimal("2.00"));
+        postJson("/api/v1/shifts/" + shiftId + "/corrections", conflictingMeasures, token)
+                .andExpect(status().isBadRequest());
+
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM shift_corrections WHERE tenant_id=? AND shift_id=?",
+                Integer.class, tenantId, shiftId)).isZero();
+    }
+
+    @Test
+    void quantityCorrectionRecalculatesFromFrozenUnitRate() throws Exception {
+        JsonNode started = startShift(token,
+                shiftBody(siteId, driverId, equipmentId, today().minusDays(1), "MORNING"));
+        long shiftId = started.path("id").asLong();
+        jdbc.update("UPDATE shifts SET compensation_basis='QUANTITY', compensation_unit_code='TON', "
+                + "compensation_rate=3.25, compensation_calculated_amount=0.00 "
+                + "WHERE tenant_id=? AND id=?", tenantId, shiftId);
+
+        Map<String, Object> finish = versionBody(started.path("version").asLong());
+        finish.put("actualQuantity", new BigDecimal("12.500"));
+        JsonNode completed = body(postJson("/api/v1/shifts/" + shiftId + "/finish", finish, token)
+                .andExpect(status().isOk()));
+        assertThat(completed.path("driverWage").decimalValue()).isEqualByComparingTo("40.63");
+
+        Map<String, Object> request = correctionBody(completed, "quantity-correction-" + UUID.randomUUID());
+        request.remove("driverWage");
+        request.put("actualQuantity", new BigDecimal("8.250"));
+        JsonNode corrected = body(postJson("/api/v1/shifts/" + shiftId + "/corrections", request, token)
+                .andExpect(status().isOk()));
+        assertThat(corrected.path("driverWage").decimalValue()).isEqualByComparingTo("26.81");
+        assertThat(jdbc.queryForObject(
+                "SELECT actual_quantity FROM shifts WHERE tenant_id=? AND id=?",
+                BigDecimal.class, tenantId, shiftId)).isEqualByComparingTo("8.250");
+        assertThat(jdbc.queryForObject(
+                "SELECT compensation_rate FROM shifts WHERE tenant_id=? AND id=?",
+                BigDecimal.class, tenantId, shiftId)).isEqualByComparingTo("3.25");
+        assertThat(ledger.sumBalance(tenantId, driverId)).isEqualByComparingTo("26.81");
+    }
+
+    @Test
+    void zeroRateHourlyCorrectionCreatesNoZeroFinancialEntries() throws Exception {
+        JsonNode started = startShift(token,
+                shiftBody(siteId, driverId, equipmentId, today().minusDays(1), "MORNING"));
+        long shiftId = started.path("id").asLong();
+        jdbc.update("UPDATE shifts SET compensation_basis='HOUR', compensation_unit_code='HOUR', "
+                + "compensation_rate=0.00, compensation_calculated_amount=0.00 "
+                + "WHERE tenant_id=? AND id=?", tenantId, shiftId);
+
+        Map<String, Object> finish = versionBody(started.path("version").asLong());
+        finish.put("actualHours", new BigDecimal("3.00"));
+        JsonNode completed = body(postJson("/api/v1/shifts/" + shiftId + "/finish", finish, token)
+                .andExpect(status().isOk()));
+        assertThat(completed.path("driverWage").decimalValue()).isEqualByComparingTo("0.00");
+
+        Map<String, Object> request = correctionBody(completed, "zero-hour-correction-" + UUID.randomUUID());
+        request.remove("driverWage");
+        request.put("actualHours", new BigDecimal("4.00"));
+        JsonNode corrected = body(postJson("/api/v1/shifts/" + shiftId + "/corrections", request, token)
+                .andExpect(status().isOk()));
+        assertThat(corrected.path("driverWage").decimalValue()).isEqualByComparingTo("0.00");
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM journal_entries WHERE tenant_id=? AND source_type IN "
+                        + "('SHIFT_WAGE_CORRECTION','SHIFT_WAGE_CORRECTION_REVERSAL')",
+                Integer.class, tenantId)).isZero();
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM driver_ledger_entries WHERE tenant_id=? AND shift_id=? "
+                        + "AND transaction_type IN ('EARNING','CORRECTION_REVERSAL')",
+                Integer.class, tenantId, shiftId)).isZero();
+        assertThat(jdbc.queryForObject(
+                "SELECT actual_hours FROM shifts WHERE tenant_id=? AND id=?",
+                BigDecimal.class, tenantId, shiftId)).isEqualByComparingTo("4.00");
+    }
+
+    @Test
+    void zeroRateQuantityCorrectionCreatesNoZeroFinancialEntries() throws Exception {
+        JsonNode started = startShift(token,
+                shiftBody(siteId, driverId, equipmentId, today().minusDays(1), "MORNING"));
+        long shiftId = started.path("id").asLong();
+        jdbc.update("UPDATE shifts SET compensation_basis='QUANTITY', compensation_unit_code='TON', "
+                + "compensation_rate=0.00, compensation_calculated_amount=0.00 "
+                + "WHERE tenant_id=? AND id=?", tenantId, shiftId);
+
+        Map<String, Object> finish = versionBody(started.path("version").asLong());
+        finish.put("actualQuantity", new BigDecimal("3.000"));
+        JsonNode completed = body(postJson("/api/v1/shifts/" + shiftId + "/finish", finish, token)
+                .andExpect(status().isOk()));
+        assertThat(completed.path("driverWage").decimalValue()).isEqualByComparingTo("0.00");
+
+        Map<String, Object> request = correctionBody(completed, "zero-quantity-correction-" + UUID.randomUUID());
+        request.remove("driverWage");
+        request.put("actualQuantity", new BigDecimal("4.500"));
+        JsonNode corrected = body(postJson("/api/v1/shifts/" + shiftId + "/corrections", request, token)
+                .andExpect(status().isOk()));
+        assertThat(corrected.path("driverWage").decimalValue()).isEqualByComparingTo("0.00");
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM journal_entries WHERE tenant_id=? AND source_type IN "
+                        + "('SHIFT_WAGE_CORRECTION','SHIFT_WAGE_CORRECTION_REVERSAL')",
+                Integer.class, tenantId)).isZero();
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM driver_ledger_entries WHERE tenant_id=? AND shift_id=? "
+                        + "AND transaction_type IN ('EARNING','CORRECTION_REVERSAL')",
+                Integer.class, tenantId, shiftId)).isZero();
+        assertThat(jdbc.queryForObject(
+                "SELECT actual_quantity FROM shifts WHERE tenant_id=? AND id=?",
+                BigDecimal.class, tenantId, shiftId)).isEqualByComparingTo("4.500");
+        assertThat(jdbc.queryForObject(
+                "SELECT compensation_rate FROM shifts WHERE tenant_id=? AND id=?",
+                BigDecimal.class, tenantId, shiftId)).isEqualByComparingTo("0.00");
     }
 
     private void insertCorrectionSnapshotDirectly(long correctionTenantId, long shiftId,

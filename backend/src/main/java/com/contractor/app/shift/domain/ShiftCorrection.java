@@ -129,6 +129,16 @@ public class ShiftCorrection extends BaseTenantEntity {
                            Long expectedShiftVersion, Shift shift, LocalDate newShiftDate, ShiftType newShiftType,
                            Long newSiteId, Long newDriverId, Long newEquipmentId, BigDecimal newDriverWage,
                            BigDecimal newPrice, BigDecimal newEquipmentOperatingCost, String newNotes) {
+        this(tenantId, shiftId, idempotencyKey, reason, actorUserId, expectedShiftVersion, shift,
+                newShiftDate, newShiftType, newSiteId, newDriverId, newEquipmentId, newDriverWage,
+                newPrice, newEquipmentOperatingCost, newNotes, shift.getActualHours(), shift.getActualQuantity());
+    }
+
+    public ShiftCorrection(Long tenantId, Long shiftId, String idempotencyKey, String reason, Long actorUserId,
+                           Long expectedShiftVersion, Shift shift, LocalDate newShiftDate, ShiftType newShiftType,
+                           Long newSiteId, Long newDriverId, Long newEquipmentId, BigDecimal newDriverWage,
+                           BigDecimal newPrice, BigDecimal newEquipmentOperatingCost, String newNotes,
+                           BigDecimal newActualHours, BigDecimal newActualQuantity) {
         super(tenantId);
         this.shiftId = shiftId;
         this.idempotencyKey = idempotencyKey;
@@ -156,21 +166,21 @@ public class ShiftCorrection extends BaseTenantEntity {
         this.oldCompensationBasis = shift.getCompensationBasis();
         this.newCompensationBasis = shift.getCompensationBasis();
         this.oldCompensationRate = shift.getCompensationRate();
-        this.newCompensationRate = shift.getCompensationRate();
         this.oldCompensationUnitCode = shift.getCompensationUnitCode();
         this.newCompensationUnitCode = shift.getCompensationUnitCode();
         this.oldCompensationCurrencyCode = shift.getCompensationCurrencyCode();
         this.newCompensationCurrencyCode = shift.getCompensationCurrencyCode();
         this.oldCompensationCalculatedAmount = shift.getCompensationCalculatedAmount();
-        // Shift.setDriverWage updates the calculated amount for a SHIFT-basis correction.
-        // Agreement rates remain frozen; legacy driver-rate snapshots track the corrected wage.
         this.newCompensationCalculatedAmount = newDriverWage;
-        this.newCompensationRate = "LEGACY_DRIVER_RATE".equals(shift.getWageSource())
+        // Only a SHIFT legacy-rate override changes the legacy rate. Measured corrections
+        // always preserve the historical unit rate, regardless of wage source.
+        this.newCompensationRate = "SHIFT".equals(shift.getCompensationBasis())
+                && "LEGACY_DRIVER_RATE".equals(shift.getWageSource())
                 ? newDriverWage : shift.getCompensationRate();
         this.oldActualHours = shift.getActualHours();
-        this.newActualHours = shift.getActualHours();
+        this.newActualHours = newActualHours;
         this.oldActualQuantity = shift.getActualQuantity();
-        this.newActualQuantity = shift.getActualQuantity();
+        this.newActualQuantity = newActualQuantity;
         this.newNotes = newNotes;
         this.oldWageJournalEntryId = shift.getDriverWageJournalEntryId();
     }

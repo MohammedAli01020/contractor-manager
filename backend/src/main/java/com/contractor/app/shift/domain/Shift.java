@@ -281,6 +281,34 @@ public class Shift extends BaseTenantEntity {
         this.driverWage = amount;
     }
 
+    /**
+     * Apply a measured-basis correction without invoking setDriverWage: the contractual
+     * rate is historical evidence and must never be rewritten by a measured wage correction.
+     */
+    public void applyMeasuredCorrection(BigDecimal hours, BigDecimal quantity, BigDecimal amount) {
+        if (amount == null || amount.signum() < 0 || this.compensationRate == null) {
+            throw new IllegalArgumentException("Invalid measured shift correction");
+        }
+        if ("HOUR".equals(this.compensationBasis)) {
+            if (hours == null || hours.signum() <= 0 || quantity != null) {
+                throw new IllegalArgumentException("Hourly correction requires positive hours only");
+            }
+            this.actualHours = hours;
+            this.actualQuantity = null;
+        } else if ("QUANTITY".equals(this.compensationBasis)) {
+            if (quantity == null || quantity.signum() <= 0 || hours != null
+                    || this.compensationUnitCode == null || this.compensationUnitCode.trim().isEmpty()) {
+                throw new IllegalArgumentException("Quantity correction requires positive quantity only");
+            }
+            this.actualHours = null;
+            this.actualQuantity = quantity;
+        } else {
+            throw new IllegalArgumentException("Measured correction requires HOUR or QUANTITY basis");
+        }
+        this.compensationCalculatedAmount = amount;
+        this.driverWage = amount;
+    }
+
     public String getNotes() {
         return notes;
     }
