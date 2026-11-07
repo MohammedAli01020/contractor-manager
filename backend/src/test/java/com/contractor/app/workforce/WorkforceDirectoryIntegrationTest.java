@@ -29,7 +29,7 @@ class WorkforceDirectoryIntegrationTest extends AbstractIntegrationTest {
         createDriver(tokenB, "Directory Worker B", "01022222222");
         long memberA = jdbcMemberId(driverA);
 
-        JsonNode pageA = body(getJson("/api/v1/workforce/members?search=Directory%20Worker", tokenA)
+        JsonNode pageA = body(getJson("/api/v1/workforce/members?search=Directory+Worker", tokenA)
                 .andExpect(status().isOk()));
 
         assertThat(pageA.path("totalElements").asLong()).isEqualTo(1);
@@ -49,7 +49,7 @@ class WorkforceDirectoryIntegrationTest extends AbstractIntegrationTest {
         createDriver(token, "Paging Worker Beta", "01044444444");
 
         JsonNode firstPage = body(getJson(
-                "/api/v1/workforce/members?search=Paging%20Worker&page=0&size=1", token)
+                "/api/v1/workforce/members?search=Paging+Worker&page=0&size=1", token)
                 .andExpect(status().isOk()));
 
         assertThat(firstPage.path("totalElements").asLong()).isEqualTo(2);
