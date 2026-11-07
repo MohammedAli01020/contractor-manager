@@ -4,12 +4,17 @@ import com.contractor.app.common.security.CurrentUser;
 import com.contractor.app.workforce.api.dto.EndWorkforceAssignmentRequest;
 import com.contractor.app.workforce.api.dto.WorkforceAssignmentRequest;
 import com.contractor.app.workforce.api.dto.WorkforceAssignmentResponse;
+import com.contractor.app.workforce.api.dto.WorkforceMemberDirectoryResponse;
 import com.contractor.app.workforce.api.dto.WorkforceRoleRequest;
 import com.contractor.app.workforce.api.dto.WorkforceRoleResponse;
 import com.contractor.app.workforce.domain.WorkforceAssignmentService;
+import com.contractor.app.workforce.infra.WorkforceMemberRepository;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
 import javax.validation.Valid;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -30,9 +35,21 @@ import org.springframework.web.bind.annotation.RestController;
 public class WorkforceController {
 
     private final WorkforceAssignmentService service;
+    private final WorkforceMemberRepository members;
 
-    public WorkforceController(WorkforceAssignmentService service) {
+    public WorkforceController(WorkforceAssignmentService service, WorkforceMemberRepository members) {
         this.service = service;
+        this.members = members;
+    }
+
+    @GetMapping("/members")
+    public Page<WorkforceMemberDirectoryResponse> members(
+            @RequestParam(required = false) String search,
+            @RequestParam(defaultValue = "false") boolean includeInactive,
+            @PageableDefault(size = 20) Pageable pageable) {
+        String normalizedSearch = search == null || search.trim().isEmpty() ? null : search.trim();
+        return members.searchDirectory(CurrentUser.tenantId(), includeInactive, normalizedSearch, pageable)
+                .map(WorkforceMemberDirectoryResponse::from);
     }
 
     @GetMapping("/roles")
