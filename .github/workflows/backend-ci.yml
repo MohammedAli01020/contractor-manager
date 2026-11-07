@@ -20,7 +20,9 @@ on:
       - fix/treasury-concurrency-hardening
       - integration/stabilization-2026-11
       - feature/wf08a-correction-snapshots
+      - feature/wf08c-measured-correction-mobile
       - feature/wf08b-measured-correction
+      - fix/driver-national-id-edit-load
     paths:
       - "backend/**"
       - "docs/phases/PHASE-WF-08A-CORRECTION-SNAPSHOT.md"
