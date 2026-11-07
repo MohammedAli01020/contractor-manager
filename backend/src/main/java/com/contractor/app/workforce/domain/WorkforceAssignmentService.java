@@ -8,12 +8,18 @@ import com.contractor.app.workforce.api.dto.EndWorkforceAssignmentRequest;
 import com.contractor.app.workforce.api.dto.WorkforceAssignmentRequest;
 import com.contractor.app.workforce.api.dto.WorkforceAssignmentResponse;
 import com.contractor.app.workforce.api.dto.WorkforceRoleRequest;
+import com.contractor.app.workforce.api.dto.WorkforceRoleSummaryResponse;
 import com.contractor.app.workforce.api.dto.WorkforceRoleResponse;
 import com.contractor.app.workforce.infra.WorkforceAssignmentRepository;
 import com.contractor.app.workforce.infra.WorkforceMemberRepository;
 import com.contractor.app.workforce.infra.WorkforceRoleRepository;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import java.util.Locale;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
@@ -45,6 +51,34 @@ public class WorkforceAssignmentService {
         return roles.findAllByTenantIdOrderByNameAsc(tenantId).stream()
                 .filter(role -> includeInactive || role.isActive())
                 .map(WorkforceRoleResponse::from).collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public Map<Long, List<WorkforceRoleSummaryResponse>> activeRoleSummaries(
+            Long tenantId, List<Long> memberIds) {
+        if (memberIds == null || memberIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        List<WorkforceAssignment> activeAssignments =
+                assignments.findAllByTenantIdAndWorkforceMemberIdInAndStatusOrderByEffectiveFromDescIdDesc(
+                        tenantId, memberIds, WorkforceAssignmentStatus.ACTIVE);
+        if (activeAssignments.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        List<Long> roleIds = activeAssignments.stream()
+                .map(WorkforceAssignment::getWorkforceRoleId).distinct().collect(Collectors.toList());
+        Map<Long, WorkforceRole> rolesById = roles.findAllByTenantIdAndIdIn(tenantId, roleIds).stream()
+                .collect(Collectors.toMap(WorkforceRole::getId, role -> role));
+        Map<Long, List<WorkforceRoleSummaryResponse>> result = new HashMap<>();
+        for (WorkforceAssignment assignment : activeAssignments) {
+            WorkforceRole role = rolesById.get(assignment.getWorkforceRoleId());
+            if (role != null) {
+                result.computeIfAbsent(assignment.getWorkforceMemberId(), ignored -> new ArrayList<>())
+                        .add(new WorkforceRoleSummaryResponse(assignment, role));
+            }
+        }
+        return result;
     }
 
     @Transactional
