@@ -35,6 +35,22 @@ The following concepts are distinct and must not be conflated:
 - Workforce profiles expose assignments, qualifications/capabilities, compensation agreements, and relevant history according to permissions.
 - Mobile-first workflows are required; do not make routine field operations depend on the platform-owner web application.
 
+### Single Workforce navigation (product-owner decision, 2026-11-07)
+
+**Workforce is the only top-level navigation area for managing people.** Do not add separate top-level modules for Drivers, Workers, Engineers, Supervisors, or Technicians.
+
+Within Workforce, provide:
+- One searchable directory and one canonical add/edit person flow.
+- Filtered classifications/views (All, Workers, Drivers/Operators, Engineers, Supervisors, Technicians, Administrative staff, and other tenant-relevant categories).
+- A single person profile with common identity/contact information and progressive, classification-specific operational sections.
+- Separate sections/tabs for assignments, qualifications/capabilities, compensation agreements, attendance/work history, and account access, shown according to authorization.
+
+A filtered view is not a separate identity store. A person with multiple classifications appears as one person in the directory and may appear in more than one filtered view without duplicate records.
+
+Legacy driver/worker operational screens may temporarily remain as compatibility routes or focused shortcuts during migration, but they must be reached from Workforce or route their add/edit actions into the canonical Workforce flow. They are not separate top-level people-management destinations in the target navigation. Preserve dispatch/shift-specific workflows where they add operational value; consolidate identity management, not every operational task into one generic screen.
+
+The common mobile flow should be short: create the person once, select one or more classifications/capabilities, and reveal only the relevant additional fields. Driver licence/dispatch details, engineering/site details, supervisor/team details, and technician/equipment details belong to progressive profile sections rather than separate person-creation systems.
+
 ## Compensation policy
 
 Compensation is independent from job classification. Examples include monthly salary, day rate, shift rate, hourly rate, quantity/piece rate, and fixed contractual amount.
