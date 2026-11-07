@@ -5,6 +5,7 @@ import '../../core/di/injector.dart';
 import '../../core/widgets/loading_view.dart';
 import '../shifts/presentation/shifts_screen.dart';
 import '../drivers/drivers_screen.dart';
+import '../workforce/workforce_screen.dart';
 import '../equipment/equipment_screen.dart';
 import '../accounting/accounting_screen.dart';
 import 'auth_bloc.dart';
@@ -214,6 +215,19 @@ class HomeScreen extends StatelessWidget {
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute<void>(
                   builder: (_) => const DriversScreen(),
+                ),
+              ),
+            ),
+          ),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.groups_outlined),
+              title: const Text('القوى العاملة والأجور'),
+              subtitle: const Text('دليل موحد للأفراد واتفاقيات الأجر المعتمدة'),
+              trailing: const Icon(Icons.chevron_left),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => WorkforceScreen(canManage: user.role == 'ADMIN'),
                 ),
               ),
             ),

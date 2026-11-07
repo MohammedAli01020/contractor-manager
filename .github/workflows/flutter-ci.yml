@@ -6,6 +6,7 @@ on:
       - feature/accounting-mobile-rebased
       - integration/stabilization-2026-11
       - feature/wf08c-measured-correction-mobile
+      - feature/wf10b-mobile-compensation-agreements
     paths:
       - "mobile/**"
       - ".github/workflows/flutter-ci.yml"
@@ -15,6 +16,7 @@ on:
       - feature/accounting-mobile-rebased
       - integration/stabilization-2026-11
       - feature/wf08b-measured-correction
+      - feature/wf10a-workforce-identity-api
     paths:
       - "mobile/**"
       - ".github/workflows/flutter-ci.yml"

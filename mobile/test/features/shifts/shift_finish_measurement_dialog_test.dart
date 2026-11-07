@@ -21,6 +21,23 @@ ShiftModel quantityShift({double rate = 10.01}) => ShiftModel(
       notes: '',
     );
 
+ShiftModel hourlyShift({double rate = 125.50}) => ShiftModel(
+      id: 53,
+      shiftDate: '2026-11-07',
+      shiftType: 'MORNING',
+      status: 'IN_PROGRESS',
+      siteName: 'الموقع',
+      driverName: 'العامل',
+      equipmentCode: 'EQ-1',
+      equipmentName: 'لودر',
+      price: 1000,
+      driverWage: 0,
+      compensationBasis: 'HOUR',
+      compensationRate: rate,
+      priceAfterWage: 0,
+      notes: '',
+    );
+
 Future<void> openDialog(WidgetTester tester, ShiftModel shift) async {
   await tester.pumpWidget(MaterialApp(
     home: Builder(
@@ -89,4 +106,36 @@ void main() {
     expect(tester.widget<ElevatedButton>(find.widgetWithText(
       ElevatedButton, 'تأكيد الإنهاء')).onPressed, isNull);
   });
+  testWidgets('hourly dialog asks for actual hours and previews the frozen rate',
+      (tester) async {
+    await openDialog(tester, hourlyShift());
+
+    expect(find.text('سعر الساعة المعتمد: 125.50 جنيه'), findsOneWidget);
+    expect(find.text('ساعات العمل الفعلية'), findsOneWidget);
+    expect(find.text('ساعة'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField), '7.50');
+    await tester.pumpAndSettle();
+
+    expect(find.text('إجمالي الأجر: 941.25 جنيه'), findsOneWidget);
+    expect(tester.widget<ElevatedButton>(find.widgetWithText(
+      ElevatedButton, 'تأكيد الإنهاء')).onPressed, isNotNull);
+  });
+
+  testWidgets('hourly dialog rejects zero and precision beyond two decimals',
+      (tester) async {
+    await openDialog(tester, hourlyShift());
+
+    await tester.enterText(find.byType(TextField), '0');
+    await tester.pumpAndSettle();
+    expect(tester.widget<ElevatedButton>(find.widgetWithText(
+      ElevatedButton, 'تأكيد الإنهاء')).onPressed, isNull);
+
+    await tester.enterText(find.byType(TextField), '7.555');
+    await tester.pumpAndSettle();
+    expect(find.text('أدخل قيمة موجبة وبحد أقصى 2 خانات عشرية'), findsOneWidget);
+    expect(tester.widget<ElevatedButton>(find.widgetWithText(
+      ElevatedButton, 'تأكيد الإنهاء')).onPressed, isNull);
+  });
+
 }
