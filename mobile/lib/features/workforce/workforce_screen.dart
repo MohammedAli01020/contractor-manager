@@ -253,7 +253,7 @@ class _WorkforceAgreementsScreenState extends State<WorkforceAgreementsScreen> {
     final payload = await showDialog<Map<String, dynamic>>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => _HourlyAgreementDialog(
+      builder: (_) => _CompensationAgreementDialog(
         currentAgreement: approved,
       ),
     );
@@ -279,10 +279,11 @@ class _WorkforceAgreementsScreenState extends State<WorkforceAgreementsScreen> {
       );
       await _load();
     } catch (error) {
-      if (mounted) setState(() => _error = _message(error));
+      final message = _message(error);
       // The draft may already have been created. Reload so it remains visible
       // and can be reviewed instead of silently retrying and duplicating it.
       await _load();
+      if (mounted) setState(() => _error = message);
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -343,6 +344,20 @@ class _WorkforceAgreementsScreenState extends State<WorkforceAgreementsScreen> {
     }
   }
 
+  String _componentUnit(Map raw) {
+    final basis = _value(raw['basis'], '');
+    switch (basis) {
+      case 'SHIFT':
+        final type = _value(raw['shiftType'], '');
+        return type == 'MORNING' ? 'وردية صباحية' : type == 'EVENING' ? 'وردية مسائية' : 'وردية ليلية';
+      case 'HOUR': return 'ساعة';
+      case 'DAY': return 'يوم';
+      case 'FIXED': return _value(raw['unitCode'], 'فترة');
+      case 'QUANTITY': return _value(raw['unitCode'], 'وحدة');
+      default: return _value(raw['unitCode'], 'وحدة');
+    }
+  }
+
   String _statusLabel(String status) {
     switch (status) {
       case 'APPROVED': return 'معتمدة';
@@ -362,7 +377,7 @@ class _WorkforceAgreementsScreenState extends State<WorkforceAgreementsScreen> {
           ? FloatingActionButton.extended(
               onPressed: _saving ? null : _createAgreement,
               icon: const Icon(Icons.add),
-              label: const Text('اتفاقية أجر ساعي'),
+              label: const Text('اتفاقية أجر جديدة'),
             )
           : null,
       body: _loading
@@ -380,7 +395,7 @@ class _WorkforceAgreementsScreenState extends State<WorkforceAgreementsScreen> {
                       ? const Center(
                           child: Padding(
                             padding: EdgeInsets.all(24),
-                            child: Text('لا توجد اتفاقيات أجر لهذا الشخص. أنشئ اتفاقية لتفعيل نظام الأجر بالساعة.'),
+                            child: Text('لا توجد اتفاقيات أجر لهذا الشخص. أنشئ اتفاقية لتحديد طريقة احتساب مستحقات هذا الشخص.'),
                           ),
                         )
                       : RefreshIndicator(
@@ -418,7 +433,7 @@ class _WorkforceAgreementsScreenState extends State<WorkforceAgreementsScreen> {
                                           Padding(
                                             padding: const EdgeInsets.only(top: 6),
                                             child: Text(
-                                              '${_value(raw['displayName'])}: ${_value(raw['rate'])} ${_value(agreement['currencyCode'], 'EGP')} / ${_value(raw['basis']) == 'HOUR' ? 'ساعة' : _value(raw['unitCode'], 'وحدة')}',
+                                              '${_value(raw['displayName'])}: ${_value(raw['rate'])} ${_value(agreement['currencyCode'], 'EGP')} / ${_componentUnit(raw)}',
                                             ),
                                           ),
                                       if (agreement['changeReason'] != null)
@@ -451,26 +466,67 @@ class _WorkforceAgreementsScreenState extends State<WorkforceAgreementsScreen> {
   }
 }
 
-class _HourlyAgreementDialog extends StatefulWidget {
-  const _HourlyAgreementDialog({Key? key, this.currentAgreement}) : super(key: key);
+class _CompensationAgreementDialog extends StatefulWidget {
+  const _CompensationAgreementDialog({Key? key, this.currentAgreement}) : super(key: key);
 
   final Map<String, dynamic>? currentAgreement;
 
   @override
-  State<_HourlyAgreementDialog> createState() => _HourlyAgreementDialogState();
+  State<_CompensationAgreementDialog> createState() => _CompensationAgreementDialogState();
 }
 
-class _HourlyAgreementDialogState extends State<_HourlyAgreementDialog> {
+class _CompensationAgreementDialogState extends State<_CompensationAgreementDialog> {
   final _formKey = GlobalKey<FormState>();
-  final _rate = TextEditingController();
+  final _hourRate = TextEditingController();
+  final _morningRate = TextEditingController();
+  final _eveningRate = TextEditingController();
+  final _nightRate = TextEditingController();
+  final _quantityRate = TextEditingController();
+  final _unitCode = TextEditingController();
   final _reference = TextEditingController();
   final _reason = TextEditingController();
   DateTime _effectiveFrom = DateTime.now();
-  bool _submitting = false;
+  String _basis = 'SHIFT';
+
+  @override
+  void initState() {
+    super.initState();
+    final rawComponents = widget.currentAgreement?['components'];
+    if (rawComponents is! List) return;
+    for (final raw in rawComponents) {
+      if (raw is! Map) continue;
+      final basis = raw['basis']?.toString();
+      if (basis == 'SHIFT' || basis == 'HOUR' || basis == 'QUANTITY') {
+        _basis = basis!;
+      }
+      final rate = raw['rate']?.toString() ?? '';
+      switch (basis) {
+        case 'SHIFT':
+          switch (raw['shiftType']?.toString()) {
+            case 'MORNING': _morningRate.text = rate; break;
+            case 'EVENING': _eveningRate.text = rate; break;
+            case 'NIGHT': _nightRate.text = rate; break;
+          }
+          break;
+        case 'HOUR':
+          _hourRate.text = rate;
+          break;
+        case 'QUANTITY':
+          _quantityRate.text = rate;
+          _unitCode.text = raw['unitCode']?.toString() ?? '';
+          break;
+      }
+    }
+  }
 
   @override
   void dispose() {
-    _rate.dispose();
+    _hourRate.dispose();
+    _morningRate.dispose();
+    _eveningRate.dispose();
+    _nightRate.dispose();
+    _quantityRate.dispose();
+    _unitCode.dispose();
     _reference.dispose();
     _reason.dispose();
     super.dispose();
@@ -478,6 +534,19 @@ class _HourlyAgreementDialogState extends State<_HourlyAgreementDialog> {
 
   String _date(DateTime value) =>
       '${value.year.toString().padLeft(4, '0')}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')}';
+
+  String _number(TextEditingController controller) =>
+      controller.text.trim().replaceAll(',', '.');
+
+  String? _validateRate(String? value) {
+    final normalized = (value ?? '').trim().replaceAll(',', '.');
+    final parsed = double.tryParse(normalized);
+    if (parsed == null || parsed < 0) return 'أدخل مبلغًا صحيحًا غير سالب';
+    if (!RegExp(r'^\d+(\.\d{1,2})?$').hasMatch(normalized)) {
+      return 'استخدم منزلتين عشريتين كحد أقصى';
+    }
+    return null;
+  }
 
   Future<void> _pickDate() async {
     final now = DateTime.now();
@@ -491,14 +560,57 @@ class _HourlyAgreementDialogState extends State<_HourlyAgreementDialog> {
     if (picked != null && mounted) setState(() => _effectiveFrom = picked);
   }
 
-  String? _validateRate(String? value) {
-    final parsed = double.tryParse((value ?? '').trim().replaceAll(',', '.'));
-    if (parsed == null || parsed < 0) return 'أدخل سعر ساعة صحيحًا غير سالب';
+  String? _validateUnit(String? value) {
+    final unit = (value ?? '').trim();
+    if (unit.isEmpty) return 'اكتب وحدة القياس مثل طن أو م³';
+    if (unit.length > 30) return 'الوحدة طويلة جدًا';
     return null;
   }
 
+  List<Map<String, dynamic>> _components() {
+    Map<String, dynamic> component({
+      required String code,
+      required String name,
+      required String basis,
+      required TextEditingController rate,
+      String? unit,
+      String? shiftType,
+      required int order,
+    }) => <String, dynamic>{
+      'componentCode': code,
+      'displayName': name,
+      'basis': basis,
+      'rate': double.parse(_number(rate)),
+      if (unit != null) 'unitCode': unit,
+      if (shiftType != null) 'shiftType': shiftType,
+      'sortOrder': order,
+    };
+
+    switch (_basis) {
+      case 'HOUR':
+        return <Map<String, dynamic>>[
+          component(code: 'BASE_HOURLY', name: 'أجر الساعة', basis: 'HOUR',
+              rate: _hourRate, unit: 'HOUR', order: 0),
+        ];
+      case 'QUANTITY':
+        return <Map<String, dynamic>>[
+          component(code: 'BASE_QUANTITY', name: 'أجر الوحدة', basis: 'QUANTITY',
+              rate: _quantityRate, unit: _unitCode.text.trim().toUpperCase(), order: 0),
+        ];
+      default:
+        return <Map<String, dynamic>>[
+          component(code: 'BASE_SHIFT_MORNING', name: 'أجر الوردية الصباحية',
+              basis: 'SHIFT', rate: _morningRate, shiftType: 'MORNING', order: 0),
+          component(code: 'BASE_SHIFT_EVENING', name: 'أجر الوردية المسائية',
+              basis: 'SHIFT', rate: _eveningRate, shiftType: 'EVENING', order: 1),
+          component(code: 'BASE_SHIFT_NIGHT', name: 'أجر الوردية الليلية',
+              basis: 'SHIFT', rate: _nightRate, shiftType: 'NIGHT', order: 2),
+        ];
+    }
+  }
+
   void _submit() {
-    if (_submitting || !_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) return;
     final old = widget.currentAgreement;
     if (old != null) {
       final oldStart = DateTime.tryParse('${old['effectiveFrom']}');
@@ -515,6 +627,7 @@ class _HourlyAgreementDialogState extends State<_HourlyAgreementDialog> {
         return;
       }
     }
+
     final payload = <String, dynamic>{
       'effectiveFrom': _date(_effectiveFrom),
       'currencyCode': 'EGP',
@@ -526,25 +639,31 @@ class _HourlyAgreementDialogState extends State<_HourlyAgreementDialog> {
         'supersedesAgreementId': old['id'],
         'changeReason': _reason.text.trim(),
       },
-      'components': <Map<String, dynamic>>[
-        <String, dynamic>{
-          'componentCode': 'BASE_HOURLY',
-          'displayName': 'أجر الساعة',
-          'basis': 'HOUR',
-          'rate': double.parse(_rate.text.trim().replaceAll(',', '.')),
-          'unitCode': 'HOUR',
-          'sortOrder': 0,
-        },
-      ],
+      'components': _components(),
     };
     Navigator.of(context).pop(payload);
+  }
+
+  Widget _rateField(String label, TextEditingController controller) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: TextFormField(
+        controller: controller,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        decoration: InputDecoration(
+          labelText: label,
+          prefixIcon: const Icon(Icons.payments_outlined),
+        ),
+        validator: _validateRate,
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final replacing = widget.currentAgreement != null;
     return AlertDialog(
-      title: Text(replacing ? 'استبدال اتفاقية الأجر الساعي' : 'اتفاقية أجر ساعي جديدة'),
+      title: Text(replacing ? 'تغيير اتفاقية الأجر' : 'اتفاقية أجر جديدة'),
       content: SizedBox(
         width: 440,
         child: SingleChildScrollView(
@@ -553,15 +672,47 @@ class _HourlyAgreementDialogState extends State<_HourlyAgreementDialog> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                TextFormField(
-                  controller: _rate,
-                  autofocus: true,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                DropdownButtonFormField<String>(
+                  value: _basis,
                   decoration: const InputDecoration(
-                    labelText: 'سعر الساعة بالجنيه *',
-                    prefixIcon: Icon(Icons.payments_outlined),
+                    labelText: 'طريقة احتساب الأجر',
+                    prefixIcon: Icon(Icons.calculate_outlined),
                   ),
-                  validator: _validateRate,
+                  items: const <DropdownMenuItem<String>>[
+                    DropdownMenuItem(value: 'SHIFT', child: Text('بالوردية')),
+                    DropdownMenuItem(value: 'HOUR', child: Text('بالساعة')),
+                    DropdownMenuItem(value: 'QUANTITY', child: Text('بالكمية / الوحدة')),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) setState(() => _basis = value);
+                  },
+                ),
+                if (_basis == 'SHIFT') ...<Widget>[
+                  _rateField('أجر الوردية الصباحية بالجنيه *', _morningRate),
+                  _rateField('أجر الوردية المسائية بالجنيه *', _eveningRate),
+                  _rateField('أجر الوردية الليلية بالجنيه *', _nightRate),
+                ] else if (_basis == 'HOUR')
+                  _rateField('سعر الساعة بالجنيه *', _hourRate)
+                else ...<Widget>[
+                  _rateField('سعر الوحدة بالجنيه *', _quantityRate),
+                  const SizedBox(height: 10),
+                  TextFormField(
+                    controller: _unitCode,
+                    maxLength: 30,
+                    decoration: const InputDecoration(
+                      labelText: 'وحدة القياس (مثل طن أو م³) *',
+                      prefixIcon: Icon(Icons.straighten),
+                    ),
+                    validator: _validateUnit,
+                  ),
+                ],
+                const SizedBox(height: 8),
+                const Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: Text(
+                    'الأجر اليومي والراتب الثابت سيظهران بعد استكمال دورة احتسابهما واعتمادهما؛ لن نفعّلهما قبل منع التكرار وربطهما بفترة الاستحقاق.',
+                    style: TextStyle(fontSize: 12),
+                  ),
                 ),
                 const SizedBox(height: 12),
                 InkWell(

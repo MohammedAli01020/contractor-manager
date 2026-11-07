@@ -22,6 +22,7 @@ on:
       - feature/wf08a-correction-snapshots
       - feature/wf08b-measured-correction
       - feature/wf10a-workforce-identity-api
+      - feature/wf10c-compensation-basis-mobile
     paths:
       - "backend/**"
       - "docs/phases/PHASE-WF-08A-CORRECTION-SNAPSHOT.md"
@@ -48,6 +49,7 @@ on:
       - feature/workforce-core-pr-wf-03
       - feature/trial-balance-reconciliation
       - feature/wf08a-correction-snapshots
+      - feature/wf10b-mobile-compensation-agreements
     paths:
       - "backend/**"
       - "docs/phases/PHASE-WF-08A-CORRECTION-SNAPSHOT.md"
