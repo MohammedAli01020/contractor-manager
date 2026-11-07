@@ -237,7 +237,7 @@ class _WorkforceScreenState extends State<WorkforceScreen> {
                                     subtitle: Text(
                                       '$categoryLabel • هاتف: ${_value(member['phone'])}\n'
                                       '${active ? 'نشط' : 'معطّل'} • '
-                                      '${linked ? 'مرتبط بملف التشغيل' : 'لا يوجد ملف تشغيل مرتبط'}',
+                                      '${roleSummaries.length} تكليف وظيفي نشط',
                                     ),
                                     isThreeLine: true,
                                     trailing: Row(
@@ -288,6 +288,12 @@ class _WorkforceAssignmentsScreenState extends State<WorkforceAssignmentsScreen>
   bool _loading = true;
   bool _saving = false;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
 
   String get _endpoint => '/workforce/members/${widget.memberId}/assignments';
 
