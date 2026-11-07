@@ -177,8 +177,7 @@ class _WorkforceScreenState extends State<WorkforceScreen> {
                                     title: Text(_value(member['fullName']),
                                         style: const TextStyle(fontWeight: FontWeight.bold)),
                                     subtitle: Text(
-                                      '${isDriver ? 'سائق' : 'عامل'} • هاتف: ${_value(member['phone'])}
-'
+                                      '$categoryLabel • هاتف: ${_value(member['phone'])}\n'
                                       '${active ? 'نشط' : 'معطّل'} • '
                                       '${linked ? 'مرتبط بملف التشغيل' : 'لا يوجد ملف تشغيل مرتبط'}',
                                     ),
