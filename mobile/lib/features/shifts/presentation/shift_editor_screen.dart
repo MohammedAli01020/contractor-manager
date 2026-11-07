@@ -82,9 +82,11 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
       if (widget.shift != null && _driverId != null &&
           !candidates.any((item) => (item['id'] as num?)?.toInt() == _driverId)) {
         final legacy = await _api.fetchLiveDrivers();
-        candidates.addAll(legacy.where(
+        final current = legacy.where(
           (item) => (item['id'] as num?)?.toInt() == _driverId,
-        ));
+        );
+        candidates.addAll(current);
+        if (current.isEmpty) candidates.add(_currentShiftCandidate());
       }
       if (!mounted) return;
       setState(() {
@@ -104,6 +106,15 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
   }
 
 
+  Map<String, dynamic> _currentShiftCandidate() => {
+        'id': _driverId,
+        'name': widget.shift?.driverName ?? 'العامل الحالي',
+        'workerType': 'DRIVER',
+        'availability': 'AVAILABLE',
+        'liveStatus': 'AVAILABLE',
+        'currentShiftId': widget.shift?.id,
+      };
+
   Future<void> _loadWorkforceCandidates() async {
     final requestId = ++_workforceCandidatesRequestId;
     try {
@@ -120,6 +131,7 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
           (item) => (item['id'] as num?)?.toInt() == _driverId,
         );
         candidates.addAll(current);
+        if (current.isEmpty) candidates.add(_currentShiftCandidate());
       }
       if (!mounted || requestId != _workforceCandidatesRequestId) return;
       setState(() {
