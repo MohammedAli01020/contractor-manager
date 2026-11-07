@@ -178,6 +178,40 @@ class CompensationAgreementWorkflowIntegrationTest extends AbstractIntegrationTe
     }
 
     @Test
+    void mobileSupportedShiftHourlyAndQuantityAgreementPayloadsArePersisted() throws Exception {
+        List<Map<String, Object>> shiftComponents = List.of(
+                Map.of("componentCode", "BASE_SHIFT_MORNING", "displayName", "أجر الوردية الصباحية",
+                        "basis", "SHIFT", "rate", 300, "shiftType", "MORNING", "sortOrder", 0),
+                Map.of("componentCode", "BASE_SHIFT_EVENING", "displayName", "أجر الوردية المسائية",
+                        "basis", "SHIFT", "rate", 325, "shiftType", "EVENING", "sortOrder", 1),
+                Map.of("componentCode", "BASE_SHIFT_NIGHT", "displayName", "أجر الوردية الليلية",
+                        "basis", "SHIFT", "rate", 350, "shiftType", "NIGHT", "sortOrder", 2));
+        long shiftAgreement = createAgreementWithComponents(driverAssignmentId,
+                "2026-01-01", null, shiftComponents);
+        JsonNode approvedShift = approve(shiftAgreement);
+        assertThat(approvedShift.path("components")).hasSize(3);
+        assertThat(approvedShift.path("components").get(0).path("shiftType").asText()).isEqualTo("MORNING");
+        assertThat(approvedShift.path("components").get(1).path("shiftType").asText()).isEqualTo("EVENING");
+        assertThat(approvedShift.path("components").get(2).path("shiftType").asText()).isEqualTo("NIGHT");
+
+        long hourlyAgreement = createAgreementWithComponents(workerAssignmentId,
+                "2026-01-01", "2026-06-30", List.of(Map.of(
+                        "componentCode", "BASE_HOURLY", "displayName", "أجر الساعة",
+                        "basis", "HOUR", "rate", 125.50, "unitCode", "HOUR", "sortOrder", 0)));
+        JsonNode approvedHourly = approve(hourlyAgreement);
+        assertThat(approvedHourly.path("components").get(0).path("basis").asText()).isEqualTo("HOUR");
+        assertThat(approvedHourly.path("components").get(0).path("unitCode").asText()).isEqualTo("HOUR");
+
+        long quantityAgreement = createAgreementWithComponents(workerAssignmentId,
+                "2026-07-01", null, List.of(Map.of(
+                        "componentCode", "BASE_QUANTITY", "displayName", "أجر الوحدة",
+                        "basis", "QUANTITY", "rate", 20, "unitCode", "TON", "sortOrder", 0)));
+        JsonNode approvedQuantity = approve(quantityAgreement);
+        assertThat(approvedQuantity.path("components").get(0).path("basis").asText()).isEqualTo("QUANTITY");
+        assertThat(approvedQuantity.path("components").get(0).path("unitCode").asText()).isEqualTo("TON");
+    }
+
+    @Test
     void anotherTenantCannotReadOrAttachAgreementToThisMember() throws Exception {
         String otherToken = registerTenant("Other Compensation Co", uniqueName("othercomp"))
                 .path("accessToken").asText();
