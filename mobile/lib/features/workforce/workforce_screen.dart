@@ -136,7 +136,7 @@ class _WorkforceScreenState extends State<WorkforceScreen> {
     }
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (_) => WorkforceAgreementsScreen(
+        builder: (_) => WorkforceAssignmentsScreen(
           memberId: memberId,
           memberName: _value(member['fullName']),
           canManage: widget.canManage,
