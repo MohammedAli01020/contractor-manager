@@ -198,18 +198,18 @@ public class WorkforceAssignmentService {
             return;
         }
 
-        Driver operational = drivers.findByWorkforceMemberIdAndTenantId(member.getId(), member.getTenantId())
-                .orElseGet(() -> {
-                    Driver created = new Driver(member.getTenantId(), member.getFullName(), workerType);
-                    created.setWorkforceMemberId(member.getId());
-                    created.setMorningRate(BigDecimal.ZERO);
-                    created.setEveningRate(BigDecimal.ZERO);
-                    created.setNightRate(BigDecimal.ZERO);
-                    return created;
-                });
-        operational.setName(member.getFullName());
+        // Existing linked records are never rewritten here. Identity edits and
+        // driver operations retain their established lock order (Driver -> Member).
+        if (drivers.findByWorkforceMemberIdAndTenantId(member.getId(), member.getTenantId()).isPresent()) {
+            return;
+        }
+
+        Driver operational = new Driver(member.getTenantId(), member.getFullName(), workerType);
+        operational.setWorkforceMemberId(member.getId());
         operational.setPhone(member.getPhone());
-        operational.setWorkerType(workerType);
+        operational.setMorningRate(BigDecimal.ZERO);
+        operational.setEveningRate(BigDecimal.ZERO);
+        operational.setNightRate(BigDecimal.ZERO);
         operational.setActive(member.isActive());
         drivers.saveAndFlush(operational);
     }
