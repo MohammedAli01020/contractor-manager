@@ -39,6 +39,7 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
   bool _quantityCompensation = false;
   String _compensationUnitCode = '';
   int _defaultsRequestId = 0;
+  int _workforceCandidatesRequestId = 0;
   String? _error;
 
   @override
@@ -77,9 +78,17 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
         _api.fetchLiveEquipment(),
         _api.fetchSites(),
       ]);
-      if (!mounted) return;
+      final candidates = result[0] as List<Map<String, dynamic>>;
+      if (widget.shift != null && _driverId != null &&
+          !candidates.any((item) => (item['id'] as num?)?.toInt() == _driverId)) {
+        final legacy = await _api.fetchLiveDrivers();
+        candidates.addAll(legacy.where(
+          (item) => (item['id'] as num?)?.toInt() == _driverId,
+        ));
+      }
+      if (!mounted || requestId != _workforceCandidatesRequestId) return;
       setState(() {
-        _drivers = result[0] as List<Map<String, dynamic>>;
+        _drivers = candidates;
         _equipment = result[1] as List<Map<String, dynamic>>;
         _sites = result[2] as List<Map<String, dynamic>>;
         _loading = false;
@@ -96,6 +105,7 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
 
 
   Future<void> _loadWorkforceCandidates() async {
+    final requestId = ++_workforceCandidatesRequestId;
     try {
       final candidates = await _api.fetchWorkforceCandidates(
         shiftDate: _date,
@@ -120,7 +130,7 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
         }
       });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || requestId != _workforceCandidatesRequestId) return;
       setState(() => _error = _message(e));
     }
   }
