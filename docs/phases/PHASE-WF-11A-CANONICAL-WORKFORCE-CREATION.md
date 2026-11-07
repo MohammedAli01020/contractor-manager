@@ -89,3 +89,19 @@ The product owner approved consolidating people management under one top-level *
 - Mobile-first progressive disclosure: capture common fields first, then show only the selected classification's relevant fields.
 
 This is an approved target UX/navigation decision. It does not mean the current mobile navigation or all category-specific profile sections have already been implemented.
+
+
+## Consolidation audit and implementation tracking
+
+The detailed inventory, retained/deprecated decisions, and acceptance criteria are recorded in [ADR-WF-02 — Unified Workforce Directory and Legacy Module Consolidation](../architecture/ADR-WF-02-UNIFIED-WORKFORCE-DIRECTORY.md).
+
+- [x] Confirm Workforce is the only target top-level people-management area.
+- [x] Identify the duplicate mobile home entry and remove it in the current implementation slice.
+- [x] Inventory the legacy Drivers screen/API and explicitly retain operational behavior during migration.
+- [ ] Complete canonical create/edit UI in Flutter.
+- [ ] Add multi-capability directory filters without duplicate people.
+- [ ] Route legacy add/edit actions into Workforce.
+- [ ] Complete backend schema/FK/query/report and ledger dependency audit before proposing any deletion.
+- [ ] Run backend and Flutter validation and real-device acceptance.
+
+No database tables, columns, APIs, or financial records are deleted by this consolidation slice.
