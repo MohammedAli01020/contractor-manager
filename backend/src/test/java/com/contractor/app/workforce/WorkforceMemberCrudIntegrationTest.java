@@ -140,6 +140,75 @@ class WorkforceMemberCrudIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(status().isForbidden());
     }
 
+
+    @Test
+    void onboardingCreatesOneCanonicalPersonWithMultipleRolesAndDirectorySummaries() throws Exception {
+        String token = registerTenant("Workforce Onboarding", uniqueName("wfonboard"))
+                .path("accessToken").asText();
+        JsonNode roles = body(getJson("/api/v1/workforce/roles", token).andExpect(status().isOk()));
+        long engineerRoleId = roleId(roles, "ENGINEER");
+        long supervisorRoleId = roleId(roles, "SUPERVISOR");
+
+        Map<String, Object> member = identity("Multi Role Person", "01055550111", null);
+        Map<String, Object> engineer = Map.of("roleId", engineerRoleId, "effectiveFrom", "2026-11-07");
+        Map<String, Object> supervisor = Map.of("roleId", supervisorRoleId, "effectiveFrom", "2026-11-07");
+        JsonNode created = body(postJson("/api/v1/workforce/members/onboard",
+                Map.of("member", member, "initialAssignments", java.util.Arrays.asList(engineer, supervisor)), token)
+                .andExpect(status().isCreated()));
+
+        long memberId = created.path("member").path("id").asLong();
+        assertThat(created.path("assignments").size()).isEqualTo(2);
+        assertThat(jdbc.queryForObject(
+                "select count(*) from workforce_members where id = ?", Integer.class, memberId)).isEqualTo(1);
+        assertThat(jdbc.queryForObject(
+                "select count(*) from workforce_assignments where workforce_member_id = ?",
+                Integer.class, memberId)).isEqualTo(2);
+        assertThat(jdbc.queryForObject(
+                "select count(*) from drivers where workforce_member_id = ?", Integer.class, memberId)).isZero();
+
+        JsonNode directory = body(getJson("/api/v1/workforce/members", token).andExpect(status().isOk()));
+        JsonNode row = null;
+        for (JsonNode candidate : directory.path("content")) {
+            if (candidate.path("workforceMemberId").asLong() == memberId) row = candidate;
+        }
+        assertThat(row).isNotNull();
+        assertThat(row.path("roles").size()).isEqualTo(2);
+        assertThat(row.toString()).contains("ENGINEER", "SUPERVISOR");
+        assertThat(row.has("nationalId")).isFalse();
+        assertThat(row.has("notes")).isFalse();
+    }
+
+    @Test
+    void onboardingRejectsEmptyRolesAndRollsBackIdentityWhenRoleIsInvalid() throws Exception {
+        String token = registerTenant("Workforce Onboarding Validation", uniqueName("wfonboardvalidation"))
+                .path("accessToken").asText();
+        Integer before = jdbc.queryForObject(
+                "select count(*) from workforce_members where full_name in "
+                        + "('No Role Person', 'Invalid Role Person')", Integer.class);
+
+        postJson("/api/v1/workforce/members/onboard",
+                Map.of("member", identity("No Role Person", null, null), "initialAssignments", java.util.Collections.emptyList()),
+                token).andExpect(status().isBadRequest());
+
+        Map<String, Object> invalidAssignment = Map.of("roleId", 999999L, "effectiveFrom", "2026-11-07");
+        postJson("/api/v1/workforce/members/onboard",
+                Map.of("member", identity("Invalid Role Person", null, null),
+                        "initialAssignments", java.util.Collections.singletonList(invalidAssignment)), token)
+                .andExpect(status().isNotFound());
+
+        Integer after = jdbc.queryForObject(
+                "select count(*) from workforce_members where full_name in "
+                        + "('No Role Person', 'Invalid Role Person')", Integer.class);
+        assertThat(after).isEqualTo(before);
+    }
+
+    private long roleId(JsonNode roles, String code) {
+        for (JsonNode role : roles) {
+            if (code.equals(role.path("code").asText())) return role.path("id").asLong();
+        }
+        throw new AssertionError("Missing seeded role: " + code);
+    }
+
     private Map<String, Object> identity(String name, String phone, String nationalId) {
         Map<String, Object> request = new HashMap<>();
         request.put("fullName", name);

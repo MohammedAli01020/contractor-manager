@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface WorkforceRoleRepository extends JpaRepository<WorkforceRole, Long> {
     List<WorkforceRole> findAllByTenantIdOrderByNameAsc(Long tenantId);
+    List<WorkforceRole> findAllByTenantIdAndIdIn(Long tenantId, List<Long> ids);
     Optional<WorkforceRole> findByIdAndTenantId(Long id, Long tenantId);
     boolean existsByTenantIdAndCode(Long tenantId, String code);
 }

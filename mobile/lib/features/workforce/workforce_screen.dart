@@ -136,7 +136,7 @@ class _WorkforceScreenState extends State<WorkforceScreen> {
     }
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (_) => WorkforceAgreementsScreen(
+        builder: (_) => WorkforceAssignmentsScreen(
           memberId: memberId,
           memberName: _value(member['fullName']),
           canManage: widget.canManage,
@@ -210,9 +210,22 @@ class _WorkforceScreenState extends State<WorkforceScreen> {
                                 final member = _members[index];
                                 final active = member['active'] == true;
                                 final linked = member['operationalProfileLinked'] == true;
-                                final workerType = member['workerType'];
-                                final isDriver = workerType == 'DRIVER';
-                                final categoryLabel = workerType == 'DRIVER' ? 'سائق' : workerType == 'WORKER' ? 'عامل' : 'تصنيف غير محدد';
+                                final roleSummaries = member['roles'] is List
+                                    ? (member['roles'] as List).whereType<Map<String, dynamic>>().toList()
+                                    : <Map<String, dynamic>>[];
+                                final roleNames = roleSummaries
+                                    .map((role) => role['roleName']?.toString())
+                                    .where((name) => name != null && name.trim().isNotEmpty)
+                                    .cast<String>()
+                                    .toList();
+                                final roleCodes = roleSummaries
+                                    .map((role) => role['roleCode']?.toString())
+                                    .toSet();
+                                final isDriver = roleCodes.contains('DRIVER') ||
+                                    roleCodes.contains('EQUIPMENT_OPERATOR');
+                                final categoryLabel = roleNames.isEmpty
+                                    ? 'يحتاج تحديد دور وظيفي'
+                                    : roleNames.join(' • ');
                                 return Card(
                                   margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                                   child: ListTile(
@@ -224,7 +237,7 @@ class _WorkforceScreenState extends State<WorkforceScreen> {
                                     subtitle: Text(
                                       '$categoryLabel • هاتف: ${_value(member['phone'])}\n'
                                       '${active ? 'نشط' : 'معطّل'} • '
-                                      '${linked ? 'مرتبط بملف التشغيل' : 'لا يوجد ملف تشغيل مرتبط'}',
+                                      '${roleSummaries.length} تكليف وظيفي نشط',
                                     ),
                                     isThreeLine: true,
                                     trailing: Row(
@@ -248,6 +261,320 @@ class _WorkforceScreenState extends State<WorkforceScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+
+class WorkforceAssignmentsScreen extends StatefulWidget {
+  const WorkforceAssignmentsScreen({
+    Key? key,
+    required this.memberId,
+    required this.memberName,
+    required this.canManage,
+  }) : super(key: key);
+
+  final int memberId;
+  final String memberName;
+  final bool canManage;
+
+  @override
+  State<WorkforceAssignmentsScreen> createState() => _WorkforceAssignmentsScreenState();
+}
+
+class _WorkforceAssignmentsScreenState extends State<WorkforceAssignmentsScreen> {
+  List<Map<String, dynamic>> _roles = <Map<String, dynamic>>[];
+  List<Map<String, dynamic>> _assignments = <Map<String, dynamic>>[];
+  bool _loading = true;
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  String get _endpoint => '/workforce/members/${widget.memberId}/assignments';
+
+  String _date(DateTime value) =>
+      '${value.year.toString().padLeft(4, '0')}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')}';
+
+  String _value(dynamic value, [String fallback = '—']) =>
+      value == null || value.toString().trim().isEmpty ? fallback : value.toString();
+
+  String _message(Object error) {
+    if (error is DioError) {
+      final data = error.response?.data;
+      if (data is Map && data['message'] != null) return data['message'].toString();
+      if (error.response?.statusCode == 403) return 'إدارة التكليفات متاحة للمسؤول فقط.';
+      if (error.response?.statusCode == 409) return 'يوجد تعارض في التكليف أو تم تحديثه من مكان آخر.';
+    }
+    return 'تعذر تحميل أو حفظ التكليفات. تحقق من الاتصال وحاول مرة أخرى.';
+  }
+
+  String _roleName(dynamic roleId) {
+    for (final role in _roles) {
+      if ('${role['id']}' == '$roleId') {
+        return _value(role['name'], _value(role['code'], 'دور وظيفي'));
+      }
+    }
+    return 'دور وظيفي غير متاح';
+  }
+
+  Future<void> _load() async {
+    if (!mounted) return;
+    setState(() { _loading = true; _error = null; });
+    try {
+      final responses = await Future.wait<dynamic>(<Future<dynamic>>[
+        getIt<Dio>().get<List<dynamic>>('/workforce/roles?includeInactive=true'),
+        getIt<Dio>().get<List<dynamic>>(_endpoint),
+      ]);
+      final rolesData = responses[0].data as List<dynamic>? ?? <dynamic>[];
+      final assignmentsData = responses[1].data as List<dynamic>? ?? <dynamic>[];
+      if (!mounted) return;
+      setState(() {
+        _roles = rolesData.whereType<Map<String, dynamic>>().toList();
+        _assignments = assignmentsData.whereType<Map<String, dynamic>>().toList();
+      });
+    } catch (error) {
+      if (mounted) setState(() => _error = _message(error));
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _addAssignment() async {
+    final activeRoles = _roles.where((role) => role['active'] == true).toList();
+    if (activeRoles.isEmpty) {
+      setState(() => _error = 'لا توجد أدوار نشطة متاحة لإضافتها.');
+      return;
+    }
+    final payload = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (_) => _NewWorkforceAssignmentDialog(roles: activeRoles),
+    );
+    if (payload == null || !mounted) return;
+    setState(() { _saving = true; _error = null; });
+    try {
+      await getIt<Dio>().post<Map<String, dynamic>>(_endpoint, data: payload);
+      await _load();
+    } catch (error) {
+      if (mounted) setState(() => _error = _message(error));
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _endAssignment(Map<String, dynamic> assignment) async {
+    final from = DateTime.tryParse('${assignment['effectiveFrom']}') ?? DateTime(2020);
+    final today = DateTime.now();
+    final firstAllowed = DateTime(from.year, from.month, from.day);
+    final todayDate = DateTime(today.year, today.month, today.day);
+    final initial = todayDate.isBefore(firstAllowed) ? firstAllowed : todayDate;
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: firstAllowed,
+      lastDate: DateTime(today.year + 10),
+      helpText: 'تاريخ انتهاء التكليف',
+    );
+    if (picked == null || !mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('إنهاء التكليف'),
+        content: Text('سيتم إنهاء دور ${_roleName(assignment['roleId'])} بتاريخ ${_date(picked)} مع الاحتفاظ بسجل التكليف. هل تريد المتابعة؟'),
+        actions: <Widget>[
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('رجوع')),
+          ElevatedButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('إنهاء التكليف')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    setState(() { _saving = true; _error = null; });
+    try {
+      await getIt<Dio>().put<Map<String, dynamic>>(
+        '$_endpoint/${assignment['id']}/end',
+        data: <String, dynamic>{
+          'effectiveTo': _date(picked),
+          'version': assignment['version'],
+        },
+      );
+      await _load();
+    } catch (error) {
+      if (mounted) setState(() => _error = _message(error));
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _openAgreements() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => WorkforceAgreementsScreen(
+          memberId: widget.memberId,
+          memberName: widget.memberName,
+          canManage: widget.canManage,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.memberName),
+        actions: <Widget>[
+          IconButton(
+            tooltip: 'اتفاقيات الأجر',
+            onPressed: _openAgreements,
+            icon: const Icon(Icons.payments_outlined),
+          ),
+          IconButton(tooltip: 'تحديث', onPressed: _load, icon: const Icon(Icons.refresh)),
+        ],
+      ),
+      floatingActionButton: widget.canManage
+          ? FloatingActionButton.extended(
+              onPressed: _loading || _saving ? null : _addAssignment,
+              icon: const Icon(Icons.add),
+              label: const Text('إضافة دور'),
+            )
+          : null,
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : Column(
+              children: <Widget>[
+                if (_error != null)
+                  Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                  ),
+                Expanded(
+                  child: _assignments.isEmpty
+                      ? const Center(child: Text('لا توجد تكليفات وظيفية مسجلة لهذا الشخص.'))
+                      : RefreshIndicator(
+                          onRefresh: _load,
+                          child: ListView.builder(
+                            padding: const EdgeInsets.only(bottom: 88),
+                            itemCount: _assignments.length,
+                            itemBuilder: (context, index) {
+                              final assignment = _assignments[index];
+                              final active = assignment['status'] == 'ACTIVE';
+                              return Card(
+                                margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                                child: ListTile(
+                                  leading: CircleAvatar(
+                                    child: Icon(active ? Icons.work_outline : Icons.history),
+                                  ),
+                                  title: Text(_roleName(assignment['roleId']),
+                                      style: const TextStyle(fontWeight: FontWeight.bold)),
+                                  subtitle: Text(
+                                    'من ${_value(assignment['effectiveFrom'])}'
+                                    '${assignment['effectiveTo'] == null ? '' : ' إلى ${assignment['effectiveTo']}'}'
+                                    ' • ${active ? 'تكليف نشط' : 'منتهي'}'
+                                    '${assignment['siteId'] == null ? '' : ' • موقع #${assignment['siteId']}'}',
+                                  ),
+                                  trailing: active && widget.canManage
+                                      ? IconButton(
+                                          tooltip: 'إنهاء التكليف',
+                                          onPressed: _saving ? null : () => _endAssignment(assignment),
+                                          icon: const Icon(Icons.event_busy_outlined),
+                                        )
+                                      : null,
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                ),
+              ],
+            ),
+    );
+  }
+}
+
+class _NewWorkforceAssignmentDialog extends StatefulWidget {
+  const _NewWorkforceAssignmentDialog({Key? key, required this.roles}) : super(key: key);
+
+  final List<Map<String, dynamic>> roles;
+
+  @override
+  State<_NewWorkforceAssignmentDialog> createState() => _NewWorkforceAssignmentDialogState();
+}
+
+class _NewWorkforceAssignmentDialogState extends State<_NewWorkforceAssignmentDialog> {
+  int? _roleId;
+  DateTime _effectiveFrom = DateTime.now();
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.roles.isNotEmpty && widget.roles.first['id'] is num) {
+      _roleId = (widget.roles.first['id'] as num).toInt();
+    }
+  }
+
+  String _date(DateTime value) =>
+      '${value.year.toString().padLeft(4, '0')}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')}';
+
+  Future<void> _pickDate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _effectiveFrom,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(now.year + 10),
+      helpText: 'بداية التكليف',
+    );
+    if (picked != null && mounted) setState(() => _effectiveFrom = picked);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('إضافة دور وظيفي'),
+      content: SizedBox(
+        width: 360,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            DropdownButtonFormField<int>(
+              value: _roleId,
+              isExpanded: true,
+              decoration: const InputDecoration(labelText: 'الدور الوظيفي'),
+              items: widget.roles.map((role) => DropdownMenuItem<int>(
+                value: (role['id'] as num).toInt(),
+                child: Text(role['name']?.toString() ?? role['code']?.toString() ?? 'دور'),
+              )).toList(),
+              onChanged: (value) => setState(() => _roleId = value),
+            ),
+            const SizedBox(height: 12),
+            InkWell(
+              onTap: _pickDate,
+              child: InputDecorator(
+                decoration: const InputDecoration(
+                  labelText: 'تاريخ بداية التكليف',
+                  prefixIcon: Icon(Icons.calendar_month_outlined),
+                  border: OutlineInputBorder(),
+                ),
+                child: Text(_date(_effectiveFrom)),
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: <Widget>[
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('إلغاء')),
+        ElevatedButton(
+          onPressed: _roleId == null ? null : () => Navigator.pop(context, <String, dynamic>{
+            'roleId': _roleId,
+            'effectiveFrom': _date(_effectiveFrom),
+          }),
+          child: const Text('حفظ التكليف'),
+        ),
+      ],
     );
   }
 }

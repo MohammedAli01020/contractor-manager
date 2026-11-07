@@ -1,6 +1,7 @@
 package com.contractor.app.workforce.infra;
 
 import com.contractor.app.workforce.domain.WorkforceAssignment;
+import com.contractor.app.workforce.domain.WorkforceAssignmentStatus;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -11,6 +12,9 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface WorkforceAssignmentRepository extends JpaRepository<WorkforceAssignment, Long> {
+
+    List<WorkforceAssignment> findAllByTenantIdAndWorkforceMemberIdInAndStatusOrderByEffectiveFromDescIdDesc(
+            Long tenantId, List<Long> workforceMemberIds, WorkforceAssignmentStatus status);
 
     List<WorkforceAssignment> findAllByTenantIdAndWorkforceMemberIdOrderByEffectiveFromDescIdDesc(
             Long tenantId, Long workforceMemberId);

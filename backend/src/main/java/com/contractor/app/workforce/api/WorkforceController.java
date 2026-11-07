@@ -8,11 +8,18 @@ import com.contractor.app.workforce.api.dto.WorkforceAssignmentResponse;
 import com.contractor.app.workforce.api.dto.WorkforceMemberDirectoryResponse;
 import com.contractor.app.workforce.api.dto.WorkforceMemberRequest;
 import com.contractor.app.workforce.api.dto.WorkforceMemberResponse;
+import com.contractor.app.workforce.api.dto.WorkforceOnboardRequest;
+import com.contractor.app.workforce.api.dto.WorkforceOnboardResponse;
 import com.contractor.app.workforce.api.dto.WorkforceRoleRequest;
 import com.contractor.app.workforce.api.dto.WorkforceRoleResponse;
 import com.contractor.app.workforce.domain.WorkforceAssignmentService;
 import com.contractor.app.workforce.domain.WorkforceIdentityService;
+import com.contractor.app.workforce.domain.WorkforceOnboardingService;
 import com.contractor.app.workforce.infra.WorkforceMemberRepository;
+import com.contractor.app.workforce.infra.WorkforceMemberDirectoryRow;
+import java.util.Collections;
+import java.util.Map;
+import java.util.stream.Collectors;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
 import javax.validation.Valid;
@@ -41,12 +48,14 @@ public class WorkforceController {
     private final WorkforceAssignmentService service;
     private final WorkforceIdentityService identities;
     private final WorkforceMemberRepository members;
+    private final WorkforceOnboardingService onboarding;
 
     public WorkforceController(WorkforceAssignmentService service, WorkforceIdentityService identities,
-                                WorkforceMemberRepository members) {
+                                WorkforceMemberRepository members, WorkforceOnboardingService onboarding) {
         this.service = service;
         this.identities = identities;
         this.members = members;
+        this.onboarding = onboarding;
     }
 
     @GetMapping("/members")
@@ -55,8 +64,14 @@ public class WorkforceController {
             @RequestParam(defaultValue = "false") boolean includeInactive,
             @PageableDefault(size = 20) Pageable pageable) {
         String normalizedSearch = search == null || search.trim().isEmpty() ? null : search.trim();
-        return members.searchDirectory(CurrentUser.tenantId(), includeInactive, normalizedSearch, pageable)
-                .map(WorkforceMemberDirectoryResponse::from);
+        Page<WorkforceMemberDirectoryRow> page = members.searchDirectory(
+                CurrentUser.tenantId(), includeInactive, normalizedSearch, pageable);
+        java.util.List<Long> memberIds = page.getContent().stream()
+                .map(WorkforceMemberDirectoryRow::getWorkforceMemberId).collect(Collectors.toList());
+        Map<Long, java.util.List<com.contractor.app.workforce.api.dto.WorkforceRoleSummaryResponse>> summaries =
+                service.activeRoleSummaries(CurrentUser.tenantId(), memberIds);
+        return page.map(row -> WorkforceMemberDirectoryResponse.from(
+                row, summaries.getOrDefault(row.getWorkforceMemberId(), Collections.emptyList())));
     }
 
     @PreAuthorize("hasRole('ADMIN')")
@@ -65,6 +80,13 @@ public class WorkforceController {
     public WorkforceMemberResponse createMember(@Valid @RequestBody WorkforceMemberRequest request) {
         return WorkforceMemberResponse.from(
                 identities.createMember(CurrentUser.tenantId(), request), true);
+    }
+
+    @PreAuthorize("hasRole('ADMIN')")
+    @PostMapping("/members/onboard")
+    @ResponseStatus(HttpStatus.CREATED)
+    public WorkforceOnboardResponse onboardMember(@Valid @RequestBody WorkforceOnboardRequest request) {
+        return onboarding.onboard(CurrentUser.tenantId(), request);
     }
 
     @GetMapping("/members/{memberId}")
