@@ -173,7 +173,7 @@ class WorkforceMemberCrudIntegrationTest extends AbstractIntegrationTest {
         }
         assertThat(row).isNotNull();
         assertThat(row.path("roles").size()).isEqualTo(2);
-        assertThat(row.toString()).contains("مهندس", "مشرف");
+        assertThat(row.toString()).contains("ENGINEER", "SUPERVISOR");
         assertThat(row.has("nationalId")).isFalse();
         assertThat(row.has("notes")).isFalse();
     }
@@ -183,9 +183,8 @@ class WorkforceMemberCrudIntegrationTest extends AbstractIntegrationTest {
         String token = registerTenant("Workforce Onboarding Validation", uniqueName("wfonboardvalidation"))
                 .path("accessToken").asText();
         Integer before = jdbc.queryForObject(
-                "select count(*) from workforce_members where tenant_id = "
-                        + "(select id from tenants where name = 'Workforce Onboarding Validation')",
-                Integer.class);
+                "select count(*) from workforce_members where full_name in "
+                        + "('No Role Person', 'Invalid Role Person')", Integer.class);
 
         postJson("/api/v1/workforce/members/onboard",
                 Map.of("member", identity("No Role Person", null, null), "initialAssignments", java.util.Collections.emptyList()),
@@ -198,9 +197,8 @@ class WorkforceMemberCrudIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(status().isNotFound());
 
         Integer after = jdbc.queryForObject(
-                "select count(*) from workforce_members where tenant_id = "
-                        + "(select id from tenants where name = 'Workforce Onboarding Validation')",
-                Integer.class);
+                "select count(*) from workforce_members where full_name in "
+                        + "('No Role Person', 'Invalid Role Person')", Integer.class);
         assertThat(after).isEqualTo(before);
     }
 
