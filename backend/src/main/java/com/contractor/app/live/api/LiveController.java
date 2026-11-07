@@ -6,8 +6,9 @@ import com.contractor.app.live.api.dto.LiveEquipmentResponse;
 import com.contractor.app.live.domain.LiveStatusService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import java.util.List;
 import java.time.LocalDate;
+import java.util.List;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -31,11 +32,10 @@ public class LiveController {
         return service.equipment(CurrentUser.tenantId(), onlyFree);
     }
 
-
     @GetMapping("/workforce-candidates")
     @Operation(summary = "مرشحو بدء الوردية حسب أدوار Workforce والتكليف الساري في التاريخ والموقع")
     public List<LiveDriverResponse> workforceCandidates(
-            @RequestParam LocalDate shiftDate,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate shiftDate,
             @RequestParam(required = false) Long siteId,
             @RequestParam(defaultValue = "false") boolean onlyFree) {
         return service.workforceCandidates(CurrentUser.tenantId(), shiftDate, siteId, onlyFree);
