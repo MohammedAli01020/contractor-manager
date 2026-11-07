@@ -502,7 +502,7 @@ class _CompensationAgreementDialogState extends State<_CompensationAgreementDial
   }
 
   String _date(DateTime value) =>
-      '\${value.year.toString().padLeft(4, '0')}-\${value.month.toString().padLeft(2, '0')}-\${value.day.toString().padLeft(2, '0')}';
+      '${value.year.toString().padLeft(4, '0')}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')}';
 
   String _number(TextEditingController controller) =>
       controller.text.trim().replaceAll(',', '.');
@@ -582,7 +582,7 @@ class _CompensationAgreementDialogState extends State<_CompensationAgreementDial
     if (!_formKey.currentState!.validate()) return;
     final old = widget.currentAgreement;
     if (old != null) {
-      final oldStart = DateTime.tryParse('\${old['effectiveFrom']}');
+      final oldStart = DateTime.tryParse('${old['effectiveFrom']}');
       if (oldStart != null && !_effectiveFrom.isAfter(oldStart)) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('تاريخ الاتفاقية الجديدة يجب أن يكون بعد بداية الاتفاقية الحالية.')),
