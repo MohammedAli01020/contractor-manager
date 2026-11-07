@@ -210,9 +210,22 @@ class _WorkforceScreenState extends State<WorkforceScreen> {
                                 final member = _members[index];
                                 final active = member['active'] == true;
                                 final linked = member['operationalProfileLinked'] == true;
-                                final workerType = member['workerType'];
-                                final isDriver = workerType == 'DRIVER';
-                                final categoryLabel = workerType == 'DRIVER' ? 'سائق' : workerType == 'WORKER' ? 'عامل' : 'تصنيف غير محدد';
+                                final roleSummaries = member['roles'] is List
+                                    ? (member['roles'] as List).whereType<Map<String, dynamic>>().toList()
+                                    : <Map<String, dynamic>>[];
+                                final roleNames = roleSummaries
+                                    .map((role) => role['roleName']?.toString())
+                                    .where((name) => name != null && name.trim().isNotEmpty)
+                                    .cast<String>()
+                                    .toList();
+                                final roleCodes = roleSummaries
+                                    .map((role) => role['roleCode']?.toString())
+                                    .toSet();
+                                final isDriver = roleCodes.contains('DRIVER') ||
+                                    roleCodes.contains('EQUIPMENT_OPERATOR');
+                                final categoryLabel = roleNames.isEmpty
+                                    ? 'يحتاج تحديد دور وظيفي'
+                                    : roleNames.join(' • ');
                                 return Card(
                                   margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                                   child: ListTile(
