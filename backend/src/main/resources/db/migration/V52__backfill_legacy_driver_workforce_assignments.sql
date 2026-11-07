@@ -36,6 +36,6 @@ WHERE d.active = TRUE
        AND existing_role.tenant_id = existing_assignment.tenant_id
       WHERE existing_assignment.tenant_id = d.tenant_id
         AND existing_assignment.workforce_member_id = d.workforce_member_id
-        AND existing_assignment.status <> 'CANCELLED'
+        -- Any prior operational assignment, including an explicit cancellation, is authoritative.
         AND existing_role.code IN ('DRIVER', 'EQUIPMENT_OPERATOR', 'WORKER')
   );
