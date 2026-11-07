@@ -9,9 +9,14 @@ import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 /** API contract tests for the canonical Workforce directory and legacy Driver mapping. */
 class WorkforceDirectoryIntegrationTest extends AbstractIntegrationTest {
+
+    @Autowired
+    private JdbcTemplate jdbc;
 
     @Test
     void directoryReturnsExplicitCanonicalAndOperationalIdsWithoutCrossTenantLeakage() throws Exception {
