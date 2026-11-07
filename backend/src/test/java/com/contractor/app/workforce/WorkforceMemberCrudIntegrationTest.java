@@ -46,6 +46,11 @@ class WorkforceMemberCrudIntegrationTest extends AbstractIntegrationTest {
                 "select count(*) from audit_log where entity_type = 'WORKFORCE_MEMBER' "
                         + "and entity_id = ? and (old_value like '%NID-CAN-%' or new_value like '%NID-CAN-%')",
                 Integer.class, memberId)).isZero();
+        assertThat(jdbc.queryForObject(
+                "select count(*) from audit_log where entity_type = 'WORKFORCE_MEMBER' "
+                        + "and entity_id = ? and field_name = 'nationalId' "
+                        + "and old_value = '[REDACTED]' and new_value = '[REDACTED]'",
+                Integer.class, memberId)).isEqualTo(1);
     }
 
     @Test
