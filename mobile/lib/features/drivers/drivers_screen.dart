@@ -92,10 +92,48 @@ class _DriversScreenState extends State<DriversScreen> {
   String _value(dynamic value) => value == null ? '—' : value.toString();
 
   Future<void> _edit([Map<String, dynamic>? driver]) async {
+    Map<String, dynamic>? editDriver = driver;
+
+    // The list endpoint intentionally omits nationalId to avoid exposing
+    // sensitive identity data in collection responses. Load the authorized
+    // detail response before opening the edit form so saving another field
+    // cannot accidentally replace a stored national ID with null.
+    if (driver != null) {
+      try {
+        final response = await getIt<Dio>().get<Map<String, dynamic>>(
+          '/drivers/${driver['id']}',
+        );
+        editDriver = response.data;
+        if (editDriver == null || editDriver!['id'] == null) {
+          throw StateError('استجابة تفاصيل العامل غير صالحة.');
+        }
+      } on DioError catch (error) {
+        if (!mounted) return;
+        final data = error.response?.data;
+        final message = data is Map && data['message'] != null
+            ? data['message'].toString()
+            : error.response?.statusCode == 401
+                ? 'انتهت الجلسة؛ سجّل الدخول مرة أخرى.'
+                : error.response?.statusCode == 403
+                    ? 'ليس لديك صلاحية لعرض تفاصيل العامل.'
+                    : 'تعذر تحميل تفاصيل العامل. لم يتم فتح نموذج التعديل.';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message)),
+        );
+        return;
+      } catch (error) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('تعذر تحميل تفاصيل العامل: $error')),
+        );
+        return;
+      }
+    }
+
     final saved = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => DriverEditDialog(driver: driver),
+      builder: (_) => DriverEditDialog(driver: editDriver),
     );
     if (saved != true || !mounted) return;
 
