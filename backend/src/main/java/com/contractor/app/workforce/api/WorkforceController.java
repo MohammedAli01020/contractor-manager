@@ -8,10 +8,13 @@ import com.contractor.app.workforce.api.dto.WorkforceAssignmentResponse;
 import com.contractor.app.workforce.api.dto.WorkforceMemberDirectoryResponse;
 import com.contractor.app.workforce.api.dto.WorkforceMemberRequest;
 import com.contractor.app.workforce.api.dto.WorkforceMemberResponse;
+import com.contractor.app.workforce.api.dto.WorkforceOnboardRequest;
+import com.contractor.app.workforce.api.dto.WorkforceOnboardResponse;
 import com.contractor.app.workforce.api.dto.WorkforceRoleRequest;
 import com.contractor.app.workforce.api.dto.WorkforceRoleResponse;
 import com.contractor.app.workforce.domain.WorkforceAssignmentService;
 import com.contractor.app.workforce.domain.WorkforceIdentityService;
+import com.contractor.app.workforce.domain.WorkforceOnboardingService;
 import com.contractor.app.workforce.infra.WorkforceMemberRepository;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
@@ -41,12 +44,14 @@ public class WorkforceController {
     private final WorkforceAssignmentService service;
     private final WorkforceIdentityService identities;
     private final WorkforceMemberRepository members;
+    private final WorkforceOnboardingService onboarding;
 
     public WorkforceController(WorkforceAssignmentService service, WorkforceIdentityService identities,
-                                WorkforceMemberRepository members) {
+                                WorkforceMemberRepository members, WorkforceOnboardingService onboarding) {
         this.service = service;
         this.identities = identities;
         this.members = members;
+        this.onboarding = onboarding;
     }
 
     @GetMapping("/members")
@@ -65,6 +70,13 @@ public class WorkforceController {
     public WorkforceMemberResponse createMember(@Valid @RequestBody WorkforceMemberRequest request) {
         return WorkforceMemberResponse.from(
                 identities.createMember(CurrentUser.tenantId(), request), true);
+    }
+
+    @PreAuthorize("hasRole('ADMIN')")
+    @PostMapping("/members/onboard")
+    @ResponseStatus(HttpStatus.CREATED)
+    public WorkforceOnboardResponse onboardMember(@Valid @RequestBody WorkforceOnboardRequest request) {
+        return onboarding.onboard(CurrentUser.tenantId(), request);
     }
 
     @GetMapping("/members/{memberId}")
