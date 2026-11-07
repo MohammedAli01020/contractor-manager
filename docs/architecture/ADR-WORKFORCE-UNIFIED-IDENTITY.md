@@ -87,6 +87,39 @@ In particular, do **not** present DAY or FIXED as fully supported merely because
 - Enabling DAY/FIXED or any other compensation basis solely because the database/API accepts its code.
 - Introducing microservices for this domain now; retain the current modular monolith unless evidence later justifies a change.
 
+## Operational addendum: driver creation and compensation scope
+
+### Driver creation entry point
+
+- The canonical create-person entry point is **Workforce → Add member**.
+- A driver is created there once, as a Workforce Member. The user selects the relevant job classification and operational capabilities (for example driver and/or equipment operator).
+- When the driver capability/classification is selected, the form progressively reveals driver-specific operational fields (for example licence number, licence class, expiry date, and any fields required by dispatch/vehicle workflows).
+- Saving the profile creates or links the required driver operational profile to that same Workforce Member; it must not create a second person identity.
+- Existing **Drivers & Workers** screens may remain as filtered operational shortcuts for dispatch and shift workflows. Their add actions must route into the canonical Workforce create flow (with driver fields preselected), or create/link the operational profile against an existing Workforce Member. They must never create an independent duplicate person.
+- Existing driver records must be safely linked/migrated with their identifiers and historical shift references preserved. Ambiguous identity matches require review.
+
+### Compensation scope and multiple work engagements
+
+Compensation must be resolved against a **work engagement / assignment scope**, not treated as a permanent property of the person and not freely reselected as an arbitrary pay basis on every shift.
+
+- A compensation agreement is effective-dated and scoped to a defined engagement/assignment context (such as a site, project, equipment responsibility, work type, or other explicitly modelled scope).
+- A member may have more than one concurrent engagement where the scopes are distinct and non-conflicting. Each engagement may have its own compensation agreement and basis.
+- For a normal shift, the app resolves the applicable approved agreement from the member, assignment, work context, and work date. The user should not manually choose SHIFT/HOUR/QUANTITY when there is exactly one unambiguous applicable agreement.
+- If multiple applicable agreements remain possible, or no valid agreement exists, the app must require an explicit, auditable resolution and must not silently guess or post a payable amount.
+- Separate work performed on the same day under different engagements must be recorded as separate work records, each tied to its applicable agreement. Example: a base SHIFT engagement and a separately authorized HOUR engagement for additional work.
+- Changing the primary compensation agreement is different from authorizing a separate additional engagement. A replacement agreement must not be used to represent unrelated extra work.
+- If the compensation basis changes during one continuous work activity, split the work record at the approved effective boundary or use an explicitly modelled mixed-compensation record; never combine incompatible bases implicitly.
+- Every completed work record preserves an immutable snapshot of the agreement/scope, basis, rate, unit, measured quantity or hours, and calculation result used at completion. Later agreement changes do not recalculate historical work.
+- Overlap validation must be based on effective dates **and scope**. Agreements for distinct scopes may coexist; conflicting agreements for the same scope and period must be rejected or explicitly resolved.
+
+### Delivery implications
+
+1. Keep the current Workforce directory and compensation screens as foundations; do not imply the complete multi-engagement model is already implemented.
+2. Deliver the canonical driver/member add flow and legacy operational-profile linking before removing any legacy shortcuts.
+3. Define assignment/engagement scope and agreement resolution rules before implementing concurrent compensation agreements.
+4. Add backend integration tests for no agreement, one applicable agreement, conflicting agreements, distinct concurrent scopes, same-day separate SHIFT and HOUR work, effective-date boundaries, and immutable historical snapshots.
+5. Add mobile acceptance tests proving that driver creation produces one person identity and that shift entry resolves the correct agreement without arbitrary pay-basis selection.
+
 ## Approval
 
 The product owner explicitly approved this unified Workforce direction on 2026-11-07. This ADR records the approved target architecture; it does not claim that all listed workflows have already been implemented or validated.
