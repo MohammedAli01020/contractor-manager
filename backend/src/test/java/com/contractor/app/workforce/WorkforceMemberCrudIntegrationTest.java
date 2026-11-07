@@ -237,7 +237,7 @@ class WorkforceMemberCrudIntegrationTest extends AbstractIntegrationTest {
         JsonNode beforeEffectiveDate = body(getJson(
                 "/api/v1/live/workforce-candidates?shiftDate=2026-11-07", token)
                 .andExpect(status().isOk()));
-        assertThat(beforeEffectiveDate).isEmpty();
+        assertThat(beforeEffectiveDate.size()).isZero();
 
         JsonNode effectiveDate = body(getJson(
                 "/api/v1/live/workforce-candidates?shiftDate=2026-11-08", token)
