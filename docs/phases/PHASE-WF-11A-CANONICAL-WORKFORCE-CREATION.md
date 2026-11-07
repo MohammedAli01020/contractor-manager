@@ -98,10 +98,10 @@ The detailed inventory, retained/deprecated decisions, and acceptance criteria a
 - [x] Confirm Workforce is the only target top-level people-management area.
 - [x] Identify the duplicate mobile home entry and remove it in the current implementation slice.
 - [x] Inventory the legacy Drivers screen/API and explicitly retain operational behavior during migration.
-- [ ] Complete canonical create/edit UI in Flutter.
+- [x] Add the first canonical create-person form in Flutter (common identity fields; edit flow remains pending).
 - [ ] Add multi-capability directory filters without duplicate people.
 - [ ] Route legacy add/edit actions into Workforce.
 - [ ] Complete backend schema/FK/query/report and ledger dependency audit before proposing any deletion.
 - [ ] Run backend and Flutter validation and real-device acceptance.
 
-No database tables, columns, APIs, or financial records are deleted by this consolidation slice.
+No database tables, columns, APIs, or financial records are deleted by this consolidation slice. The current Flutter create form posts directly to `POST /api/v1/workforce/members`; it captures common identity fields only and deliberately does not invent profession/capability records until the backend taxonomy and assignment semantics are approved and implemented.
