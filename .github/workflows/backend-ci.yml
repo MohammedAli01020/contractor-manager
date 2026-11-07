@@ -297,7 +297,7 @@ jobs:
 
           required = {
               "WorkforceMemberMigrationIntegrationTest": 1,
-              "WorkforceMemberBackfillIntegrationTest": 3,
+              "WorkforceMemberBackfillIntegrationTest": 4,
           }
           for suite, expected in required.items():
               pattern = f"target/surefire-reports/TEST-com.contractor.app.workforce.{suite}.xml"
