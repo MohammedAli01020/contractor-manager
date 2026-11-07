@@ -74,7 +74,20 @@ class _WorkforceScreenState extends State<WorkforceScreen> {
     }
   }
 
-  Future<void> _createMember() async {\n    final created = await showDialog<Map<String, dynamic>>(\n      context: context,\n      barrierDismissible: false,\n      builder: (_) => const WorkforceMemberFormDialog(),\n    );\n    if (created == null || !mounted) return;\n    ScaffoldMessenger.of(context).showSnackBar(\n      const SnackBar(content: Text('تمت إضافة الشخص إلى القوى العاملة.')),\n    );\n    await _load();\n  }\n\n  Future<void> _openMember(Map<String, dynamic> member) async {
+  Future<void> _createMember() async {
+    final created = await showDialog<Map<String, dynamic>>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const WorkforceMemberFormDialog(),
+    );
+    if (created == null || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('تمت إضافة الشخص إلى القوى العاملة.')),
+    );
+    await _load();
+  }
+
+  Future<void> _openMember(Map<String, dynamic> member) async {
     final rawId = member['workforceMemberId'];
     final memberId = rawId is num ? rawId.toInt() : int.tryParse('$rawId');
     if (memberId == null) {
@@ -152,7 +165,9 @@ class _WorkforceScreenState extends State<WorkforceScreen> {
                                 final member = _members[index];
                                 final active = member['active'] == true;
                                 final linked = member['operationalProfileLinked'] == true;
-                                final workerType = member['workerType'];\n                                final isDriver = workerType == 'DRIVER';\n                                final categoryLabel = workerType == 'DRIVER' ? 'سائق' : workerType == 'WORKER' ? 'عامل' : 'تصنيف غير محدد';
+                                final workerType = member['workerType'];
+                                final isDriver = workerType == 'DRIVER';
+                                final categoryLabel = workerType == 'DRIVER' ? 'سائق' : workerType == 'WORKER' ? 'عامل' : 'تصنيف غير محدد';
                                 return Card(
                                   margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                                   child: ListTile(
@@ -162,7 +177,8 @@ class _WorkforceScreenState extends State<WorkforceScreen> {
                                     title: Text(_value(member['fullName']),
                                         style: const TextStyle(fontWeight: FontWeight.bold)),
                                     subtitle: Text(
-                                      '${isDriver ? 'سائق' : 'عامل'} • هاتف: ${_value(member['phone'])}\n'
+                                      '${isDriver ? 'سائق' : 'عامل'} • هاتف: ${_value(member['phone'])}
+'
                                       '${active ? 'نشط' : 'معطّل'} • '
                                       '${linked ? 'مرتبط بملف التشغيل' : 'لا يوجد ملف تشغيل مرتبط'}',
                                     ),
