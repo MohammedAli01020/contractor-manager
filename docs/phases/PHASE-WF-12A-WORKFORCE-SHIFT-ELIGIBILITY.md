@@ -2,7 +2,7 @@
 
 ## Status
 
-Architecture and implementation audit. Draft scope only; no runtime behavior has been changed in this phase.
+Implementation in progress on this branch. Backend, Flutter, and integration-test changes have been added; CI validation is pending.
 
 ## Confirmed current-state gap
 
