@@ -104,7 +104,7 @@ class _DriversScreenState extends State<DriversScreen> {
           '/drivers/${driver['id']}',
         );
         editDriver = response.data;
-        if (editDriver == null || editDriver!['id'] == null) {
+        if (editDriver == null || editDriver['id'] == null) {
           throw StateError('استجابة تفاصيل العامل غير صالحة.');
         }
       } on DioError catch (error) {
