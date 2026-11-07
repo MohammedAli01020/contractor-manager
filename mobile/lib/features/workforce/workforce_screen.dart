@@ -5,7 +5,9 @@ import '../../core/di/injector.dart';
 
 /// Mobile administration for canonical workforce identities and their pay agreements.
 class WorkforceScreen extends StatefulWidget {
-  const WorkforceScreen({Key? key}) : super(key: key);
+  const WorkforceScreen({Key? key, this.canManage = false}) : super(key: key);
+
+  final bool canManage;
 
   @override
   State<WorkforceScreen> createState() => _WorkforceScreenState();
@@ -85,6 +87,7 @@ class _WorkforceScreenState extends State<WorkforceScreen> {
         builder: (_) => WorkforceAgreementsScreen(
           memberId: memberId,
           memberName: _value(member['fullName']),
+          canManage: widget.canManage,
         ),
       ),
     );
@@ -182,10 +185,12 @@ class WorkforceAgreementsScreen extends StatefulWidget {
     Key? key,
     required this.memberId,
     required this.memberName,
+    required this.canManage,
   }) : super(key: key);
 
   final int memberId;
   final String memberName;
+  final bool canManage;
 
   @override
   State<WorkforceAgreementsScreen> createState() => _WorkforceAgreementsScreenState();
@@ -353,11 +358,13 @@ class _WorkforceAgreementsScreenState extends State<WorkforceAgreementsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text(widget.memberName, maxLines: 1, overflow: TextOverflow.ellipsis)),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _saving ? null : _createAgreement,
-        icon: const Icon(Icons.add),
-        label: const Text('اتفاقية أجر ساعي'),
-      ),
+      floatingActionButton: widget.canManage
+          ? FloatingActionButton.extended(
+              onPressed: _saving ? null : _createAgreement,
+              icon: const Icon(Icons.add),
+              label: const Text('اتفاقية أجر ساعي'),
+            )
+          : null,
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : Column(
@@ -416,7 +423,7 @@ class _WorkforceAgreementsScreenState extends State<WorkforceAgreementsScreen> {
                                           ),
                                       if (agreement['changeReason'] != null)
                                         Text('سبب التغيير: ${agreement['changeReason']}'),
-                                      if (status == 'DRAFT')
+                                      if (status == 'DRAFT' && widget.canManage)
                                         Wrap(
                                           spacing: 8,
                                           children: <Widget>[
@@ -514,6 +521,8 @@ class _HourlyAgreementDialogState extends State<_HourlyAgreementDialog> {
       'source': 'MANUAL',
       'agreementReference': _reference.text.trim().isEmpty ? null : _reference.text.trim(),
       if (old != null) ...<String, dynamic>{
+        if (old['workforceAssignmentId'] != null)
+          'workforceAssignmentId': old['workforceAssignmentId'],
         'supersedesAgreementId': old['id'],
         'changeReason': _reason.text.trim(),
       },
