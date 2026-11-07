@@ -75,6 +75,21 @@ class ShiftsApi {
     return _mapList(response.data, 'قائمة السائقين غير صالحة.');
   }
 
+
+  Future<List<Map<String, dynamic>>> fetchWorkforceCandidates({
+    required String shiftDate,
+    int? siteId,
+  }) async {
+    final response = await _dio.get<List<dynamic>>(
+      '/live/workforce-candidates',
+      queryParameters: {
+        'shiftDate': shiftDate,
+        if (siteId != null) 'siteId': siteId,
+      },
+    );
+    return _mapList(response.data, 'قائمة القوى العاملة المؤهلة للوردية غير صالحة.');
+  }
+
   Future<List<Map<String, dynamic>>> fetchLiveEquipment() async {
     final response = await _dio.get<List<dynamic>>('/live/equipment');
     return _mapList(response.data, 'قائمة المعدات غير صالحة.');
