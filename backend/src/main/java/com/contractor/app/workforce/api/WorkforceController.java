@@ -1,13 +1,17 @@
 package com.contractor.app.workforce.api;
 
 import com.contractor.app.common.security.CurrentUser;
+import com.contractor.app.user.domain.Role;
 import com.contractor.app.workforce.api.dto.EndWorkforceAssignmentRequest;
 import com.contractor.app.workforce.api.dto.WorkforceAssignmentRequest;
 import com.contractor.app.workforce.api.dto.WorkforceAssignmentResponse;
 import com.contractor.app.workforce.api.dto.WorkforceMemberDirectoryResponse;
+import com.contractor.app.workforce.api.dto.WorkforceMemberRequest;
+import com.contractor.app.workforce.api.dto.WorkforceMemberResponse;
 import com.contractor.app.workforce.api.dto.WorkforceRoleRequest;
 import com.contractor.app.workforce.api.dto.WorkforceRoleResponse;
 import com.contractor.app.workforce.domain.WorkforceAssignmentService;
+import com.contractor.app.workforce.domain.WorkforceIdentityService;
 import com.contractor.app.workforce.infra.WorkforceMemberRepository;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
@@ -35,10 +39,13 @@ import org.springframework.web.bind.annotation.RestController;
 public class WorkforceController {
 
     private final WorkforceAssignmentService service;
+    private final WorkforceIdentityService identities;
     private final WorkforceMemberRepository members;
 
-    public WorkforceController(WorkforceAssignmentService service, WorkforceMemberRepository members) {
+    public WorkforceController(WorkforceAssignmentService service, WorkforceIdentityService identities,
+                                WorkforceMemberRepository members) {
         this.service = service;
+        this.identities = identities;
         this.members = members;
     }
 
@@ -50,6 +57,28 @@ public class WorkforceController {
         String normalizedSearch = search == null || search.trim().isEmpty() ? null : search.trim();
         return members.searchDirectory(CurrentUser.tenantId(), includeInactive, normalizedSearch, pageable)
                 .map(WorkforceMemberDirectoryResponse::from);
+    }
+
+    @PreAuthorize("hasRole('ADMIN')")
+    @PostMapping("/members")
+    @ResponseStatus(HttpStatus.CREATED)
+    public WorkforceMemberResponse createMember(@Valid @RequestBody WorkforceMemberRequest request) {
+        return WorkforceMemberResponse.from(
+                identities.createMember(CurrentUser.tenantId(), request), true);
+    }
+
+    @GetMapping("/members/{memberId}")
+    public WorkforceMemberResponse member(@PathVariable Long memberId) {
+        return WorkforceMemberResponse.from(identities.requireMember(CurrentUser.tenantId(), memberId),
+                CurrentUser.get().getRole() == Role.ADMIN);
+    }
+
+    @PreAuthorize("hasRole('ADMIN')")
+    @PutMapping("/members/{memberId}")
+    public WorkforceMemberResponse updateMember(@PathVariable Long memberId,
+                                                  @Valid @RequestBody WorkforceMemberRequest request) {
+        return WorkforceMemberResponse.from(
+                identities.updateMember(CurrentUser.tenantId(), memberId, request), true);
     }
 
     @GetMapping("/roles")
