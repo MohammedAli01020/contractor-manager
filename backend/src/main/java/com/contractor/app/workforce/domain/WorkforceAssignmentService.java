@@ -1,6 +1,10 @@
 package com.contractor.app.workforce.domain;
 
 import com.contractor.app.common.error.ApiException;
+import com.contractor.app.driver.domain.Driver;
+import com.contractor.app.driver.domain.WorkerType;
+import com.contractor.app.driver.infra.DriverRepository;
+import java.math.BigDecimal;
 import com.contractor.app.site.domain.Site;
 import com.contractor.app.site.infra.SiteRepository;
 import com.contractor.app.tenant.infra.TenantRepository;
@@ -32,17 +36,19 @@ public class WorkforceAssignmentService {
     private final WorkforceAssignmentRepository assignments;
     private final SiteRepository sites;
     private final TenantRepository tenants;
+    private final DriverRepository drivers;
 
     public WorkforceAssignmentService(WorkforceMemberRepository members,
                                       WorkforceRoleRepository roles,
                                       WorkforceAssignmentRepository assignments,
                                       SiteRepository sites,
-                                      TenantRepository tenants) {
+                                      TenantRepository tenants, DriverRepository drivers) {
         this.members = members;
         this.roles = roles;
         this.assignments = assignments;
         this.sites = sites;
         this.tenants = tenants;
+        this.drivers = drivers;
     }
 
     @Transactional(readOnly = true)
@@ -150,7 +156,9 @@ public class WorkforceAssignmentService {
                 request.getEffectiveFrom(), request.getEffectiveTo(),
                 request.getNotes() == null || request.getNotes().trim().isEmpty()
                         ? null : request.getNotes().trim());
-        return WorkforceAssignmentResponse.from(assignments.saveAndFlush(assignment));
+        WorkforceAssignment saved = assignments.saveAndFlush(assignment);
+        ensureOperationalDriver(member, role);
+        return WorkforceAssignmentResponse.from(saved);
     }
 
     @Transactional
@@ -171,6 +179,39 @@ public class WorkforceAssignmentService {
         }
         assignment.endOn(request.getEffectiveTo());
         return WorkforceAssignmentResponse.from(assignments.saveAndFlush(assignment));
+    }
+
+
+    /**
+     * The current shift aggregate still persists its responsible operator through
+     * shifts.driver_id. Keep a one-to-one operational projection for roles that
+     * can occupy that slot; WorkforceMember remains the only person identity.
+     * Zero legacy rates are compatibility placeholders, never contractual wages.
+     */
+    private void ensureOperationalDriver(WorkforceMember member, WorkforceRole role) {
+        WorkerType workerType;
+        if ("DRIVER".equals(role.getCode()) || "EQUIPMENT_OPERATOR".equals(role.getCode())) {
+            workerType = WorkerType.DRIVER;
+        } else if ("WORKER".equals(role.getCode())) {
+            workerType = WorkerType.WORKER;
+        } else {
+            return;
+        }
+
+        Driver operational = drivers.findByWorkforceMemberIdAndTenantId(member.getId(), member.getTenantId())
+                .orElseGet(() -> {
+                    Driver created = new Driver(member.getTenantId(), member.getFullName(), workerType);
+                    created.setWorkforceMemberId(member.getId());
+                    created.setMorningRate(BigDecimal.ZERO);
+                    created.setEveningRate(BigDecimal.ZERO);
+                    created.setNightRate(BigDecimal.ZERO);
+                    return created;
+                });
+        operational.setName(member.getFullName());
+        operational.setPhone(member.getPhone());
+        operational.setWorkerType(workerType);
+        operational.setActive(member.isActive());
+        drivers.saveAndFlush(operational);
     }
 
     private WorkforceMember lockMember(Long tenantId, Long memberId) {
