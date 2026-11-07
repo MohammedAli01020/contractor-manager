@@ -73,6 +73,11 @@ In particular, do **not** present DAY or FIXED as fully supported merely because
 - Historical operational and financial records remain stable after profile, assignment, or agreement changes.
 - Tenant isolation and personal-data access controls are covered by automated tests.
 - Mobile users can complete the common workforce workflows without relying on desktop-only screens.
+- A Workforce Member can exist and participate in operations without an application account; access can be linked later without creating a duplicate person.
+- Suspending or revoking an account does not delete workforce or historical financial/operational records.
+- Application permissions are independent from job classifications and are enforced by backend authorization with tenant and assignment scope.
+- Sensitive personal and financial information is not exposed to ordinary workforce accounts by default.
+- The common add-person flow remains short and mobile-first, with optional/progressive category-specific fields.
 
 ## Explicit non-goals
 
