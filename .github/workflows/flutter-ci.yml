@@ -8,6 +8,8 @@ on:
       - feature/wf08c-measured-correction-mobile
       - feature/wf10b-mobile-compensation-agreements
       - feature/wf10c-compensation-basis-mobile
+      - feature/wf11a-workforce-member-creation
+      - feature/wf11b-workforce-roles-assignments
     paths:
       - "mobile/**"
       - ".github/workflows/flutter-ci.yml"
@@ -19,6 +21,8 @@ on:
       - feature/wf08b-measured-correction
       - feature/wf10a-workforce-identity-api
       - feature/wf10b-mobile-compensation-agreements
+      - feature/wf10c-compensation-basis-mobile
+      - feature/wf11a-workforce-member-creation
     paths:
       - "mobile/**"
       - ".github/workflows/flutter-ci.yml"

@@ -94,6 +94,56 @@ class WorkforceMemberBackfillIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void editingOtherProfileFieldsPreservesNationalIdAcrossDriverAndWorkforceIdentity() throws Exception {
+        String token = registerTenant("Workforce National ID Preservation", uniqueName("wfnid"))
+                .path("accessToken").asText();
+        long driverId = createDriver(token, "National ID Worker", "01000000004",
+                "NID-PRESERVE-004", "before");
+
+        JsonNode list = body(getJson("/api/v1/drivers?page=0&size=100", token)
+                .andExpect(status().isOk()));
+        JsonNode listedDriver = list.path("items").findValue("id");
+        assertThat(listedDriver).isNotNull();
+        JsonNode listItem = null;
+        for (JsonNode item : list.path("items")) {
+            if (item.path("id").asLong() == driverId) {
+                listItem = item;
+                break;
+            }
+        }
+        assertThat(listItem).isNotNull();
+        assertThat(listItem.path("nationalId").isNull()).isTrue();
+
+        JsonNode detail = body(getJson("/api/v1/drivers/" + driverId, token)
+                .andExpect(status().isOk()));
+        assertThat(detail.path("nationalId").asText()).isEqualTo("NID-PRESERVE-004");
+
+        Map<String, Object> update = new HashMap<>();
+        update.put("name", "National ID Worker Updated");
+        update.put("workerType", detail.path("workerType").asText());
+        update.put("phone", "01000000005");
+        update.put("nationalId", detail.path("nationalId").asText());
+        update.put("notes", "updated without changing identity number");
+        update.put("morningRate", detail.path("morningRate").decimalValue());
+        update.put("eveningRate", detail.path("eveningRate").decimalValue());
+        update.put("nightRate", detail.path("nightRate").decimalValue());
+        update.put("active", detail.path("active").asBoolean());
+        update.put("version", detail.path("version").asLong());
+
+        putJson("/api/v1/drivers/" + driverId, update, token)
+                .andExpect(status().isOk());
+
+        Map<String, Object> persisted = jdbc.queryForMap(
+                "SELECT d.national_id AS driver_national_id, wm.national_id AS member_national_id "
+                        + "FROM drivers d JOIN workforce_members wm "
+                        + "ON wm.id = d.workforce_member_id AND wm.tenant_id = d.tenant_id "
+                        + "WHERE d.id = ?",
+                driverId);
+        assertThat(persisted.get("driver_national_id")).isEqualTo("NID-PRESERVE-004");
+        assertThat(persisted.get("member_national_id")).isEqualTo("NID-PRESERVE-004");
+    }
+
+    @Test
     void databaseRejectsCrossTenantAndDuplicateDriverMappings() throws Exception {
         String tokenA = registerTenant("Workforce Tenant A", uniqueName("wfa"))
                 .path("accessToken").asText();

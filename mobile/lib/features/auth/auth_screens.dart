@@ -4,7 +4,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../core/di/injector.dart';
 import '../../core/widgets/loading_view.dart';
 import '../shifts/presentation/shifts_screen.dart';
-import '../drivers/drivers_screen.dart';
 import '../workforce/workforce_screen.dart';
 import '../equipment/equipment_screen.dart';
 import '../accounting/accounting_screen.dart';
@@ -208,22 +207,9 @@ class HomeScreen extends StatelessWidget {
           ),
           Card(
             child: ListTile(
-              leading: const Icon(Icons.people_alt_outlined),
-              title: const Text('السائقون والعمال'),
-              subtitle: const Text('إضافة وتعديل الأفراد والأجور والتوافر'),
-              trailing: const Icon(Icons.chevron_left),
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => const DriversScreen(),
-                ),
-              ),
-            ),
-          ),
-          Card(
-            child: ListTile(
               leading: const Icon(Icons.groups_outlined),
-              title: const Text('القوى العاملة والأجور'),
-              subtitle: const Text('دليل موحد للأفراد واتفاقيات الأجر المعتمدة'),
+              title: const Text('القوى العاملة'),
+              subtitle: const Text('إدارة جميع الأفراد والتخصصات والتكليفات واتفاقيات الأجر'),
               trailing: const Icon(Icons.chevron_left),
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute<void>(

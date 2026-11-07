@@ -6,9 +6,8 @@ import javax.persistence.Entity;
 import javax.persistence.Table;
 
 /**
- * General person identity. During PR-WF-01 the legacy Driver service remains
- * the only write entry point and synchronizes this compatibility identity
- * within the same database transaction.
+ * Canonical tenant-scoped person identity. Operational profiles such as Driver
+ * remain optional, linked records and are synchronized transactionally.
  */
 @Entity
 @Table(name = "workforce_members")

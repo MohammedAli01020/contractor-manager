@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/di/injector.dart';
+import 'workforce_member_form_dialog.dart';
 
 /// Mobile administration for canonical workforce identities and their pay agreements.
 class WorkforceScreen extends StatefulWidget {
@@ -73,6 +74,57 @@ class _WorkforceScreenState extends State<WorkforceScreen> {
     }
   }
 
+  Future<void> _createMember() async {
+    final created = await showDialog<Map<String, dynamic>>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const WorkforceMemberFormDialog(),
+    );
+    if (created == null || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('تمت إضافة الشخص إلى القوى العاملة.')),
+    );
+    await _load();
+  }
+
+  Future<void> _editMember(Map<String, dynamic> member) async {
+    final rawId = member['workforceMemberId'];
+    final memberId = rawId is num ? rawId.toInt() : int.tryParse('$rawId');
+    if (memberId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('لا يوجد معرّف Workforce صالح لهذا الشخص.')),
+      );
+      return;
+    }
+    try {
+      // Fetch the canonical detail first: the directory intentionally omits
+      // sensitive national ID and the optimistic-lock version.
+      final response = await getIt<Dio>().get<Map<String, dynamic>>(
+        '/workforce/members/$memberId',
+      );
+      final detail = response.data;
+      if (detail == null || detail['version'] == null) {
+        throw Exception('بيانات الشخص غير مكتملة؛ لم يتم فتح التعديل.');
+      }
+      if (!mounted) return;
+      final updated = await showDialog<Map<String, dynamic>>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => WorkforceMemberFormDialog(initialMember: detail),
+      );
+      if (updated == null || !mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تم حفظ بيانات الفرد بنجاح.')),
+      );
+      await _load();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_message(error))),
+      );
+    }
+  }
+
   Future<void> _openMember(Map<String, dynamic> member) async {
     final rawId = member['workforceMemberId'];
     final memberId = rawId is num ? rawId.toInt() : int.tryParse('$rawId');
@@ -96,6 +148,13 @@ class _WorkforceScreenState extends State<WorkforceScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      floatingActionButton: widget.canManage
+          ? FloatingActionButton.extended(
+              onPressed: _loading ? null : _createMember,
+              icon: const Icon(Icons.person_add_alt_1),
+              label: const Text('إضافة فرد'),
+            )
+          : null,
       appBar: AppBar(
         title: const Text('القوى العاملة'),
         actions: <Widget>[
@@ -141,7 +200,7 @@ class _WorkforceScreenState extends State<WorkforceScreen> {
                 : _error != null
                     ? const SizedBox.shrink()
                     : _members.isEmpty
-                        ? const Center(child: Text('لا توجد سجلات مطابقة. أضف الشخص أولًا من شاشة السائقين والعمال.'))
+                        ? Center(child: Padding(padding: const EdgeInsets.all(24), child: Text(widget.canManage ? 'لا توجد أفراد بعد. ابدأ بإضافة أول فرد إلى القوى العاملة.' : 'لا توجد سجلات مطابقة.')))
                         : RefreshIndicator(
                             onRefresh: _load,
                             child: ListView.builder(
@@ -151,7 +210,9 @@ class _WorkforceScreenState extends State<WorkforceScreen> {
                                 final member = _members[index];
                                 final active = member['active'] == true;
                                 final linked = member['operationalProfileLinked'] == true;
-                                final isDriver = member['workerType'] == 'DRIVER';
+                                final workerType = member['workerType'];
+                                final isDriver = workerType == 'DRIVER';
+                                final categoryLabel = workerType == 'DRIVER' ? 'سائق' : workerType == 'WORKER' ? 'عامل' : 'تصنيف غير محدد';
                                 return Card(
                                   margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                                   child: ListTile(
@@ -161,12 +222,23 @@ class _WorkforceScreenState extends State<WorkforceScreen> {
                                     title: Text(_value(member['fullName']),
                                         style: const TextStyle(fontWeight: FontWeight.bold)),
                                     subtitle: Text(
-                                      '${isDriver ? 'سائق' : 'عامل'} • هاتف: ${_value(member['phone'])}\n'
+                                      '$categoryLabel • هاتف: ${_value(member['phone'])}\n'
                                       '${active ? 'نشط' : 'معطّل'} • '
                                       '${linked ? 'مرتبط بملف التشغيل' : 'لا يوجد ملف تشغيل مرتبط'}',
                                     ),
                                     isThreeLine: true,
-                                    trailing: const Icon(Icons.chevron_left),
+                                    trailing: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: <Widget>[
+                                        if (widget.canManage)
+                                          IconButton(
+                                            tooltip: 'تعديل بيانات الفرد',
+                                            icon: const Icon(Icons.edit_outlined),
+                                            onPressed: () => _editMember(member),
+                                          ),
+                                        const Icon(Icons.chevron_left),
+                                      ],
+                                    ),
                                     onTap: () => _openMember(member),
                                   ),
                                 );

@@ -23,6 +23,8 @@ on:
       - feature/wf08b-measured-correction
       - feature/wf10a-workforce-identity-api
       - feature/wf10c-compensation-basis-mobile
+      - feature/wf11a-workforce-member-creation
+      - feature/wf11b-workforce-roles-assignments
     paths:
       - "backend/**"
       - "docs/phases/PHASE-WF-08A-CORRECTION-SNAPSHOT.md"
@@ -50,6 +52,8 @@ on:
       - feature/trial-balance-reconciliation
       - feature/wf08a-correction-snapshots
       - feature/wf10b-mobile-compensation-agreements
+      - feature/wf10c-compensation-basis-mobile
+      - feature/wf11a-workforce-member-creation
     paths:
       - "backend/**"
       - "docs/phases/PHASE-WF-08A-CORRECTION-SNAPSHOT.md"
@@ -295,7 +299,7 @@ jobs:
 
           required = {
               "WorkforceMemberMigrationIntegrationTest": 1,
-              "WorkforceMemberBackfillIntegrationTest": 3,
+              "WorkforceMemberBackfillIntegrationTest": 4,
           }
           for suite, expected in required.items():
               pattern = f"target/surefire-reports/TEST-com.contractor.app.workforce.{suite}.xml"
