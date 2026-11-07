@@ -489,6 +489,37 @@ class _CompensationAgreementDialogState extends State<_CompensationAgreementDial
   String _basis = 'SHIFT';
 
   @override
+  void initState() {
+    super.initState();
+    final rawComponents = widget.currentAgreement?['components'];
+    if (rawComponents is! List) return;
+    for (final raw in rawComponents) {
+      if (raw is! Map) continue;
+      final basis = raw['basis']?.toString();
+      if (basis == 'SHIFT' || basis == 'HOUR' || basis == 'QUANTITY') {
+        _basis = basis!;
+      }
+      final rate = raw['rate']?.toString() ?? '';
+      switch (basis) {
+        case 'SHIFT':
+          switch (raw['shiftType']?.toString()) {
+            case 'MORNING': _morningRate.text = rate; break;
+            case 'EVENING': _eveningRate.text = rate; break;
+            case 'NIGHT': _nightRate.text = rate; break;
+          }
+          break;
+        case 'HOUR':
+          _hourRate.text = rate;
+          break;
+        case 'QUANTITY':
+          _quantityRate.text = rate;
+          _unitCode.text = raw['unitCode']?.toString() ?? '';
+          break;
+      }
+    }
+  }
+
+  @override
   void dispose() {
     _hourRate.dispose();
     _morningRate.dispose();
