@@ -189,7 +189,7 @@ class CompensationAgreementWorkflowIntegrationTest extends AbstractIntegrationTe
         long shiftAgreement = createAgreementWithComponents(driverAssignmentId,
                 "2026-01-01", null, shiftComponents);
         JsonNode approvedShift = approve(shiftAgreement);
-        assertThat(approvedShift.path("components")).hasSize(3);
+        assertThat(approvedShift.path("components").size()).isEqualTo(3);
         assertThat(approvedShift.path("components").get(0).path("shiftType").asText()).isEqualTo("MORNING");
         assertThat(approvedShift.path("components").get(1).path("shiftType").asText()).isEqualTo("EVENING");
         assertThat(approvedShift.path("components").get(2).path("shiftType").asText()).isEqualTo("NIGHT");
