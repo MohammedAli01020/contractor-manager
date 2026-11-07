@@ -242,6 +242,19 @@ class CompensationAgreementWorkflowIntegrationTest extends AbstractIntegrationTe
         return result.path("id").asLong();
     }
 
+    private long createAgreementWithComponents(Long assignmentId, String from, String to,
+                                                List<Map<String, Object>> components) throws Exception {
+        Map<String, Object> request = new HashMap<>();
+        request.put("workforceAssignmentId", assignmentId);
+        request.put("effectiveFrom", from);
+        request.put("effectiveTo", to);
+        request.put("currencyCode", "EGP");
+        request.put("components", components);
+        JsonNode result = body(postJson("/api/v1/workforce/members/" + memberId
+                + "/compensation-agreements", request, token).andExpect(status().isCreated()));
+        return result.path("id").asLong();
+    }
+
     private Map<String, Object> agreementBody(Long assignmentId, String from, String to,
                                                Long supersedesId, String reason) {
         Map<String, Object> request = new HashMap<>();
