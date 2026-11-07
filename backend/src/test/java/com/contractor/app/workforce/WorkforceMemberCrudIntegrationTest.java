@@ -42,6 +42,10 @@ class WorkforceMemberCrudIntegrationTest extends AbstractIntegrationTest {
         assertThat(saved.path("fullName").asText()).isEqualTo("Updated Engineer");
         assertThat(saved.path("phone").asText()).isEqualTo("01055550002");
         assertThat(saved.path("version").asLong()).isGreaterThan(created.path("version").asLong());
+        assertThat(jdbc.queryForObject(
+                "select count(*) from audit_log where entity_type = 'WORKFORCE_MEMBER' "
+                        + "and entity_id = ? and (old_value like '%NID-CAN-%' or new_value like '%NID-CAN-%')",
+                Integer.class, memberId)).isZero();
     }
 
     @Test
@@ -107,6 +111,28 @@ class WorkforceMemberCrudIntegrationTest extends AbstractIntegrationTest {
         JsonNode directory = body(getJson("/api/v1/workforce/members", token).andExpect(status().isOk()));
         JsonNode row = directory.path("content").get(0);
         assertThat(row.has("nationalId")).isFalse();
+    }
+
+    @Test
+    void onlyAdminCanCreateOrUpdateCanonicalMembers() throws Exception {
+        String adminToken = registerTenant("Workforce Permissions", uniqueName("wfpermissions"))
+                .path("accessToken").asText();
+        String username = uniqueName("workforceviewer");
+        body(postJson("/api/v1/users", Map.of("fullName", "Workforce Viewer", "username", username,
+                "password", PASSWORD, "role", "VIEWER"), adminToken).andExpect(status().isCreated()));
+        String viewerToken = body(postJson("/api/v1/auth/login",
+                Map.of("username", username, "password", PASSWORD), null).andExpect(status().isOk()))
+                .path("accessToken").asText();
+
+        postJson("/api/v1/workforce/members", identity("Viewer Must Not Create", null, null), viewerToken)
+                .andExpect(status().isForbidden());
+
+        JsonNode member = body(postJson("/api/v1/workforce/members",
+                identity("Admin Created Person", null, null), adminToken).andExpect(status().isCreated()));
+        Map<String, Object> update = identity("Viewer Must Not Update", null, null);
+        update.put("version", member.path("version").asLong());
+        putJson("/api/v1/workforce/members/" + member.path("id").asLong(), update, viewerToken)
+                .andExpect(status().isForbidden());
     }
 
     private Map<String, Object> identity(String name, String phone, String nationalId) {
