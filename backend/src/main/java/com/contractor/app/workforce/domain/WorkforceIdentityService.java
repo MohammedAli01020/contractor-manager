@@ -81,10 +81,13 @@ public class WorkforceIdentityService {
         AuditService.ChangeSet changes = new AuditService.ChangeSet()
                 .track("fullName", oldName, saved.getFullName())
                 .track("phone", oldPhone, saved.getPhone())
-                .track("nationalIdChanged", oldNationalId == null ? null : "SET",
-                        saved.getNationalId() == null ? null : "SET")
                 .track("notes", oldNotes, saved.getNotes());
         audit.recordChanges(tenantId, AuditEntityType.WORKFORCE_MEMBER, memberId, changes);
+        if (!Objects.equals(oldNationalId, saved.getNationalId())) {
+            audit.record(tenantId, AuditEntityType.WORKFORCE_MEMBER, memberId, AuditAction.UPDATED,
+                    "nationalId", oldNationalId == null ? null : "[REDACTED]",
+                    saved.getNationalId() == null ? null : "[REDACTED]");
+        }
         return saved;
     }
 
