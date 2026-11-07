@@ -6,7 +6,9 @@ import '../../core/di/injector.dart';
 /// Canonical person identity form. Job capabilities and assignments are managed
 /// separately so creating a person never creates a duplicate operational identity.
 class WorkforceMemberFormDialog extends StatefulWidget {
-  const WorkforceMemberFormDialog({Key? key}) : super(key: key);
+  const WorkforceMemberFormDialog({Key? key, this.initialMember}) : super(key: key);
+
+  final Map<String, dynamic>? initialMember;
 
   @override
   State<WorkforceMemberFormDialog> createState() => _WorkforceMemberFormDialogState();
@@ -21,6 +23,20 @@ class _WorkforceMemberFormDialogState extends State<WorkforceMemberFormDialog> {
   bool _saving = false;
   String? _error;
 
+  bool get _editing => widget.initialMember != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final member = widget.initialMember;
+    if (member != null) {
+      _name.text = member['fullName']?.toString() ?? '';
+      _phone.text = member['phone']?.toString() ?? '';
+      _nationalId.text = member['nationalId']?.toString() ?? '';
+      _notes.text = member['notes']?.toString() ?? '';
+    }
+  }
+
   @override
   void dispose() {
     _name.dispose();
@@ -34,25 +50,33 @@ class _WorkforceMemberFormDialogState extends State<WorkforceMemberFormDialog> {
     if (!_formKey.currentState!.validate()) return;
     setState(() { _saving = true; _error = null; });
     try {
-      final response = await getIt<Dio>().post<Map<String, dynamic>>(
-        '/workforce/members',
-        data: <String, dynamic>{
+      final member = widget.initialMember;
+      final payload = <String, dynamic>{
           'fullName': _name.text.trim(),
           'phone': _phone.text.trim().isEmpty ? null : _phone.text.trim(),
           'nationalId': _nationalId.text.trim().isEmpty ? null : _nationalId.text.trim(),
           'notes': _notes.text.trim().isEmpty ? null : _notes.text.trim(),
-        },
-      );
+          if (_editing) 'version': member!['version'],
+        };
+      final response = _editing
+          ? await getIt<Dio>().put<Map<String, dynamic>>(
+              '/workforce/members/${member!['id']}', data: payload)
+          : await getIt<Dio>().post<Map<String, dynamic>>(
+              '/workforce/members', data: payload);
       if (!mounted) return;
       Navigator.of(context).pop(response.data);
     } catch (error) {
-      var message = 'تعذر إضافة الشخص. راجع البيانات والاتصال وحاول مرة أخرى.';
+      var message = _editing
+          ? 'تعذر حفظ تعديلات الشخص. راجع البيانات والاتصال وحاول مرة أخرى.'
+          : 'تعذر إضافة الشخص. راجع البيانات والاتصال وحاول مرة أخرى.';
       if (error is DioError) {
         final data = error.response?.data;
         if (data is Map && data['message'] != null) {
           message = data['message'].toString();
         } else if (error.response?.statusCode == 403) {
-          message = 'إضافة أفراد القوى العاملة متاحة للمسؤول فقط.';
+          message = 'إدارة بيانات أفراد القوى العاملة متاحة للمسؤول فقط.';
+        } else if (error.response?.statusCode == 409) {
+          message = 'تم تعديل بيانات الشخص من مكان آخر. أغلق النافذة وأعد فتحها لتحميل أحدث نسخة.';
         }
       }
       if (mounted) setState(() => _error = message);
@@ -64,7 +88,7 @@ class _WorkforceMemberFormDialogState extends State<WorkforceMemberFormDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('إضافة فرد للقوى العاملة'),
+      title: Text(_editing ? 'تعديل بيانات الفرد' : 'إضافة فرد للقوى العاملة'),
       content: SizedBox(
         width: 440,
         child: SingleChildScrollView(
@@ -75,7 +99,7 @@ class _WorkforceMemberFormDialogState extends State<WorkforceMemberFormDialog> {
               children: <Widget>[
                 TextFormField(
                   controller: _name,
-                  autofocus: true,
+                  autofocus: !_editing,
                   maxLength: 150,
                   textInputAction: TextInputAction.next,
                   decoration: const InputDecoration(
@@ -137,7 +161,7 @@ class _WorkforceMemberFormDialogState extends State<WorkforceMemberFormDialog> {
           onPressed: _saving ? null : _save,
           child: _saving
               ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-              : const Text('حفظ'),
+              : Text(_editing ? 'حفظ التعديلات' : 'حفظ'),
         ),
       ],
     );
