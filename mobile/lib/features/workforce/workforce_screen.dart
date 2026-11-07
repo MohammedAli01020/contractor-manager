@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/di/injector.dart';
+import 'workforce_member_form_dialog.dart';
 
 /// Mobile administration for canonical workforce identities and their pay agreements.
 class WorkforceScreen extends StatefulWidget {
@@ -73,7 +74,7 @@ class _WorkforceScreenState extends State<WorkforceScreen> {
     }
   }
 
-  Future<void> _openMember(Map<String, dynamic> member) async {
+  Future<void> _createMember() async {\n    final created = await showDialog<Map<String, dynamic>>(\n      context: context,\n      barrierDismissible: false,\n      builder: (_) => const WorkforceMemberFormDialog(),\n    );\n    if (created == null || !mounted) return;\n    ScaffoldMessenger.of(context).showSnackBar(\n      const SnackBar(content: Text('تمت إضافة الشخص إلى القوى العاملة.')),\n    );\n    await _load();\n  }\n\n  Future<void> _openMember(Map<String, dynamic> member) async {
     final rawId = member['workforceMemberId'];
     final memberId = rawId is num ? rawId.toInt() : int.tryParse('$rawId');
     if (memberId == null) {
@@ -141,7 +142,7 @@ class _WorkforceScreenState extends State<WorkforceScreen> {
                 : _error != null
                     ? const SizedBox.shrink()
                     : _members.isEmpty
-                        ? const Center(child: Text('لا توجد سجلات مطابقة. أضف الشخص أولًا من شاشة السائقين والعمال.'))
+                        ? Center(child: Padding(padding: const EdgeInsets.all(24), child: Text(widget.canManage ? 'لا توجد أفراد بعد. ابدأ بإضافة أول فرد إلى القوى العاملة.' : 'لا توجد سجلات مطابقة.')))
                         : RefreshIndicator(
                             onRefresh: _load,
                             child: ListView.builder(
@@ -151,7 +152,7 @@ class _WorkforceScreenState extends State<WorkforceScreen> {
                                 final member = _members[index];
                                 final active = member['active'] == true;
                                 final linked = member['operationalProfileLinked'] == true;
-                                final isDriver = member['workerType'] == 'DRIVER';
+                                final workerType = member['workerType'];\n                                final isDriver = workerType == 'DRIVER';\n                                final categoryLabel = workerType == 'DRIVER' ? 'سائق' : workerType == 'WORKER' ? 'عامل' : 'تصنيف غير محدد';
                                 return Card(
                                   margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                                   child: ListTile(
