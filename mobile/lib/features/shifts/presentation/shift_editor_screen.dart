@@ -73,7 +73,7 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
   Future<void> _loadOptions() async {
     try {
       final result = await Future.wait<dynamic>([
-        _api.fetchLiveDrivers(),
+        _api.fetchWorkforceCandidates(shiftDate: _date, siteId: _siteId),
         _api.fetchLiveEquipment(),
         _api.fetchSites(),
       ]);
@@ -91,6 +91,37 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
         _loading = false;
         _error = _message(e);
       });
+    }
+  }
+
+
+  Future<void> _loadWorkforceCandidates() async {
+    try {
+      final candidates = await _api.fetchWorkforceCandidates(
+        shiftDate: _date,
+        siteId: _siteId,
+      );
+      // Editing an existing shift must remain possible even if its historical
+      // assignment has since ended or the old record predates Workforce roles.
+      if (widget.shift != null && _driverId != null &&
+          !candidates.any((item) => (item['id'] as num?)?.toInt() == _driverId)) {
+        final legacy = await _api.fetchLiveDrivers();
+        final current = legacy.where(
+          (item) => (item['id'] as num?)?.toInt() == _driverId,
+        );
+        candidates.addAll(current);
+      }
+      if (!mounted) return;
+      setState(() {
+        _drivers = candidates;
+        if (_driverId != null &&
+            !candidates.any((item) => (item['id'] as num?)?.toInt() == _driverId)) {
+          _driverId = null;
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = _message(e));
     }
   }
 
@@ -314,6 +345,7 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
                         validator: (v) => v == null ? 'اختار الموقع' : null,
                         onChanged: (v) {
                           setState(() { _siteId = v; _defaultsLoaded = false; });
+                          _loadWorkforceCandidates();
                           _loadDefaults();
                         },
                       ),
@@ -446,6 +478,7 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
       _date = '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
       _defaultsLoaded = false;
     });
+    _loadWorkforceCandidates();
     _loadDefaults();
   }
 
