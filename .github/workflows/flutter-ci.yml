@@ -10,6 +10,7 @@ on:
       - feature/wf10c-compensation-basis-mobile
       - feature/wf11a-workforce-member-creation
       - feature/wf11b-workforce-roles-assignments
+      - feature/wf12a-workforce-shift-eligibility
     paths:
       - "mobile/**"
       - ".github/workflows/flutter-ci.yml"
@@ -23,6 +24,7 @@ on:
       - feature/wf10b-mobile-compensation-agreements
       - feature/wf10c-compensation-basis-mobile
       - feature/wf11a-workforce-member-creation
+      - feature/wf11b-workforce-roles-assignments
     paths:
       - "mobile/**"
       - ".github/workflows/flutter-ci.yml"
