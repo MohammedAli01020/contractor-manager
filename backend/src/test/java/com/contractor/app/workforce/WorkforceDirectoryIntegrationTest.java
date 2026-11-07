@@ -1,6 +1,7 @@
 package com.contractor.app.workforce;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.contractor.app.AbstractIntegrationTest;
@@ -10,6 +11,7 @@ import java.util.HashMap;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpHeaders;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /** API contract tests for the canonical Workforce directory and legacy Driver mapping. */
@@ -29,7 +31,7 @@ class WorkforceDirectoryIntegrationTest extends AbstractIntegrationTest {
         createDriver(tokenB, "Directory Worker B", "01022222222");
         long memberA = jdbcMemberId(driverA);
 
-        JsonNode pageA = body(getJson("/api/v1/workforce/members?search=Directory+Worker", tokenA)
+        JsonNode pageA = body(getJson("/api/v1/workforce/members", tokenA)
                 .andExpect(status().isOk()));
 
         assertThat(pageA.path("totalElements").asLong()).isEqualTo(1);
@@ -48,8 +50,11 @@ class WorkforceDirectoryIntegrationTest extends AbstractIntegrationTest {
         createDriver(token, "Paging Worker Alpha", "01033333333");
         createDriver(token, "Paging Worker Beta", "01044444444");
 
-        JsonNode firstPage = body(getJson(
-                "/api/v1/workforce/members?search=Paging+Worker&page=0&size=1", token)
+        JsonNode firstPage = body(mockMvc.perform(get("/api/v1/workforce/members")
+                .param("search", "Paging Worker")
+                .param("page", "0")
+                .param("size", "1")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
                 .andExpect(status().isOk()));
 
         assertThat(firstPage.path("totalElements").asLong()).isEqualTo(2);
