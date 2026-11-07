@@ -37,7 +37,7 @@ The existing `workforce_roles` and `workforce_assignments` model represents effe
 - Added `POST /api/v1/workforce/members` for ADMIN-only creation of a general person identity without requiring a Driver row, legacy wage rates, compensation agreement, or application account.
 - Added tenant-scoped `GET /api/v1/workforce/members/{memberId}`. National ID is revealed only to ADMIN; other permitted readers receive the profile without that sensitive value. Audit entries never store the national ID value itself.
 - Added ADMIN-only `PUT /api/v1/workforce/members/{memberId}` with mandatory optimistic `version` checking.
-- Added canonical identity audit events (`WORKFORCE_MEMBER`) for create and changed identity fields. National ID values are redacted from audit old/new values; the audit records only whether the field is set.
+- Added canonical identity audit events (`WORKFORCE_MEMBER`) for create and changed identity fields. National ID values are redacted from audit old/new values; the audit records the change using a `[REDACTED]` marker and never stores the submitted identifier.
 - Canonical edits lock the linked legacy Driver row before the WorkforceMember row, then update both in one transaction. This matches the existing Driver → WorkforceMember lock order and prevents a stale operational projection from diverging after a canonical edit.
 - Added a repository lock query for the linked Driver and a `WorkforceMemberCrudIntegrationTest` covering standalone person creation, linked-driver synchronization, tenant isolation, and directory national-ID privacy.
 - Updated the entity documentation to state that WorkforceMember is canonical and operational profiles are optional linked records.
