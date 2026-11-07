@@ -81,7 +81,8 @@ public class WorkforceIdentityService {
         AuditService.ChangeSet changes = new AuditService.ChangeSet()
                 .track("fullName", oldName, saved.getFullName())
                 .track("phone", oldPhone, saved.getPhone())
-                .track("nationalId", oldNationalId, saved.getNationalId())
+                .track("nationalIdChanged", oldNationalId == null ? null : "SET",
+                        saved.getNationalId() == null ? null : "SET")
                 .track("notes", oldNotes, saved.getNotes());
         audit.recordChanges(tenantId, AuditEntityType.WORKFORCE_MEMBER, memberId, changes);
         return saved;
