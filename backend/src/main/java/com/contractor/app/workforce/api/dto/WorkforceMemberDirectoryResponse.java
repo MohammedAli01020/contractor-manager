@@ -2,6 +2,8 @@ package com.contractor.app.workforce.api.dto;
 
 import com.contractor.app.driver.domain.WorkerType;
 import com.contractor.app.workforce.infra.WorkforceMemberDirectoryRow;
+import java.util.Collections;
+import java.util.List;
 
 public class WorkforceMemberDirectoryResponse {
     private final Long workforceMemberId;
@@ -12,8 +14,9 @@ public class WorkforceMemberDirectoryResponse {
     private final String workerType;
     private final Boolean driverActive;
     private final boolean operationalProfileLinked;
+    private final List<WorkforceRoleSummaryResponse> roles;
 
-    private WorkforceMemberDirectoryResponse(WorkforceMemberDirectoryRow row) {
+    private WorkforceMemberDirectoryResponse(WorkforceMemberDirectoryRow row, List<WorkforceRoleSummaryResponse> roles) {
         this.workforceMemberId = row.getWorkforceMemberId();
         this.driverId = row.getDriverId();
         this.fullName = row.getFullName();
@@ -23,10 +26,16 @@ public class WorkforceMemberDirectoryResponse {
         this.workerType = type == null ? null : type.name();
         this.driverActive = row.getDriverActive();
         this.operationalProfileLinked = row.getDriverId() != null;
+        this.roles = roles == null ? Collections.emptyList() : roles;
     }
 
     public static WorkforceMemberDirectoryResponse from(WorkforceMemberDirectoryRow row) {
-        return new WorkforceMemberDirectoryResponse(row);
+        return new WorkforceMemberDirectoryResponse(row, Collections.emptyList());
+    }
+
+    public static WorkforceMemberDirectoryResponse from(WorkforceMemberDirectoryRow row,
+                                                          List<WorkforceRoleSummaryResponse> roles) {
+        return new WorkforceMemberDirectoryResponse(row, roles);
     }
 
     public Long getWorkforceMemberId() { return workforceMemberId; }
@@ -37,4 +46,5 @@ public class WorkforceMemberDirectoryResponse {
     public String getWorkerType() { return workerType; }
     public Boolean getDriverActive() { return driverActive; }
     public boolean isOperationalProfileLinked() { return operationalProfileLinked; }
+    public List<WorkforceRoleSummaryResponse> getRoles() { return roles; }
 }
