@@ -1,6 +1,6 @@
 # WF-11A — Canonical Workforce Member Creation
 
-- **Status:** In progress — implementation design / code audit
+- **Status:** In progress — canonical identity API implemented in branch; integration tests authored, execution pending
 - **Branch:** `feature/wf11a-workforce-member-creation`
 - **Base:** `feature/wf10c-compensation-basis-mobile`
 - **Tracking issue:** [#52](https://github.com/MohammedAli01020/contractor-manager/issues/52)
@@ -19,15 +19,30 @@ The existing `workforce_roles` and `workforce_assignments` model represents effe
 ## Implementation rules
 
 1. Keep the tenant-scoped `WorkforceMember` as the canonical identity. A person can exist without a Driver row, an assignment, a compensation agreement, or an application login.
-2. Add ADMIN-only create, detail, and update operations under `/api/v1/workforce/members`. Directory/search remains safe and excludes national ID.
+2. Add ADMIN-only create/update and tenant-scoped detail operations under `/api/v1/workforce/members`. Directory/search remains safe and excludes national ID; detail responses reveal national ID only to ADMIN.
 3. Treat job classification and operational capabilities as separate, multi-valued concepts. Audit existing role/assignment semantics and migrations before choosing persistence; do not conflate them.
 4. A driver capability may create/link one optional Driver operational profile in the same transaction. Existing `drivers.id` values and shift foreign references remain unchanged.
 5. Driver operational fields (availability, dispatch/vehicle-related data, and legacy compatibility wage fields) remain in the operational profile. Identity edits must not modify rates or compensation agreements.
 6. Reverse the legacy identity synchronization safely: canonical identity changes are propagated to the linked operational profile where required; legacy operational updates must not overwrite canonical identity fields. Keep lock order consistent and cover both paths with concurrency tests.
-7. National ID is never returned in directory/search. Detail access is ADMIN-only; update semantics must preserve omitted protected fields and avoid accidental null overwrite.
+7. National ID is never returned in directory/search and is revealed in detail/create/update responses only to ADMIN. Identity PUT is a full replacement of the common editable identity fields; clients must send the latest values and `version`, and may explicitly clear optional fields with null.
 8. Existing records are not deleted or automatically merged. Any ambiguous identity/profile match requires explicit review.
 9. Keep account/login provisioning separate from person creation. No automatic account creation.
 10. No production migration, backfill, or DB-volume reset is part of this phase.
+
+
+## Implementation progress (2026-11-07)
+
+### Canonical identity API — code added, tests not yet executed
+
+- Added `POST /api/v1/workforce/members` for ADMIN-only creation of a general person identity without requiring a Driver row, legacy wage rates, compensation agreement, or application account.
+- Added tenant-scoped `GET /api/v1/workforce/members/{memberId}`. National ID is revealed only to ADMIN; other permitted readers receive the profile without that sensitive value.
+- Added ADMIN-only `PUT /api/v1/workforce/members/{memberId}` with mandatory optimistic `version` checking.
+- Added canonical identity audit events (`WORKFORCE_MEMBER`) for create and changed identity fields.
+- Canonical edits lock the linked legacy Driver row before the WorkforceMember row, then update both in one transaction. This matches the existing Driver → WorkforceMember lock order and prevents a stale operational projection from diverging after a canonical edit.
+- Added a repository lock query for the linked Driver and a `WorkforceMemberCrudIntegrationTest` covering standalone person creation, linked-driver synchronization, tenant isolation, and directory national-ID privacy.
+- Updated the entity documentation to state that WorkforceMember is canonical and operational profiles are optional linked records.
+
+**Not yet implemented:** multi-valued job classifications, canonical attach/create of Driver operational profiles, category-specific progressive profile fields, mobile add/edit UI, and migration of legacy add actions. No tests have been run or claimed passing as part of this documentation update.
 
 ## Required test sequence
 
