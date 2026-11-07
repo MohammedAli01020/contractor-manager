@@ -202,6 +202,54 @@ class WorkforceMemberCrudIntegrationTest extends AbstractIntegrationTest {
         assertThat(after).isEqualTo(before);
     }
 
+
+    @Test
+    void operationalRoleCreatesOneLegacyShiftProjectionAndCandidateRequiresEffectiveAssignmentDate()
+            throws Exception {
+        String token = registerTenant("Workforce Shift Eligibility", uniqueName("wfshifteligibility"))
+                .path("accessToken").asText();
+        JsonNode roles = body(getJson("/api/v1/workforce/roles", token).andExpect(status().isOk()));
+        long driverRoleId = roleId(roles, "DRIVER");
+
+        Map<String, Object> assignment = Map.of(
+                "roleId", driverRoleId,
+                "effectiveFrom", "2026-11-08");
+        JsonNode onboarded = body(postJson("/api/v1/workforce/members/onboard",
+                Map.of("member", identity("Eligible Operator", "01055550999", null),
+                        "initialAssignments", java.util.Collections.singletonList(assignment)), token)
+                .andExpect(status().isCreated()));
+        long memberId = onboarded.path("member").path("id").asLong();
+
+        assertThat(jdbc.queryForObject(
+                "select count(*) from drivers where tenant_id = ? and workforce_member_id = ?",
+                Integer.class, jdbc.queryForObject(
+                        "select tenant_id from workforce_members where id = ?", Long.class, memberId),
+                memberId)).isEqualTo(1);
+        Map<String, Object> projection = jdbc.queryForMap(
+                "select worker_type, morning_rate, evening_rate, night_rate, active "
+                        + "from drivers where workforce_member_id = ?", memberId);
+        assertThat(projection.get("worker_type")).isEqualTo("DRIVER");
+        assertThat(((Number) projection.get("morning_rate")).doubleValue()).isZero();
+        assertThat(((Number) projection.get("evening_rate")).doubleValue()).isZero();
+        assertThat(((Number) projection.get("night_rate")).doubleValue()).isZero();
+        assertThat(projection.get("active")).isEqualTo(true);
+
+        JsonNode beforeEffectiveDate = body(getJson(
+                "/api/v1/live/workforce-candidates?shiftDate=2026-11-07", token)
+                .andExpect(status().isOk()));
+        assertThat(beforeEffectiveDate).isEmpty();
+
+        JsonNode effectiveDate = body(getJson(
+                "/api/v1/live/workforce-candidates?shiftDate=2026-11-08", token)
+                .andExpect(status().isOk()));
+        assertThat(effectiveDate.size()).isEqualTo(1);
+        assertThat(effectiveDate.get(0).path("id").asLong()).isEqualTo(
+                jdbc.queryForObject("select id from drivers where workforce_member_id = ?",
+                        Long.class, memberId));
+        assertThat(effectiveDate.get(0).path("name").asText()).isEqualTo("Eligible Operator");
+        assertThat(effectiveDate.get(0).path("workerType").asText()).isEqualTo("DRIVER");
+    }
+
     private long roleId(JsonNode roles, String code) {
         for (JsonNode role : roles) {
             if (code.equals(role.path("code").asText())) return role.path("id").asLong();
