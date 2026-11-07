@@ -14,6 +14,8 @@ public interface DriverRepository extends JpaRepository<Driver, Long>, JpaSpecif
 
     Optional<Driver> findByIdAndTenantId(Long id, Long tenantId);
 
+    Optional<Driver> findByWorkforceMemberIdAndTenantId(Long memberId, Long tenantId);
+
     /** Keep the global lock order: driver rows first, then workforce identity rows. */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select d from Driver d where d.id = :id and d.tenantId = :tenantId")
