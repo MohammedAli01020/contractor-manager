@@ -4,7 +4,7 @@
 - **Branch:** `feature/wf11a-workforce-member-creation`
 - **Base:** `feature/wf10c-compensation-basis-mobile`
 - **Tracking issue:** [#52](https://github.com/MohammedAli01020/contractor-manager/issues/52)
-- **Product decision:** Workforce is the sole person-identity creation entry point. Existing driver/worker records remain operational profiles linked to the same identity.
+- **Product decision:** Workforce is the sole top-level people-management area and the only canonical identity create/edit entry point. Drivers, workers, engineers, supervisors, technicians, and other categories are filtered views/progressive profile sections, not separate people modules or identity stores.
 
 ## Verified baseline
 
@@ -58,3 +58,19 @@ F. Validate on the WF06 isolated test compose project and a real Android device.
 - Do not expose DAY/FIXED compensation.
 - Do not couple identity creation to wage/rate entry.
 - Do not claim completion until the end-to-end acceptance sequence passes.
+
+## Approved product navigation and UX decision (2026-11-07)
+
+The product owner approved consolidating people management under one top-level **Workforce** area. Do not create separate top-level Drivers, Workers, Engineers, Supervisors, or Technicians modules in the target navigation.
+
+- Workforce owns the single searchable directory and canonical add/edit flow.
+- Provide category filters/views inside Workforce (All, Workers, Drivers/Operators, Engineers, Supervisors, Technicians, Administrative staff, and future categories).
+- One person may have multiple classifications/capabilities and appears once in the master directory; filtered views must resolve to that same identity.
+- Keep one person profile with common identity/contact data and progressive sections for category-specific operational data.
+- Keep assignments, qualifications/capabilities, compensation agreements, work history, and optional account access as distinct profile sections with permission-aware visibility.
+- Driver licence/dispatch data, engineering/site data, supervisor/team data, and technician/equipment data are specialized profile sections, not separate identity creation flows.
+- Existing driver/worker pages may temporarily remain as compatibility routes or operational shortcuts during migration. They are not target top-level people-management modules; their create/edit actions must route into Workforce and must never create a duplicate identity.
+- Consolidation applies to people/identity management, not necessarily every operational task. Dispatch, shift, and site workflows may remain specialized where useful, but they consume the same Workforce identity.
+- Mobile-first progressive disclosure: capture common fields first, then show only the selected classification's relevant fields.
+
+This is an approved target UX/navigation decision. It does not mean the current mobile navigation or all category-specific profile sections have already been implemented.
