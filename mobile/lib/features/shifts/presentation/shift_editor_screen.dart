@@ -86,7 +86,7 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
           (item) => (item['id'] as num?)?.toInt() == _driverId,
         ));
       }
-      if (!mounted || requestId != _workforceCandidatesRequestId) return;
+      if (!mounted) return;
       setState(() {
         _drivers = candidates;
         _equipment = result[1] as List<Map<String, dynamic>>;
@@ -121,7 +121,7 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
         );
         candidates.addAll(current);
       }
-      if (!mounted) return;
+      if (!mounted || requestId != _workforceCandidatesRequestId) return;
       setState(() {
         _drivers = candidates;
         if (_driverId != null &&
