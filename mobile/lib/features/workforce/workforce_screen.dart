@@ -87,6 +87,44 @@ class _WorkforceScreenState extends State<WorkforceScreen> {
     await _load();
   }
 
+  Future<void> _editMember(Map<String, dynamic> member) async {
+    final rawId = member['workforceMemberId'];
+    final memberId = rawId is num ? rawId.toInt() : int.tryParse('$rawId');
+    if (memberId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('لا يوجد معرّف Workforce صالح لهذا الشخص.')),
+      );
+      return;
+    }
+    try {
+      // Fetch the canonical detail first: the directory intentionally omits
+      // sensitive national ID and the optimistic-lock version.
+      final response = await getIt<Dio>().get<Map<String, dynamic>>(
+        '/workforce/members/$memberId',
+      );
+      final detail = response.data;
+      if (detail == null || detail['version'] == null) {
+        throw Exception('بيانات الشخص غير مكتملة؛ لم يتم فتح التعديل.');
+      }
+      if (!mounted) return;
+      final updated = await showDialog<Map<String, dynamic>>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => WorkforceMemberFormDialog(initialMember: detail),
+      );
+      if (updated == null || !mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تم حفظ بيانات الفرد بنجاح.')),
+      );
+      await _load();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_message(error))),
+      );
+    }
+  }
+
   Future<void> _openMember(Map<String, dynamic> member) async {
     final rawId = member['workforceMemberId'];
     final memberId = rawId is num ? rawId.toInt() : int.tryParse('$rawId');
@@ -110,6 +148,13 @@ class _WorkforceScreenState extends State<WorkforceScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      floatingActionButton: widget.canManage
+          ? FloatingActionButton.extended(
+              onPressed: _loading ? null : _createMember,
+              icon: const Icon(Icons.person_add_alt_1),
+              label: const Text('إضافة فرد'),
+            )
+          : null,
       appBar: AppBar(
         title: const Text('القوى العاملة'),
         actions: <Widget>[
@@ -182,7 +227,18 @@ class _WorkforceScreenState extends State<WorkforceScreen> {
                                       '${linked ? 'مرتبط بملف التشغيل' : 'لا يوجد ملف تشغيل مرتبط'}',
                                     ),
                                     isThreeLine: true,
-                                    trailing: const Icon(Icons.chevron_left),
+                                    trailing: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: <Widget>[
+                                        if (widget.canManage)
+                                          IconButton(
+                                            tooltip: 'تعديل بيانات الفرد',
+                                            icon: const Icon(Icons.edit_outlined),
+                                            onPressed: () => _editMember(member),
+                                          ),
+                                        const Icon(Icons.chevron_left),
+                                      ],
+                                    ),
                                     onTap: () => _openMember(member),
                                   ),
                                 );
