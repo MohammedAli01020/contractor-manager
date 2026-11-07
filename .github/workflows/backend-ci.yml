@@ -21,6 +21,7 @@ on:
       - integration/stabilization-2026-11
       - feature/wf08a-correction-snapshots
       - feature/wf08b-measured-correction
+      - feature/wf10a-workforce-identity-api
     paths:
       - "backend/**"
       - "docs/phases/PHASE-WF-08A-CORRECTION-SNAPSHOT.md"
