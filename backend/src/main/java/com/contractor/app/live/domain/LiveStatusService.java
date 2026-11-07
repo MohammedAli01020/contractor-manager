@@ -25,6 +25,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.Set;
 import org.springframework.stereotype.Service;
@@ -165,8 +166,8 @@ public class LiveStatusService {
                 .findAllByTenantIdAndIdIn(tenantId, memberIds).stream()
                 .collect(Collectors.toMap(WorkforceMember::getId, member -> member));
         List<WorkforceAssignment> assignments = workforceAssignments
-                .findAllByTenantIdAndWorkforceMemberIdInAndStatusOrderByEffectiveFromDescIdDesc(
-                        tenantId, memberIds, WorkforceAssignmentStatus.ACTIVE);
+                .findAllByTenantIdAndWorkforceMemberIdInAndStatusInOrderByEffectiveFromDescIdDesc(
+                        tenantId, memberIds, Arrays.asList(WorkforceAssignmentStatus.ACTIVE, WorkforceAssignmentStatus.ENDED));
         List<Long> roleIds = assignments.stream().map(WorkforceAssignment::getWorkforceRoleId)
                 .distinct().collect(Collectors.toList());
         Map<Long, WorkforceRole> rolesById = roleIds.isEmpty() ? new HashMap<>()
