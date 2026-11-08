@@ -16,6 +16,9 @@ public interface WorkforceAssignmentRepository extends JpaRepository<WorkforceAs
     List<WorkforceAssignment> findAllByTenantIdAndWorkforceMemberIdInAndStatusOrderByEffectiveFromDescIdDesc(
             Long tenantId, List<Long> workforceMemberIds, WorkforceAssignmentStatus status);
 
+    List<WorkforceAssignment> findAllByTenantIdAndWorkforceMemberIdInAndStatusInOrderByEffectiveFromDescIdDesc(
+            Long tenantId, List<Long> workforceMemberIds, List<WorkforceAssignmentStatus> statuses);
+
     List<WorkforceAssignment> findAllByTenantIdAndWorkforceMemberIdOrderByEffectiveFromDescIdDesc(
             Long tenantId, Long workforceMemberId);
 

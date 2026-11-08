@@ -202,6 +202,155 @@ class WorkforceMemberCrudIntegrationTest extends AbstractIntegrationTest {
         assertThat(after).isEqualTo(before);
     }
 
+
+    @Test
+    void operationalRoleCreatesOneLegacyShiftProjectionAndCandidateRequiresEffectiveAssignmentDate()
+            throws Exception {
+        String token = registerTenant("Workforce Shift Eligibility", uniqueName("wfshifteligibility"))
+                .path("accessToken").asText();
+        JsonNode roles = body(getJson("/api/v1/workforce/roles", token).andExpect(status().isOk()));
+        long driverRoleId = roleId(roles, "DRIVER");
+
+        Map<String, Object> assignment = Map.of(
+                "roleId", driverRoleId,
+                "effectiveFrom", "2026-11-08");
+        JsonNode onboarded = body(postJson("/api/v1/workforce/members/onboard",
+                Map.of("member", identity("Eligible Operator", "01055550999", null),
+                        "initialAssignments", java.util.Collections.singletonList(assignment)), token)
+                .andExpect(status().isCreated()));
+        long memberId = onboarded.path("member").path("id").asLong();
+
+        assertThat(jdbc.queryForObject(
+                "select count(*) from drivers where tenant_id = ? and workforce_member_id = ?",
+                Integer.class, jdbc.queryForObject(
+                        "select tenant_id from workforce_members where id = ?", Long.class, memberId),
+                memberId)).isEqualTo(1);
+        Map<String, Object> projection = jdbc.queryForMap(
+                "select worker_type, morning_rate, evening_rate, night_rate, active "
+                        + "from drivers where workforce_member_id = ?", memberId);
+        assertThat(projection.get("worker_type")).isEqualTo("DRIVER");
+        assertThat(((Number) projection.get("morning_rate")).doubleValue()).isZero();
+        assertThat(((Number) projection.get("evening_rate")).doubleValue()).isZero();
+        assertThat(((Number) projection.get("night_rate")).doubleValue()).isZero();
+        assertThat(projection.get("active")).isEqualTo(true);
+
+        JsonNode beforeEffectiveDate = body(getJson(
+                "/api/v1/live/workforce-candidates?shiftDate=2026-11-07", token)
+                .andExpect(status().isOk()));
+        assertThat(beforeEffectiveDate.size()).isZero();
+
+        JsonNode effectiveDate = body(getJson(
+                "/api/v1/live/workforce-candidates?shiftDate=2026-11-08", token)
+                .andExpect(status().isOk()));
+        assertThat(effectiveDate.size()).isEqualTo(1);
+        assertThat(effectiveDate.get(0).path("id").asLong()).isEqualTo(
+                jdbc.queryForObject("select id from drivers where workforce_member_id = ?",
+                        Long.class, memberId));
+        assertThat(effectiveDate.get(0).path("name").asText()).isEqualTo("Eligible Operator");
+        assertThat(effectiveDate.get(0).path("workerType").asText()).isEqualTo("DRIVER");
+    }
+
+    @Test
+    void addingOperationalRoleReconcilesExistingInactiveProjectionWithoutResettingAvailabilityOrRates()
+            throws Exception {
+        String token = registerTenant("Workforce Projection Reconciliation", uniqueName("wfprojection"))
+                .path("accessToken").asText();
+        JsonNode roles = body(getJson("/api/v1/workforce/roles", token).andExpect(status().isOk()));
+        long workerRoleId = roleId(roles, "WORKER");
+        long driverRoleId = roleId(roles, "DRIVER");
+
+        JsonNode member = body(postJson("/api/v1/workforce/members",
+                identity("Canonical Shift Person", "01055550888", null), token)
+                .andExpect(status().isCreated()));
+        long memberId = member.path("id").asLong();
+
+        postJson("/api/v1/workforce/members/" + memberId + "/assignments",
+                Map.of("roleId", workerRoleId, "effectiveFrom", "2026-11-08"), token)
+                .andExpect(status().isCreated());
+
+        long driverId = jdbc.queryForObject(
+                "select id from drivers where workforce_member_id = ?", Long.class, memberId);
+        jdbc.update("update drivers set active = false, name = 'Stale Projection', "
+                        + "availability = 'UNAVAILABLE', unavailable_reason = 'صيانة', "
+                        + "morning_rate = 123, evening_rate = 456, night_rate = 789 where id = ?",
+                driverId);
+
+        postJson("/api/v1/workforce/members/" + memberId + "/assignments",
+                Map.of("roleId", driverRoleId, "effectiveFrom", "2026-11-08"), token)
+                .andExpect(status().isCreated());
+
+        Map<String, Object> reconciled = jdbc.queryForMap(
+                "select name, worker_type, active, availability, unavailable_reason, "
+                        + "morning_rate, evening_rate, night_rate "
+                        + "from drivers where id = ?", driverId);
+        assertThat(reconciled.get("name")).isEqualTo("Canonical Shift Person");
+        assertThat(reconciled.get("worker_type")).isEqualTo("DRIVER");
+        assertThat(reconciled.get("active")).isEqualTo(true);
+        assertThat(reconciled.get("availability")).isEqualTo("UNAVAILABLE");
+        assertThat(reconciled.get("unavailable_reason")).isEqualTo("صيانة");
+        assertThat(((Number) reconciled.get("morning_rate")).doubleValue()).isEqualTo(123);
+        assertThat(((Number) reconciled.get("evening_rate")).doubleValue()).isEqualTo(456);
+        assertThat(((Number) reconciled.get("night_rate")).doubleValue()).isEqualTo(789);
+        assertThat(jdbc.queryForObject(
+                "select count(*) from drivers where workforce_member_id = ?", Integer.class, memberId))
+                .isEqualTo(1);
+
+        JsonNode candidates = body(getJson(
+                "/api/v1/live/workforce-candidates?shiftDate=2026-11-08", token)
+                .andExpect(status().isOk()));
+        int matchingCandidates = 0;
+        for (JsonNode candidate : candidates) {
+            if (candidate.path("id").asLong() == driverId) matchingCandidates++;
+        }
+        assertThat(matchingCandidates).isEqualTo(1);
+    }
+
+    @Test
+    void shiftCandidatesRespectAssignmentSiteAndEndDate() throws Exception {
+        String token = registerTenant("Workforce Site Eligibility", uniqueName("wfsiteeligibility"))
+                .path("accessToken").asText();
+        long driverRoleId = roleId(
+                body(getJson("/api/v1/workforce/roles", token).andExpect(status().isOk())), "DRIVER");
+        long siteA = body(postJson("/api/v1/sites",
+                Map.of("name", uniqueName("WF Site A")), token).andExpect(status().isCreated()))
+                .path("id").asLong();
+        long siteB = body(postJson("/api/v1/sites",
+                Map.of("name", uniqueName("WF Site B")), token).andExpect(status().isCreated()))
+                .path("id").asLong();
+
+        JsonNode member = body(postJson("/api/v1/workforce/members",
+                identity("Site Assigned Driver", "01055550777", null), token)
+                .andExpect(status().isCreated()));
+        long memberId = member.path("id").asLong();
+        Map<String, Object> assignment = new HashMap<>();
+        assignment.put("roleId", driverRoleId);
+        assignment.put("siteId", siteA);
+        assignment.put("effectiveFrom", "2026-11-08");
+        assignment.put("effectiveTo", "2026-11-10");
+        postJson("/api/v1/workforce/members/" + memberId + "/assignments", assignment, token)
+                .andExpect(status().isCreated());
+
+        JsonNode matchingSite = body(getJson(
+                "/api/v1/live/workforce-candidates?shiftDate=2026-11-09&siteId=" + siteA, token)
+                .andExpect(status().isOk()));
+        assertThat(matchingSite.size()).isEqualTo(1);
+
+        JsonNode differentSite = body(getJson(
+                "/api/v1/live/workforce-candidates?shiftDate=2026-11-09&siteId=" + siteB, token)
+                .andExpect(status().isOk()));
+        assertThat(differentSite.size()).isZero();
+
+        JsonNode beforeStart = body(getJson(
+                "/api/v1/live/workforce-candidates?shiftDate=2026-11-07&siteId=" + siteA, token)
+                .andExpect(status().isOk()));
+        assertThat(beforeStart.size()).isZero();
+
+        JsonNode afterEnd = body(getJson(
+                "/api/v1/live/workforce-candidates?shiftDate=2026-11-11&siteId=" + siteA, token)
+                .andExpect(status().isOk()));
+        assertThat(afterEnd.size()).isZero();
+    }
+
     private long roleId(JsonNode roles, String code) {
         for (JsonNode role : roles) {
             if (code.equals(role.path("code").asText())) return role.path("id").asLong();

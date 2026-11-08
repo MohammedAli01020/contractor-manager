@@ -1,6 +1,10 @@
 package com.contractor.app.workforce.domain;
 
 import com.contractor.app.common.error.ApiException;
+import com.contractor.app.driver.domain.Driver;
+import com.contractor.app.driver.domain.WorkerType;
+import com.contractor.app.driver.infra.DriverRepository;
+import java.math.BigDecimal;
 import com.contractor.app.site.domain.Site;
 import com.contractor.app.site.infra.SiteRepository;
 import com.contractor.app.tenant.infra.TenantRepository;
@@ -32,17 +36,19 @@ public class WorkforceAssignmentService {
     private final WorkforceAssignmentRepository assignments;
     private final SiteRepository sites;
     private final TenantRepository tenants;
+    private final DriverRepository drivers;
 
     public WorkforceAssignmentService(WorkforceMemberRepository members,
                                       WorkforceRoleRepository roles,
                                       WorkforceAssignmentRepository assignments,
                                       SiteRepository sites,
-                                      TenantRepository tenants) {
+                                      TenantRepository tenants, DriverRepository drivers) {
         this.members = members;
         this.roles = roles;
         this.assignments = assignments;
         this.sites = sites;
         this.tenants = tenants;
+        this.drivers = drivers;
     }
 
     @Transactional(readOnly = true)
@@ -117,6 +123,11 @@ public class WorkforceAssignmentService {
     @Transactional
     public WorkforceAssignmentResponse createAssignment(Long tenantId, Long memberId,
                                                           WorkforceAssignmentRequest request) {
+        // Match the global lock order used by DriverService: operational Driver,
+        // then canonical WorkforceMember. This also serializes reconciliation with
+        // concurrent edits/deactivation of an existing projection.
+        Driver linkedDriver = drivers.findByWorkforceMemberIdAndTenantIdForUpdate(memberId, tenantId)
+                .orElse(null);
         WorkforceMember member = lockMember(tenantId, memberId);
         if (!member.isActive()) {
             throw ApiException.conflict("لا يمكن إنشاء تكليف لشخص غير نشط.");
@@ -150,7 +161,9 @@ public class WorkforceAssignmentService {
                 request.getEffectiveFrom(), request.getEffectiveTo(),
                 request.getNotes() == null || request.getNotes().trim().isEmpty()
                         ? null : request.getNotes().trim());
-        return WorkforceAssignmentResponse.from(assignments.saveAndFlush(assignment));
+        WorkforceAssignment saved = assignments.saveAndFlush(assignment);
+        ensureOperationalDriver(member, role, linkedDriver);
+        return WorkforceAssignmentResponse.from(saved);
     }
 
     @Transactional
@@ -171,6 +184,46 @@ public class WorkforceAssignmentService {
         }
         assignment.endOn(request.getEffectiveTo());
         return WorkforceAssignmentResponse.from(assignments.saveAndFlush(assignment));
+    }
+
+
+    /**
+     * The current shift aggregate still persists its responsible operator through
+     * shifts.driver_id. Keep a one-to-one operational projection for roles that
+     * can occupy that slot; WorkforceMember remains the only person identity.
+     * Zero legacy rates are compatibility placeholders, never contractual wages.
+     */
+    private void ensureOperationalDriver(WorkforceMember member, WorkforceRole role, Driver operational) {
+        WorkerType workerType;
+        if ("DRIVER".equals(role.getCode()) || "EQUIPMENT_OPERATOR".equals(role.getCode())) {
+            workerType = WorkerType.DRIVER;
+        } else if ("WORKER".equals(role.getCode())) {
+            workerType = WorkerType.WORKER;
+        } else {
+            return;
+        }
+
+        // Workforce is the canonical identity and active-state source. A linked
+        // legacy projection may exist but be inactive or stale (for example after
+        // a member was reactivated in Workforce). Reconcile only identity/type and
+        // active state; preserve operational availability and all legacy rates.
+        if (operational != null) {
+            operational.setName(member.getFullName());
+            operational.setPhone(member.getPhone());
+            operational.setWorkerType(workerType);
+            operational.setActive(member.isActive());
+            drivers.saveAndFlush(operational);
+            return;
+        }
+
+        operational = new Driver(member.getTenantId(), member.getFullName(), workerType);
+        operational.setWorkforceMemberId(member.getId());
+        operational.setPhone(member.getPhone());
+        operational.setMorningRate(BigDecimal.ZERO);
+        operational.setEveningRate(BigDecimal.ZERO);
+        operational.setNightRate(BigDecimal.ZERO);
+        operational.setActive(member.isActive());
+        drivers.saveAndFlush(operational);
     }
 
     private WorkforceMember lockMember(Long tenantId, Long memberId) {
