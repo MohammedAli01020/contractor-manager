@@ -448,6 +448,31 @@ jobs:
               sys.exit("WF-08B measured correction tests were skipped or reported failures/errors.")
           PY
 
+      - name: Require WF12C shift Workforce identity migration test to execute
+        run: |
+          python3 - <<'PY'
+          import glob
+          import sys
+          import xml.etree.ElementTree as ET
+
+          pattern = "target/surefire-reports/TEST-com.contractor.app.shift.ShiftWorkforceIdentityMigrationIntegrationTest.xml"
+          reports = glob.glob(pattern)
+          if not reports:
+              sys.exit(f"Required WF12C migration-test report missing: {pattern}")
+
+          root = ET.parse(reports[0]).getroot()
+          totals = {key: int(root.attrib.get(key, 0))
+                    for key in ("tests", "failures", "errors", "skipped")}
+          print(f"ShiftWorkforceIdentityMigrationIntegrationTest: {totals}")
+
+          if totals["tests"] != 1:
+              sys.exit("WF12C shift Workforce identity migration test did not execute exactly once.")
+          if totals["skipped"] != 0:
+              sys.exit("WF12C migration test was skipped; Docker/MySQL must be available in CI.")
+          if totals["failures"] != 0 or totals["errors"] != 0:
+              sys.exit("WF12C migration test reported failures or errors.")
+          PY
+
       - name: Write test summary
         if: always()
         env:
