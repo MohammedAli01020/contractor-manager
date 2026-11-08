@@ -217,6 +217,9 @@ class _ShiftsView extends StatelessWidget {
                             final shift = state.visibleItems[index];
                             return _ShiftCard(
                               shift: shift,
+                              onOpenDetails: () => _openShiftDetails(
+                                context, shift, bloc, canCorrectCompletedShifts,
+                              ),
                               onManage: () => _manageShift(context, shift, bloc, canCorrectCompletedShifts),
                             );
                           },
@@ -230,6 +233,28 @@ class _ShiftsView extends StatelessWidget {
     );
   }
 
+
+  Future<void> _openShiftDetails(
+    BuildContext context,
+    ShiftModel shift,
+    ShiftsBloc bloc,
+    bool canCorrectCompletedShifts,
+  ) async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (detailsContext) => _ShiftDetailsScreen(
+          shift: shift,
+          onManage: (currentShift) => _manageShift(
+            detailsContext,
+            currentShift,
+            bloc,
+            canCorrectCompletedShifts,
+          ),
+        ),
+      ),
+    );
+    bloc.add(const ShiftsRequested());
+  }
 
   Future<void> _manageShift(
     BuildContext context,
@@ -924,8 +949,13 @@ class _SummaryNumber extends StatelessWidget {
 }
 
 class _ShiftCard extends StatefulWidget {
-  const _ShiftCard({required this.shift, required this.onManage});
+  const _ShiftCard({
+    required this.shift,
+    required this.onOpenDetails,
+    required this.onManage,
+  });
   final ShiftModel shift;
+  final VoidCallback onOpenDetails;
   final VoidCallback onManage;
   @override
   State<_ShiftCard> createState() => _ShiftCardState();
@@ -1040,35 +1070,65 @@ class _ShiftCardState extends State<_ShiftCard> {
             _InfoLine(icon: Icons.person_outline, text: shift.driverName),
             _InfoLine(icon: Icons.construction_outlined, text: equipment),
             const Divider(height: 24),
-            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              const Text('قيمة الوردية'),
-              Text(_money(shift.price), style: theme.textTheme.bodyMedium),
-            ]),
+            _CardMoneyLine(label: 'قيمة الوردية', value: shift.price),
             const SizedBox(height: 4),
-            if (shift.compensationBasis == 'HOUR' && shift.status == 'IN_PROGRESS')
-              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                const Text('سعر الساعة'),
-                Text(_money(shift.compensationRate),
-                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-              ])
-            else
-              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                const Text('بعد أجر السائق'),
-                Text(_money(shift.priceAfterWage),
-                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-              ]),
+            _InfoLine(
+              icon: Icons.payments_outlined,
+              text: 'أساس الأجر: ' + _compensationBasisLabel(shift.compensationBasis),
+            ),
+            if (shift.compensationBasis == 'HOUR') ...[
+              _CardMoneyLine(label: 'سعر الساعة', value: shift.compensationRate),
+              if (shift.actualHours != null)
+                _InfoLine(
+                  icon: Icons.schedule_outlined,
+                  text: 'الساعات الفعلية: ' + _quantity(shift.actualHours!) + ' ساعة',
+                ),
+            ] else if (shift.compensationBasis == 'QUANTITY') ...[
+              _CardMoneyLine(
+                label: 'سعر الوحدة' + (shift.compensationUnitCode.isEmpty ? '' : ' (' + shift.compensationUnitCode + ')'),
+                value: shift.compensationRate,
+              ),
+              if (shift.actualQuantity != null)
+                _InfoLine(
+                  icon: Icons.scale_outlined,
+                  text: 'الكمية الفعلية: ' + _quantity(shift.actualQuantity!),
+                ),
+            ] else if (shift.compensationRate > 0) ...[
+              _CardMoneyLine(
+                label: _compensationRateLabel(shift.compensationBasis),
+                value: shift.compensationRate,
+              ),
+            ],
+            if (shift.status == 'COMPLETED')
+              _CardMoneyLine(
+                label: 'إجمالي أجر العامل',
+                value: shift.driverWage,
+                emphasize: true,
+              ),
+            _CardMoneyLine(
+              label: 'الصافي بعد الأجر',
+              value: shift.priceAfterWage,
+              emphasize: true,
+            ),
             if (shift.notes.isNotEmpty) ...[
               const SizedBox(height: 8),
               Text('ملاحظات: ${shift.notes}'),
             ],
             const SizedBox(height: 12),
-            Align(
-              alignment: AlignmentDirectional.centerEnd,
-              child: OutlinedButton.icon(
-                onPressed: widget.onManage,
-                icon: const Icon(Icons.more_horiz),
-                label: const Text('إجراءات الوردية'),
-              ),
+            Row(
+              children: [
+                TextButton.icon(
+                  onPressed: widget.onOpenDetails,
+                  icon: const Icon(Icons.receipt_long_outlined),
+                  label: const Text('التفاصيل'),
+                ),
+                const Spacer(),
+                OutlinedButton.icon(
+                  onPressed: widget.onManage,
+                  icon: const Icon(Icons.more_horiz),
+                  label: const Text('إجراءات الوردية'),
+                ),
+              ],
             ),
           ],
         ),
@@ -1086,6 +1146,69 @@ class _ShiftCardState extends State<_ShiftCard> {
     return 'مستمرة منذ $days أيام';
   }
   String _money(double value) => value.toStringAsFixed(2) + ' جنيه';
+  String _quantity(double value) => value.toStringAsFixed(
+        value == value.roundToDouble() ? 0 : 2,
+      );
+}
+
+String _compensationBasisLabel(String basis) {
+  switch (basis) {
+    case 'SHIFT':
+      return 'بالوردية';
+    case 'HOUR':
+      return 'بالساعة';
+    case 'DAY':
+      return 'باليومية';
+    case 'QUANTITY':
+      return 'بالكمية';
+    case 'FIXED':
+      return 'مبلغ ثابت';
+    default:
+      return basis;
+  }
+}
+
+String _compensationRateLabel(String basis) {
+  switch (basis) {
+    case 'SHIFT':
+      return 'سعر الوردية المعتمد';
+    case 'DAY':
+      return 'سعر اليوم';
+    case 'FIXED':
+      return 'المبلغ الثابت';
+    default:
+      return 'السعر المعتمد';
+  }
+}
+
+class _CardMoneyLine extends StatelessWidget {
+  const _CardMoneyLine({
+    required this.label,
+    required this.value,
+    this.emphasize = false,
+  });
+
+  final String label;
+  final double value;
+  final bool emphasize;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = emphasize
+        ? Theme.of(context).textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.bold,
+            )
+        : Theme.of(context).textTheme.bodyMedium;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        children: [
+          Expanded(child: Text(label)),
+          Text(value.toStringAsFixed(2) + ' جنيه', style: style),
+        ],
+      ),
+    );
+  }
 }
 
 class _InfoLine extends StatelessWidget {
@@ -1249,6 +1372,10 @@ class _ShiftDetailsScreenState extends State<_ShiftDetailsScreen> {
                   _InfoLine(icon: Icons.location_on_outlined, text: shift.siteName),
                   _InfoLine(icon: Icons.person_outline, text: shift.driverName),
                   _InfoLine(icon: Icons.construction_outlined, text: equipment),
+                  _InfoLine(
+                    icon: Icons.payments_outlined,
+                    text: 'أساس الأجر: ' + _compensationBasisLabel(shift.compensationBasis),
+                  ),
                   const Divider(height: 24),
                   _DetailMoneyLine(label: 'قيمة الوردية', value: shift.price),
                   if (shift.compensationBasis == 'HOUR') ...[
@@ -1263,8 +1390,17 @@ class _ShiftDetailsScreenState extends State<_ShiftDetailsScreen> {
                       _DetailMoneyLine(label: 'الكمية الفعلية', value: shift.actualQuantity!),
                     if (shift.status == 'COMPLETED')
                       _DetailMoneyLine(label: 'إجمالي أجر السائق', value: shift.driverWage),
-                  ] else
-                    _DetailMoneyLine(label: 'أجر السائق', value: shift.driverWage),
+                  ] else ...[
+                    if (shift.compensationRate > 0)
+                      _DetailMoneyLine(
+                        label: _compensationRateLabel(shift.compensationBasis),
+                        value: shift.compensationRate,
+                      ),
+                    _DetailMoneyLine(
+                      label: 'إجمالي أجر العامل',
+                      value: shift.driverWage,
+                    ),
+                  ],
                   if (shift.status == 'COMPLETED') ...[
                     const Divider(),
                     _DetailMoneyLine(
