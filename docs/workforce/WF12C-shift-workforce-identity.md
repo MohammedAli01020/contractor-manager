@@ -44,14 +44,18 @@ SELECT COUNT(*) AS drivers_without_workforce_identity
 FROM drivers
 WHERE workforce_member_id IS NULL;
 
+```
+
+Both preflight counts must be zero before migration. After V54, verify every shift has a non-null Workforce ID and run this read-only consistency check:
+
+```sql
 SELECT COUNT(*) AS shift_identity_mismatches
 FROM shifts s
 JOIN drivers d ON d.id = s.driver_id AND d.tenant_id = s.tenant_id
-WHERE s.workforce_member_id IS NOT NULL
-  AND s.workforce_member_id <> d.workforce_member_id;
+WHERE s.workforce_member_id <> d.workforce_member_id;
 ```
 
-All three counts must be zero before migration. After migration, verify every shift has a non-null Workforce ID and that the composite FK rejects mismatched identities. Re-run the existing start/finish/correction and financial-balance tests. Do not apply this migration to production until the isolated migration and application test pass.
+The mismatch count must be zero, and the composite FK must reject mismatched identities. Re-run the existing start/finish/correction and financial-balance tests. Do not apply this migration to production until the isolated migration and application test pass.
 
 ## Deliberately out of scope
 
