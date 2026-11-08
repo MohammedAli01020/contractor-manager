@@ -123,6 +123,11 @@ public class WorkforceAssignmentService {
     @Transactional
     public WorkforceAssignmentResponse createAssignment(Long tenantId, Long memberId,
                                                           WorkforceAssignmentRequest request) {
+        // Match the global lock order used by DriverService: operational Driver,
+        // then canonical WorkforceMember. This also serializes reconciliation with
+        // concurrent edits/deactivation of an existing projection.
+        Driver linkedDriver = drivers.findByWorkforceMemberIdAndTenantIdForUpdate(memberId, tenantId)
+                .orElse(null);
         WorkforceMember member = lockMember(tenantId, memberId);
         if (!member.isActive()) {
             throw ApiException.conflict("لا يمكن إنشاء تكليف لشخص غير نشط.");
@@ -157,7 +162,7 @@ public class WorkforceAssignmentService {
                 request.getNotes() == null || request.getNotes().trim().isEmpty()
                         ? null : request.getNotes().trim());
         WorkforceAssignment saved = assignments.saveAndFlush(assignment);
-        ensureOperationalDriver(member, role);
+        ensureOperationalDriver(member, role, linkedDriver);
         return WorkforceAssignmentResponse.from(saved);
     }
 
@@ -188,7 +193,7 @@ public class WorkforceAssignmentService {
      * can occupy that slot; WorkforceMember remains the only person identity.
      * Zero legacy rates are compatibility placeholders, never contractual wages.
      */
-    private void ensureOperationalDriver(WorkforceMember member, WorkforceRole role) {
+    private void ensureOperationalDriver(WorkforceMember member, WorkforceRole role, Driver operational) {
         WorkerType workerType;
         if ("DRIVER".equals(role.getCode()) || "EQUIPMENT_OPERATOR".equals(role.getCode())) {
             workerType = WorkerType.DRIVER;
@@ -202,8 +207,6 @@ public class WorkforceAssignmentService {
         // legacy projection may exist but be inactive or stale (for example after
         // a member was reactivated in Workforce). Reconcile only identity/type and
         // active state; preserve operational availability and all legacy rates.
-        Driver operational = drivers.findByWorkforceMemberIdAndTenantId(
-                member.getId(), member.getTenantId()).orElse(null);
         if (operational != null) {
             operational.setName(member.getFullName());
             operational.setPhone(member.getPhone());
