@@ -16,6 +16,7 @@ public class ShiftResponse {
     private final Long siteId;
     private final String siteName;
     private final Long driverId;
+    private final Long workforceMemberId;
     private final String driverName;
     private final Long equipmentId;
     private final String equipmentCode;
@@ -55,6 +56,7 @@ public class ShiftResponse {
         this.siteId = s.getSiteId();
         this.siteName = siteName;
         this.driverId = s.getDriverId();
+        this.workforceMemberId = s.getWorkforceMemberId();
         this.driverName = driverName;
         this.equipmentId = s.getEquipmentId();
         this.equipmentCode = equipmentCode;
@@ -122,6 +124,10 @@ public class ShiftResponse {
 
     public Long getDriverId() {
         return driverId;
+    }
+
+    public Long getWorkforceMemberId() {
+        return workforceMemberId;
     }
 
     public String getDriverName() {
