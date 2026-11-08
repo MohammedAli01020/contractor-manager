@@ -250,6 +250,58 @@ class WorkforceMemberCrudIntegrationTest extends AbstractIntegrationTest {
         assertThat(effectiveDate.get(0).path("workerType").asText()).isEqualTo("DRIVER");
     }
 
+    @Test
+    void addingOperationalRoleReconcilesExistingInactiveProjectionWithoutResettingAvailabilityOrRates()
+            throws Exception {
+        String token = registerTenant("Workforce Projection Reconciliation", uniqueName("wfprojection"))
+                .path("accessToken").asText();
+        JsonNode roles = body(getJson("/api/v1/workforce/roles", token).andExpect(status().isOk()));
+        long workerRoleId = roleId(roles, "WORKER");
+        long driverRoleId = roleId(roles, "DRIVER");
+
+        JsonNode member = body(postJson("/api/v1/workforce/members",
+                identity("Canonical Shift Person", "01055550888", null), token)
+                .andExpect(status().isCreated()));
+        long memberId = member.path("id").asLong();
+
+        postJson("/api/v1/workforce/members/" + memberId + "/assignments",
+                Map.of("roleId", workerRoleId, "effectiveFrom", "2026-11-08"), token)
+                .andExpect(status().isCreated());
+
+        long driverId = jdbc.queryForObject(
+                "select id from drivers where workforce_member_id = ?", Long.class, memberId);
+        jdbc.update("update drivers set active = false, name = 'Stale Projection', "
+                        + "availability = 'UNAVAILABLE', unavailable_reason = 'صيانة', "
+                        + "morning_rate = 123, evening_rate = 456, night_rate = 789 where id = ?",
+                driverId);
+
+        postJson("/api/v1/workforce/members/" + memberId + "/assignments",
+                Map.of("roleId", driverRoleId, "effectiveFrom", "2026-11-08"), token)
+                .andExpect(status().isCreated());
+
+        Map<String, Object> reconciled = jdbc.queryForMap(
+                "select name, worker_type, active, availability, unavailable_reason, "
+                        + "morning_rate, evening_rate, night_rate "
+                        + "from drivers where id = ?", driverId);
+        assertThat(reconciled.get("name")).isEqualTo("Canonical Shift Person");
+        assertThat(reconciled.get("worker_type")).isEqualTo("DRIVER");
+        assertThat(reconciled.get("active")).isEqualTo(true);
+        assertThat(reconciled.get("availability")).isEqualTo("UNAVAILABLE");
+        assertThat(reconciled.get("unavailable_reason")).isEqualTo("صيانة");
+        assertThat(((Number) reconciled.get("morning_rate")).doubleValue()).isEqualTo(123);
+        assertThat(((Number) reconciled.get("evening_rate")).doubleValue()).isEqualTo(456);
+        assertThat(((Number) reconciled.get("night_rate")).doubleValue()).isEqualTo(789);
+        assertThat(jdbc.queryForObject(
+                "select count(*) from drivers where workforce_member_id = ?", Integer.class, memberId))
+                .isEqualTo(1);
+
+        JsonNode candidates = body(getJson(
+                "/api/v1/live/workforce-candidates?shiftDate=2026-11-08", token)
+                .andExpect(status().isOk()));
+        assertThat(candidates).anySatisfy(candidate ->
+                assertThat(candidate.path("id").asLong()).isEqualTo(driverId));
+    }
+
     private long roleId(JsonNode roles, String code) {
         for (JsonNode role : roles) {
             if (code.equals(role.path("code").asText())) return role.path("id").asLong();
