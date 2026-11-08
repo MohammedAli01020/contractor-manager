@@ -297,6 +297,14 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
         assertThat(shift.path("priceAfterWage").decimalValue()).isEqualByComparingTo("1050.00");
         assertThat(shift.path("siteName").asText()).isEqualTo("Main Site");
         assertThat(shift.path("driverName").asText()).isEqualTo("Driver One");
+        Long expectedWorkforceMemberId = jdbcTemplate.queryForObject(
+                "select workforce_member_id from drivers where id = ? and tenant_id = ?",
+                Long.class, driverId, tenantId);
+        assertThat(expectedWorkforceMemberId).isNotNull();
+        assertThat(shift.path("workforceMemberId").asLong()).isEqualTo(expectedWorkforceMemberId);
+        assertThat(jdbcTemplate.queryForObject(
+                "select workforce_member_id from shifts where id = ? and tenant_id = ?",
+                Long.class, shift.path("id").asLong(), tenantId)).isEqualTo(expectedWorkforceMemberId);
         assertThat(shift.path("equipmentCode").asText()).isEqualTo("EX-01");
         assertThat(shift.path("shiftDate").asText()).isEqualTo(day(1).toString());
     }
