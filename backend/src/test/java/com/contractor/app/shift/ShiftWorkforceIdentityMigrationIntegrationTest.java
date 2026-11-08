@@ -61,8 +61,11 @@ class ShiftWorkforceIdentityMigrationIntegrationTest {
         long equipmentId = insertId(jdbc, "INSERT INTO equipment (tenant_id, code, equipment_type_id) VALUES ("
                 + tenantId + ", 'WF12C-EQ', " + equipmentTypeId + ")");
         long shiftId = insertId(jdbc, "INSERT INTO shifts (tenant_id, shift_date, shift_type, site_id, driver_id, "
-                + "equipment_id) VALUES (" + tenantId + ", '2026-01-10', 'MORNING', " + siteId + ", "
-                + driverId + ", " + equipmentId + ")");
+                + "equipment_id, wage_source, compensation_component_code, compensation_component_name, "
+                + "compensation_basis, compensation_rate, compensation_calculated_amount) VALUES ("
+                + tenantId + ", '2026-01-10', 'MORNING', " + siteId + ", " + driverId + ", " + equipmentId
+                + ", 'HISTORICAL_SHIFT_SNAPSHOT', 'HISTORICAL_SHIFT_WAGE', 'Historical recorded shift wage', "
+                + "'SHIFT', 0.00, 0.00)");
 
         Flyway.configure().dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
                 .locations("classpath:db/migration").load().migrate();
