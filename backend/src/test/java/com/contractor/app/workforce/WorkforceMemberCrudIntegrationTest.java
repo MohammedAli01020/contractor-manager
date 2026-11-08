@@ -351,6 +351,66 @@ class WorkforceMemberCrudIntegrationTest extends AbstractIntegrationTest {
         assertThat(afterEnd.size()).isZero();
     }
 
+    @Test
+    void workforceCandidatesApplyOnlyFreeAndExcludeInactiveMembers() throws Exception {
+        String token = registerTenant("Workforce Free Candidate Filter", uniqueName("wffreefilter"))
+                .path("accessToken").asText();
+        long driverRoleId = roleId(
+                body(getJson("/api/v1/workforce/roles", token).andExpect(status().isOk())), "DRIVER");
+
+        JsonNode freeMember = body(postJson("/api/v1/workforce/members",
+                identity("Free Workforce Candidate", "01055550661", null), token)
+                .andExpect(status().isCreated()));
+        long freeMemberId = freeMember.path("id").asLong();
+        postJson("/api/v1/workforce/members/" + freeMemberId + "/assignments",
+                Map.of("roleId", driverRoleId, "effectiveFrom", "2026-11-08"), token)
+                .andExpect(status().isCreated());
+
+        JsonNode unavailableMember = body(postJson("/api/v1/workforce/members",
+                identity("Unavailable Workforce Candidate", "01055550662", null), token)
+                .andExpect(status().isCreated()));
+        long unavailableMemberId = unavailableMember.path("id").asLong();
+        postJson("/api/v1/workforce/members/" + unavailableMemberId + "/assignments",
+                Map.of("roleId", driverRoleId, "effectiveFrom", "2026-11-08"), token)
+                .andExpect(status().isCreated());
+
+        long freeDriverId = jdbc.queryForObject(
+                "select id from drivers where workforce_member_id = ?", Long.class, freeMemberId);
+        long unavailableDriverId = jdbc.queryForObject(
+                "select id from drivers where workforce_member_id = ?", Long.class, unavailableMemberId);
+        jdbc.update("update drivers set availability = 'UNAVAILABLE', unavailable_reason = ? where id = ?",
+                "maintenance", unavailableDriverId);
+
+        JsonNode allCandidates = body(getJson(
+                "/api/v1/live/workforce-candidates?shiftDate=2026-11-08", token)
+                .andExpect(status().isOk()));
+        assertThat(allCandidates.size()).isEqualTo(2);
+        JsonNode unavailableCandidate = null;
+        for (JsonNode candidate : allCandidates) {
+            if (candidate.path("id").asLong() == unavailableDriverId) unavailableCandidate = candidate;
+        }
+        assertThat(unavailableCandidate).isNotNull();
+        assertThat(unavailableCandidate.path("liveStatus").asText()).isEqualTo("UNAVAILABLE");
+
+        JsonNode onlyFreeCandidates = body(getJson(
+                "/api/v1/live/workforce-candidates?shiftDate=2026-11-08&onlyFree=true", token)
+                .andExpect(status().isOk()));
+        assertThat(onlyFreeCandidates.size()).isEqualTo(1);
+        assertThat(onlyFreeCandidates.get(0).path("id").asLong()).isEqualTo(freeDriverId);
+
+        jdbc.update("update workforce_members set active = false where id = ?", freeMemberId);
+        JsonNode afterDeactivation = body(getJson(
+                "/api/v1/live/workforce-candidates?shiftDate=2026-11-08", token)
+                .andExpect(status().isOk()));
+        assertThat(afterDeactivation.size()).isEqualTo(1);
+        assertThat(afterDeactivation.get(0).path("id").asLong()).isEqualTo(unavailableDriverId);
+
+        JsonNode onlyFreeAfterDeactivation = body(getJson(
+                "/api/v1/live/workforce-candidates?shiftDate=2026-11-08&onlyFree=true", token)
+                .andExpect(status().isOk()));
+        assertThat(onlyFreeAfterDeactivation).isEmpty();
+    }
+
     private long roleId(JsonNode roles, String code) {
         for (JsonNode role : roles) {
             if (code.equals(role.path("code").asText())) return role.path("id").asLong();

@@ -26,6 +26,7 @@ on:
       - feature/wf11a-workforce-member-creation
       - feature/wf11b-workforce-roles-assignments
       - feature/wf12a-workforce-shift-eligibility
+      - feature/wf12b-workforce-native-shift-identity
     paths:
       - "backend/**"
       - "docs/phases/PHASE-WF-08A-CORRECTION-SNAPSHOT.md"
@@ -56,6 +57,7 @@ on:
       - feature/wf10c-compensation-basis-mobile
       - feature/wf11a-workforce-member-creation
       - feature/wf11b-workforce-roles-assignments
+      - feature/wf12a-workforce-shift-eligibility
     paths:
       - "backend/**"
       - "docs/phases/PHASE-WF-08A-CORRECTION-SNAPSHOT.md"
@@ -98,6 +100,30 @@ jobs:
       - name: Run backend tests
         id: backend-tests
         run: mvn -B -ntp test
+      - name: Require WF12B operational projection migration test to execute
+        run: |
+          python3 - <<'PY'
+          import glob
+          import sys
+          import xml.etree.ElementTree as ET
+
+          pattern = "target/surefire-reports/TEST-com.contractor.app.workforce.WorkforceOperationalDriverProjectionMigrationIntegrationTest.xml"
+          reports = glob.glob(pattern)
+          if not reports:
+              sys.exit(f"Required WF12B migration-test report missing: {pattern}")
+
+          root = ET.parse(reports[0]).getroot()
+          totals = {key: int(root.attrib.get(key, 0))
+                    for key in ("tests", "failures", "errors", "skipped")}
+          print(f"WorkforceOperationalDriverProjectionMigrationIntegrationTest: {totals}")
+
+          if totals["tests"] != 1:
+              sys.exit("WF12B migration integration test did not execute exactly once.")
+          if totals["skipped"] != 0:
+              sys.exit("WF12B migration integration test was skipped; Docker/MySQL must be available in CI.")
+          if totals["failures"] != 0 or totals["errors"] != 0:
+              sys.exit("WF12B migration integration test reported failures or errors.")
+          PY
 
       - name: Require MySQL accounting integration tests to execute
         run: |
