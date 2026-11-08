@@ -298,8 +298,11 @@ class WorkforceMemberCrudIntegrationTest extends AbstractIntegrationTest {
         JsonNode candidates = body(getJson(
                 "/api/v1/live/workforce-candidates?shiftDate=2026-11-08", token)
                 .andExpect(status().isOk()));
-        assertThat(candidates).anySatisfy(candidate ->
-                assertThat(candidate.path("id").asLong()).isEqualTo(driverId));
+        int matchingCandidates = 0;
+        for (JsonNode candidate : candidates) {
+            if (candidate.path("id").asLong() == driverId) matchingCandidates++;
+        }
+        assertThat(matchingCandidates).isEqualTo(1);
     }
 
     private long roleId(JsonNode roles, String code) {
