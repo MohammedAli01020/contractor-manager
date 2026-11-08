@@ -305,6 +305,52 @@ class WorkforceMemberCrudIntegrationTest extends AbstractIntegrationTest {
         assertThat(matchingCandidates).isEqualTo(1);
     }
 
+    @Test
+    void shiftCandidatesRespectAssignmentSiteAndEndDate() throws Exception {
+        String token = registerTenant("Workforce Site Eligibility", uniqueName("wfsiteeligibility"))
+                .path("accessToken").asText();
+        long driverRoleId = roleId(
+                body(getJson("/api/v1/workforce/roles", token).andExpect(status().isOk())), "DRIVER");
+        long siteA = body(postJson("/api/v1/sites",
+                Map.of("name", uniqueName("WF Site A")), token).andExpect(status().isCreated()))
+                .path("id").asLong();
+        long siteB = body(postJson("/api/v1/sites",
+                Map.of("name", uniqueName("WF Site B")), token).andExpect(status().isCreated()))
+                .path("id").asLong();
+
+        JsonNode member = body(postJson("/api/v1/workforce/members",
+                identity("Site Assigned Driver", "01055550777", null), token)
+                .andExpect(status().isCreated()));
+        long memberId = member.path("id").asLong();
+        Map<String, Object> assignment = new HashMap<>();
+        assignment.put("roleId", driverRoleId);
+        assignment.put("siteId", siteA);
+        assignment.put("effectiveFrom", "2026-11-08");
+        assignment.put("effectiveTo", "2026-11-10");
+        postJson("/api/v1/workforce/members/" + memberId + "/assignments", assignment, token)
+                .andExpect(status().isCreated());
+
+        JsonNode matchingSite = body(getJson(
+                "/api/v1/live/workforce-candidates?shiftDate=2026-11-09&siteId=" + siteA, token)
+                .andExpect(status().isOk()));
+        assertThat(matchingSite.size()).isEqualTo(1);
+
+        JsonNode differentSite = body(getJson(
+                "/api/v1/live/workforce-candidates?shiftDate=2026-11-09&siteId=" + siteB, token)
+                .andExpect(status().isOk()));
+        assertThat(differentSite.size()).isZero();
+
+        JsonNode beforeStart = body(getJson(
+                "/api/v1/live/workforce-candidates?shiftDate=2026-11-07&siteId=" + siteA, token)
+                .andExpect(status().isOk()));
+        assertThat(beforeStart.size()).isZero();
+
+        JsonNode afterEnd = body(getJson(
+                "/api/v1/live/workforce-candidates?shiftDate=2026-11-11&siteId=" + siteA, token)
+                .andExpect(status().isOk()));
+        assertThat(afterEnd.size()).isZero();
+    }
+
     private long roleId(JsonNode roles, String code) {
         for (JsonNode role : roles) {
             if (code.equals(role.path("code").asText())) return role.path("id").asLong();
