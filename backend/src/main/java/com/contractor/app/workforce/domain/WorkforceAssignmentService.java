@@ -198,13 +198,22 @@ public class WorkforceAssignmentService {
             return;
         }
 
-        // Existing linked records are never rewritten here. Identity edits and
-        // driver operations retain their established lock order (Driver -> Member).
-        if (drivers.findByWorkforceMemberIdAndTenantId(member.getId(), member.getTenantId()).isPresent()) {
+        // Workforce is the canonical identity and active-state source. A linked
+        // legacy projection may exist but be inactive or stale (for example after
+        // a member was reactivated in Workforce). Reconcile only identity/type and
+        // active state; preserve operational availability and all legacy rates.
+        Driver operational = drivers.findByWorkforceMemberIdAndTenantId(
+                member.getId(), member.getTenantId()).orElse(null);
+        if (operational != null) {
+            operational.setName(member.getFullName());
+            operational.setPhone(member.getPhone());
+            operational.setWorkerType(workerType);
+            operational.setActive(member.isActive());
+            drivers.saveAndFlush(operational);
             return;
         }
 
-        Driver operational = new Driver(member.getTenantId(), member.getFullName(), workerType);
+        operational = new Driver(member.getTenantId(), member.getFullName(), workerType);
         operational.setWorkforceMemberId(member.getId());
         operational.setPhone(member.getPhone());
         operational.setMorningRate(BigDecimal.ZERO);
