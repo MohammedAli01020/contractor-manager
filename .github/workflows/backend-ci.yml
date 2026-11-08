@@ -26,7 +26,6 @@ on:
       - feature/wf11a-workforce-member-creation
       - feature/wf11b-workforce-roles-assignments
       - feature/wf12a-workforce-shift-eligibility
-      - feature/wf12a-workforce-shift-eligibility
       - feature/wf12b-workforce-native-shift-identity
     paths:
       - "backend/**"
@@ -58,6 +57,7 @@ on:
       - feature/wf10c-compensation-basis-mobile
       - feature/wf11a-workforce-member-creation
       - feature/wf11b-workforce-roles-assignments
+      - feature/wf12a-workforce-shift-eligibility
     paths:
       - "backend/**"
       - "docs/phases/PHASE-WF-08A-CORRECTION-SNAPSHOT.md"
