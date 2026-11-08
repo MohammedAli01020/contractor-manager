@@ -365,6 +365,9 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
         // Different equipment isolates the driver constraint as the source of the failure.
         long secondEquipmentId = createEquipment(token, "EX-02", typeId, "600", "1300");
         Shift duplicate = new Shift(tenantId, day(2), ShiftType.EVENING, siteId, driverId, secondEquipmentId);
+        duplicate.setWorkforceMemberId(jdbcTemplate.queryForObject(
+                "select workforce_member_id from drivers where id = ? and tenant_id = ?",
+                Long.class, driverId, tenantId));
         duplicate.setPrice(new BigDecimal("1300.00"));
         duplicate.setDriverWage(new BigDecimal("175.00"));
         duplicate.setEquipmentOperatingCost(new BigDecimal("600.00"));
@@ -400,6 +403,9 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
 
         long secondDriverId = createDriver(token, "Driver Two", "160", "180", "210");
         Shift duplicate = new Shift(tenantId, day(2), ShiftType.EVENING, siteId, secondDriverId, equipmentId);
+        duplicate.setWorkforceMemberId(jdbcTemplate.queryForObject(
+                "select workforce_member_id from drivers where id = ? and tenant_id = ?",
+                Long.class, secondDriverId, tenantId));
         duplicate.setPrice(new BigDecimal("1200.00"));
         duplicate.setDriverWage(new BigDecimal("180.00"));
         duplicate.setEquipmentOperatingCost(new BigDecimal("500.00"));
