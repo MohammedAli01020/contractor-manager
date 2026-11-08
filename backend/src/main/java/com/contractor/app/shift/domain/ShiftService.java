@@ -191,6 +191,7 @@ public class ShiftService {
 
         Shift shift = new Shift(tenantId, date, request.getShiftType(), request.getSiteId(), request.getDriverId(),
                 request.getEquipmentId());
+        shift.setWorkforceMemberId(driver.getWorkforceMemberId());
         shift.setStartedAt(LocalDateTime.now(ZoneOffset.UTC));
         shift.setNotes(Texts.blankToNull(request.getNotes()));
         // نسخ ثابتة وقت التسجيل: تغيير الأسعار لاحقًا لا يمس هذه الوردية
@@ -273,6 +274,7 @@ public class ShiftService {
         shift.setShiftType(request.getShiftType());
         shift.setSiteId(request.getSiteId());
         shift.setDriverId(request.getDriverId());
+        shift.setWorkforceMemberId(driver.getWorkforceMemberId());
         shift.setEquipmentId(request.getEquipmentId());
         shift.setPrice(price);
         shift.setDriverWage(wage);
