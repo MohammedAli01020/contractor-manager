@@ -310,6 +310,20 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
     }
 
     @Test
+    void databaseRejectsShiftDriverAndWorkforceIdentityMismatch() throws Exception {
+        JsonNode shift = startShift(token, shiftBody(siteId, driverId, equipmentId, day(1), "MORNING"));
+        long secondDriverId = createDriver(token, "Driver Two", "160", "180", "210");
+        Long otherMemberId = jdbcTemplate.queryForObject(
+                "select workforce_member_id from drivers where id = ? and tenant_id = ?",
+                Long.class, secondDriverId, tenantId);
+
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "update shifts set workforce_member_id = ? where id = ? and tenant_id = ?",
+                otherMemberId, shift.path("id").asLong(), tenantId))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
     void dateDefaultsToTodayAndFutureDatesAreRejected() throws Exception {
         JsonNode shift = startShift(token, shiftBody(siteId, driverId, equipmentId, null, "MORNING"));
         assertThat(shift.path("shiftDate").asText()).isEqualTo(today().toString());
