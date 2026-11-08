@@ -81,6 +81,10 @@ class ShiftWorkforceIdentityMigrationIntegrationTest {
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM information_schema.STATISTICS "
                 + "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'drivers' "
                 + "AND INDEX_NAME = 'uq_drivers_id_tenant_workforce_member'",
+                Integer.class)).isEqualTo(3);
+        assertThat(jdbc.queryForObject("SELECT COUNT(DISTINCT INDEX_NAME) FROM information_schema.STATISTICS "
+                + "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'drivers' "
+                + "AND INDEX_NAME = 'uq_drivers_id_tenant_workforce_member'",
                 Integer.class)).isEqualTo(1);
 
         assertThatThrownBy(() -> jdbc.update("INSERT INTO shifts (tenant_id, shift_date, shift_type, site_id, "
