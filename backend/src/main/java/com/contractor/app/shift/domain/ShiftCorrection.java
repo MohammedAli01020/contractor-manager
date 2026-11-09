@@ -119,6 +119,14 @@ public class ShiftCorrection extends BaseTenantEntity {
     @Column(name = "replacement_earning_ledger_entry_id")
     private Long replacementEarningLedgerEntryId;
 
+    // Canonical Workforce ledger references; legacy IDs above remain historical compatibility references.
+    @Column(name = "old_earning_workforce_ledger_entry_id")
+    private Long oldEarningWorkforceLedgerEntryId;
+    @Column(name = "reversed_earning_workforce_ledger_entry_id")
+    private Long reversedEarningWorkforceLedgerEntryId;
+    @Column(name = "replacement_earning_workforce_ledger_entry_id")
+    private Long replacementEarningWorkforceLedgerEntryId;
+
     @Column(name = "applied_at")
     private LocalDateTime appliedAt;
 
@@ -229,10 +237,16 @@ public class ShiftCorrection extends BaseTenantEntity {
     public Long getOldEarningLedgerEntryId() { return oldEarningLedgerEntryId; }
     public Long getReversedEarningLedgerEntryId() { return reversedEarningLedgerEntryId; }
     public Long getReplacementEarningLedgerEntryId() { return replacementEarningLedgerEntryId; }
+    public Long getOldEarningWorkforceLedgerEntryId() { return oldEarningWorkforceLedgerEntryId; }
+    public Long getReversedEarningWorkforceLedgerEntryId() { return reversedEarningWorkforceLedgerEntryId; }
+    public Long getReplacementEarningWorkforceLedgerEntryId() { return replacementEarningWorkforceLedgerEntryId; }
     public void setOldEarningLedgerEntryId(Long value) { this.oldEarningLedgerEntryId = value; }
     public void setWageReversalJournalEntryId(Long value) { this.wageReversalJournalEntryId = value; }
     public void setReplacementWageJournalEntryId(Long value) { this.replacementWageJournalEntryId = value; }
     public void setReversedEarningLedgerEntryId(Long value) { this.reversedEarningLedgerEntryId = value; }
     public void setReplacementEarningLedgerEntryId(Long value) { this.replacementEarningLedgerEntryId = value; }
+    public void setOldEarningWorkforceLedgerEntryId(Long value) { this.oldEarningWorkforceLedgerEntryId = value; }
+    public void setReversedEarningWorkforceLedgerEntryId(Long value) { this.reversedEarningWorkforceLedgerEntryId = value; }
+    public void setReplacementEarningWorkforceLedgerEntryId(Long value) { this.replacementEarningWorkforceLedgerEntryId = value; }
     public LocalDateTime getAppliedAt() { return appliedAt; }
 }

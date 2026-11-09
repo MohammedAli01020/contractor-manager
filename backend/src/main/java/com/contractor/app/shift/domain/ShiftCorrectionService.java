@@ -27,6 +27,8 @@ import com.contractor.app.shift.api.dto.ShiftCorrectionRequest;
 import com.contractor.app.shift.api.dto.ShiftResponse;
 import com.contractor.app.shift.infra.ShiftCorrectionRepository;
 import com.contractor.app.shift.infra.ShiftRepository;
+import com.contractor.app.workforce.domain.WorkforceLedgerEntry;
+import com.contractor.app.workforce.infra.WorkforceLedgerEntryRepository;
 import com.contractor.app.site.domain.Site;
 import com.contractor.app.site.infra.SiteRepository;
 import java.math.BigDecimal;
@@ -55,6 +57,7 @@ public class ShiftCorrectionService {
     private final ShiftCorrectionRepository corrections;
     private final DriverRepository drivers;
     private final DriverLedgerEntryRepository ledger;
+    private final WorkforceLedgerEntryRepository workforceLedger;
     private final JournalEntryRepository journals;
     private final JournalLineRepository journalLines;
     private final JournalPostingService posting;
@@ -67,7 +70,8 @@ public class ShiftCorrectionService {
     private final ZoneId businessZone;
 
     public ShiftCorrectionService(ShiftRepository shifts, ShiftCorrectionRepository corrections,
-            DriverRepository drivers, DriverLedgerEntryRepository ledger, JournalEntryRepository journals,
+            DriverRepository drivers, DriverLedgerEntryRepository ledger,
+            WorkforceLedgerEntryRepository workforceLedger, JournalEntryRepository journals,
             JournalLineRepository journalLines, JournalPostingService posting,
             DefaultChartOfAccountsService defaultAccounts, SiteRepository sites,
             EquipmentRepository equipment, ShiftService shiftService, AuditService audit,
@@ -77,6 +81,7 @@ public class ShiftCorrectionService {
         this.corrections = corrections;
         this.drivers = drivers;
         this.ledger = ledger;
+        this.workforceLedger = workforceLedger;
         this.journals = journals;
         this.journalLines = journalLines;
         this.posting = posting;
@@ -212,6 +217,7 @@ public class ShiftCorrectionService {
         }
         JournalEntry original = null;
         DriverLedgerEntry oldEarning = null;
+        WorkforceLedgerEntry oldWorkforceEarning = null;
         List<JournalLine> originalLines = new ArrayList<>();
         ChartAccount wageExpense = null;
         ChartAccount driverPayable = null;
@@ -256,6 +262,8 @@ public class ShiftCorrectionService {
                     || oldEarning.getBalanceEffect().compareTo(oldWage) != 0) {
                 throw ApiException.conflict("حركة دفتر السائق الأصلية غير متطابقة ولا يمكن تصحيحها بأمان.");
             }
+            oldWorkforceEarning =
+                    requireWorkforceMirror(tenantId, oldEarning, shift.getWorkforceMemberId());
             originalLines = journalLines.findByTenantIdAndJournalEntryIdOrderByLineNumberAsc(
                     tenantId, original.getId());
             wageExpense = defaultAccounts.requireSystemAccount(
@@ -287,7 +295,10 @@ public class ShiftCorrectionService {
                 request.getExpectedVersion(), shift, request.getShiftDate(), request.getShiftType(),
                 request.getSiteId(), shift.getDriverId(), request.getEquipmentId(), newWage, newPrice,
                 newOperatingCost, newNotes, correctedHours, correctedQuantity);
-        if (oldEarning != null) correction.setOldEarningLedgerEntryId(oldEarning.getId());
+        if (oldEarning != null) {
+            correction.setOldEarningLedgerEntryId(oldEarning.getId());
+            correction.setOldEarningWorkforceLedgerEntryId(oldWorkforceEarning.getId());
+        }
         corrections.saveAndFlush(correction);
 
         // Reverse a previously recognized wage only when the old snapshot was positive.
@@ -310,6 +321,8 @@ public class ShiftCorrectionService {
                     "shift-wage-correction-reversal-" + correction.getId(),
                     shiftId, reversal.getId(), actorId));
             correction.setReversedEarningLedgerEntryId(reversedEarning.getId());
+            correction.setReversedEarningWorkforceLedgerEntryId(
+                    requireWorkforceMirror(tenantId, reversedEarning, shift.getWorkforceMemberId()).getId());
         }
 
         // Zero is represented by no replacement journal and no zero-value ledger row.
@@ -329,6 +342,8 @@ public class ShiftCorrectionService {
                     "أجر الوردية المصحح رقم " + shiftId + " (تصحيح " + correction.getId() + ")",
                     "shift-wage-correction-" + correction.getId(), shiftId, replacement.getId(), actorId));
             correction.setReplacementEarningLedgerEntryId(replacementEarning.getId());
+            correction.setReplacementEarningWorkforceLedgerEntryId(
+                    requireWorkforceMirror(tenantId, replacementEarning, shift.getWorkforceMemberId()).getId());
         }
         corrections.saveAndFlush(correction);
 
@@ -367,6 +382,25 @@ public class ShiftCorrectionService {
         audit.record(tenantId, AuditEntityType.SHIFT, shiftId, AuditAction.CORRECTED,
                 "correction", null, "id=" + correction.getId() + "; reason=" + reason);
         return shiftService.get(tenantId, shiftId);
+    }
+
+    private WorkforceLedgerEntry requireWorkforceMirror(
+            Long tenantId, DriverLedgerEntry legacyEntry, Long workforceMemberId) {
+        WorkforceLedgerEntry mirrored = workforceLedger
+                .findByTenantIdAndLegacySourceEntryId(tenantId, legacyEntry.getId())
+                .orElseThrow(() -> ApiException.conflict(
+                        "الحركة المالية غير موجودة في دفتر القوى العاملة؛ تم إيقاف التصحيح لحماية السجل."));
+        if (!Objects.equals(mirrored.getTenantId(), tenantId)
+                || !Objects.equals(mirrored.getWorkforceMemberId(), workforceMemberId)
+                || !Objects.equals(mirrored.getShiftId(), legacyEntry.getShiftId())
+                || !Objects.equals(mirrored.getJournalEntryId(), legacyEntry.getJournalEntryId())
+                || !Objects.equals(mirrored.getTransactionType(), legacyEntry.getTransactionType())
+                || mirrored.getAmount().compareTo(legacyEntry.getAmount()) != 0
+                || mirrored.getBalanceEffect().compareTo(legacyEntry.getBalanceEffect()) != 0) {
+            throw ApiException.conflict(
+                    "نسخة الحركة في دفتر القوى العاملة لا تطابق دفتر السائق؛ يلزم فحص المطابقة قبل التصحيح.");
+        }
+        return mirrored;
     }
 
     private void requireSameRequest(ShiftCorrection prior, Long shiftId,
