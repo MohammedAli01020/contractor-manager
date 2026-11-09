@@ -61,7 +61,8 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
         // Keep these names in sync with V6__prevent_duplicate_active_shifts.sql.
         if (causeMessage.contains("uq_shifts_one_active_driver")
-                || causeMessage.contains("uq_shifts_one_active_equipment")) {
+                || causeMessage.contains("uq_shifts_one_active_equipment")
+                || causeMessage.contains("uq_shifts_one_active_workforce_member")) {
             return build(HttpStatus.CONFLICT, "ACTIVE_SHIFT_CONFLICT",
                     "السائق أو المعدة مستخدم بالفعل في وردية نشطة.", request, null);
         }
