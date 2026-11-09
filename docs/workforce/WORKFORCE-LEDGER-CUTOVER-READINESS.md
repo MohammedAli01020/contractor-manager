@@ -100,3 +100,31 @@ V58 allows the legacy provenance pair to be NULL for future Workforce-native row
 ## Immediate next implementation unit
 
 Add focused integration tests around the shared WorkforceMember lock and financial race cases while the legacy writer remains authoritative. Then implement the canonical command boundary behind existing endpoints, initially delegating to the same single legacy writer. Only after the test matrix and full reader inventory are satisfied should a separate reviewed commit switch the writer to Workforce.
+
+## Lock-protocol decision addendum (2026-11-09)
+
+The earlier phrase "lock the WorkforceMember row as the shared mutex" is a target-state concept, not permission to change the lock order in one service. The source audit found existing workflows that acquire Driver before WorkforceMember, including financial commands and non-financial Driver-to-Workforce synchronization. Changing only financial commands to WorkforceMember-before-Driver would introduce a lock-order inversion and can deadlock with those synchronization paths.
+
+### Safe transition protocol
+
+Use a dedicated, tenant-scoped `workforce_financial_locks` row as the financial serialization mutex for each canonical member during the compatibility period:
+
+1. Create exactly one mutex row for each WorkforceMember in the same transaction as member creation; backfill existing members with a unique `(tenant_id, workforce_member_id)` key before enabling the protocol.
+2. Every balance-affecting command must lock that mutex row first: shift earning, shift recovery, payment, both advance types, correction reversal, and correction replacement. A command must resolve and tenant-check the canonical member before it can acquire the mutex.
+3. After the mutex, retain the existing compatibility lock order for rows still in use: Driver, then WorkforceMember, then Equipment (and Shift/resource locks in one documented order for workflows that need them). No path may acquire the financial mutex after taking one of those row locks.
+4. All command entry points must adopt the mutex in one coordinated release. Until that release, the old lock protocol remains authoritative; do not partially deploy the new protocol.
+5. Keep non-financial Driver profile synchronization on its current Driver → WorkforceMember order. It does not acquire the financial mutex and must not mutate financial balances.
+6. Add race tests that mix every pair of financial commands on the same member, plus tests for mutex-row creation/backfill, tenant isolation, and rollback. Verify no deadlocks/timeouts and exactly-once movement/journal outcomes.
+7. After all legacy Driver financial dependencies are retired, the dedicated mutex may be removed in a later reviewed change if locking the canonical WorkforceMember row alone is proven safe across every remaining writer and profile workflow.
+
+### Why not use WorkforceMember as the mutex immediately?
+
+A lock is only a mutex when every competing path takes it before any conflicting lock. Today, Driver-first profile synchronization can hold Driver while waiting for WorkforceMember. If a newly changed financial path holds WorkforceMember while waiting for Driver, each transaction can wait for the other. A dedicated mutex row avoids this inversion while preserving the existing compatibility order beneath it.
+
+### Updated implementation order
+
+- First, add the mutex schema/backfill and repository/service primitives without changing existing writers.
+- Next, wire all financial command entry points to acquire the mutex before any Driver/Workforce/Shift/Equipment row locks; do this as one coordinated unit, not one endpoint at a time.
+- Then add pairwise concurrency coverage and run the complete MySQL financial integration suite.
+- Only after the protocol is proven should the canonical idempotency migration and Workforce-native writer cutover proceed.
+- Keep the V56 trigger and legacy ledger intact throughout this phase.
