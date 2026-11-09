@@ -196,3 +196,19 @@ Next safe implementation unit: introduce a shared canonical payment/advance comm
 ### Cross-route idempotency regression coverage — 2026-11-09
 
 Added an integration test that submits the same payment first through the Workforce member route and then through the legacy Driver route. It asserts that the retry reuses the original Driver-ledger movement and journal, and that exactly one mirrored Workforce row exists with complete legacy provenance. This protects the current compatibility behavior while the shared-writer cutover is designed. The test has been committed but has not yet been observed in a new CI run.
+
+### Mixed-route payment concurrency validation — 2026-11-09
+
+- Commit `d158145fda77386b04b1de77f6407cfee1f07c45` adds a mixed-route, distinct-key payment race: two concurrent requests each attempt to pay 300 from the same 500 earned balance, one through the Workforce route and one through the Driver route.
+- GitHub Actions run [42615462847](https://github.com/MohammedAli01020/contractor-manager/actions/runs/42615462847) completed successfully. The full Backend Maven Tests job and all required migration/integration execution gates passed.
+- The test asserts exactly one 300 payment in each ledger, a remaining payable balance of 200 in both projections, complete legacy provenance on the Workforce mirror, and exactly one corresponding payment journal.
+- This validates the current Driver-row serialization and V56 mirror under the tested mixed-route race. It does not make Workforce ledger the writer.
+
+### Mixed-route advance concurrency validation — 2026-11-09
+
+- Commit `6d1229d9869f75b8264989f61e9dd4fb5a8e6332` adds two integration tests to `DriverLedgerIdempotencyIntegrationTest`.
+- `AGAINST_EARNED`: concurrent 300 advances via Workforce and Driver routes against 500 earned balance; expects one 201 and one 400, one mirrored ADVANCE movement, and 200 remaining payable.
+- `RECOVERABLE`: concurrent 300 advances via both routes; expects two 201 responses, two legacy movements and two Workforce mirrors, unchanged payable balance of 500, and recoverable-advance balance of 600.
+- GitHub Actions run [42615938860](https://github.com/MohammedAli01020/contractor-manager/actions/runs/42615938860) was started for this commit. Its result is pending at the time of this update; these new tests must not be described as passed until that run completes successfully.
+- These tests continue to validate the compatibility architecture only: Driver ledger remains the sole application writer and V56 remains the mirror.
+
