@@ -2045,7 +2045,7 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
                 Integer.class, tenantId, driverId, shiftId)).isEqualTo(1);
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM driver_ledger_entries WHERE tenant_id=? AND driver_id=? "
-                        + "AND transaction_type='ADVANCE' AND client_request_key=?,
+                        + "AND transaction_type='ADVANCE' AND client_request_key=?",
                 Integer.class, tenantId, driverId, advance.get("clientRequestKey")))
                 .isEqualTo(advanceStatus == 201 ? 1 : 0);
 
