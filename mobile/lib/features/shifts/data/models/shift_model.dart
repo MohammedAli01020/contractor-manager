@@ -21,6 +21,7 @@ class ShiftModel {
     required this.notes,
     this.siteId,
     this.driverId,
+    this.workforceMemberId,
     this.equipmentId,
     this.version,
     this.createdAt,
@@ -53,6 +54,7 @@ class ShiftModel {
       notes: _stringValue(json['notes'], ''),
       siteId: _nullableInt(json['siteId']),
       driverId: _nullableInt(json['driverId']),
+      workforceMemberId: _nullableInt(json['workforceMemberId']),
       equipmentId: _nullableInt(json['equipmentId']),
       version: _nullableInt(json['version']),
       createdAt: _dateTimeValue(json['createdAt']),
@@ -83,6 +85,7 @@ class ShiftModel {
   final String notes;
   final int? siteId;
   final int? driverId;
+  final int? workforceMemberId;
   final int? equipmentId;
   final int? version;
   final DateTime? createdAt;
