@@ -53,3 +53,10 @@ This is a verified dependency inventory, not a claim that every repository refer
 - The V56 legacy INSERT trigger remains enabled and unchanged. Current application writers still use the Driver ledger.
 - The nullable unique provenance index continues to prevent duplicate legacy source links while allowing multiple native rows with NULL provenance under MySQL semantics.
 - This is schema preparation only, not a writer cutover. No Workforce-native financial command has been enabled by V58.
+
+## Native provenance schema test
+
+- `DriverLedgerIdempotencyIntegrationTest.workforceLedgerSchemaAcceptsNativeMovementWithoutLegacyDriverProvenance` inserts a balanced journal whose lines reference the Workforce member without a Driver ID, then inserts a Workforce ledger movement with both legacy provenance columns NULL.
+- The test asserts the movement is visible through the canonical Workforce repository, contributes to the Workforce balance, and has no corresponding Driver ledger row.
+- This is a schema/read-path capability test only. It does not switch shift completion or any production command to native writes.
+- The integration test has been added but has not been executed in this environment.
