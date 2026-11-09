@@ -29,6 +29,10 @@ public class WorkforceRoleProvisioningService {
         this.tenants = tenants;
     }
 
+    private boolean isDefaultShiftEligible(String code) {
+        return "DRIVER".equals(code) || "EQUIPMENT_OPERATOR".equals(code) || "WORKER".equals(code);
+    }
+
     @Transactional
     public void initializeForTenant(Long tenantId) {
         // Serialize all provisioning attempts for this tenant before checking/inserting roles.
@@ -39,6 +43,7 @@ public class WorkforceRoleProvisioningService {
             if (!roles.existsByTenantIdAndCode(tenantId, definition[0])) {
                 WorkforceRole role = new WorkforceRole(tenantId, definition[0], definition[1]);
                 role.setSystemDefined(true);
+                role.setShiftEligible(isDefaultShiftEligible(definition[0]));
                 roles.save(role);
             }
         }
