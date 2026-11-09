@@ -550,6 +550,45 @@ class DriverLedgerIdempotencyIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void workforceMirrorTriggerFailureRollsBackLegacyPaymentAndJournal() throws Exception {
+        Long driverId = createDriver("mirror-trigger-rollback");
+        earn(driverId, "mirror-trigger-rollback-earned");
+        Long memberId = jdbcTemplate.queryForObject(
+                "SELECT workforce_member_id FROM drivers WHERE id = ? AND tenant_id = ?",
+                Long.class, driverId, tenantId);
+        String key = "mirror-trigger-rollback-collision";
+
+        JournalPostingRequest nativeJournalRequest = new JournalPostingRequest(
+                "mirror-trigger-native-journal", "WORKFORCE_LEDGER_TEST", memberId,
+                LocalDate.of(2026, 11, 2), "Existing native Workforce movement", null,
+                Arrays.asList(
+                        new JournalLineRequest(expenseId, "Workforce expense",
+                                new BigDecimal("10.00"), BigDecimal.ZERO, null, memberId, null),
+                        new JournalLineRequest(payableId, "Workforce payable",
+                                BigDecimal.ZERO, new BigDecimal("10.00"), null, memberId, null)));
+        Long nativeJournalId = postingService.post(tenantId, actorId, nativeJournalRequest).getId();
+        jdbcTemplate.update(
+                "INSERT INTO workforce_ledger_entries (tenant_id, workforce_member_id, transaction_type, "
+                        + "transaction_date, amount, balance_effect, description, client_request_key, shift_id, "
+                        + "journal_entry_id, created_by_user_id, created_at, legacy_source_entry_id, legacy_driver_id) "
+                        + "VALUES (?, ?, 'ADJUSTMENT', ?, ?, ?, ?, ?, NULL, ?, ?, UTC_TIMESTAMP(6), NULL, NULL)",
+                tenantId, memberId, LocalDate.of(2026, 11, 2), new BigDecimal("10.00"),
+                new BigDecimal("10.00"), "Existing native movement", key, nativeJournalId, actorId);
+
+        int responseStatus = postPayment(driverId, key, cashId).andReturn().getResponse().getStatus();
+
+        assertThat(responseStatus).isGreaterThanOrEqualTo(400);
+        assertThat(ledger.findByTenantIdAndClientRequestKey(tenantId, key)).isEmpty();
+        assertThat(journals.findByTenantIdAndPostingKey(tenantId, "driver-payment:" + key)).isEmpty();
+        assertThat(workforceLedger.findByTenantIdAndClientRequestKey(tenantId, key))
+                .hasValueSatisfying(entry -> {
+                    assertThat(entry.getWorkforceMemberId()).isEqualTo(memberId);
+                    assertThat(entry.getJournalEntryId()).isEqualTo(nativeJournalId);
+                    assertThat(entry.getLegacySourceEntryId()).isNull();
+                });
+    }
+
+    @Test
     void workforceLedgerSchemaAcceptsNativeMovementWithoutLegacyDriverProvenance() throws Exception {
         Long driverId = createDriver("native-workforce-ledger");
         Long memberId = jdbcTemplate.queryForObject(
