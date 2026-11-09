@@ -89,13 +89,13 @@ public class DriverLedgerService {
                         request.getPaymentAccountId()));
         // Initialize accounts before the financial mutex; every financial command follows
         // this order so account setup cannot invert the mutex/tenant lock order.
-        Driver candidate = drivers.findByIdAndTenantId(driverId, tenantId)
+        Long candidateMemberId = drivers.findWorkforceMemberIdByIdAndTenantId(driverId, tenantId)
                 .orElseThrow(() -> ApiException.notFound("العامل غير موجود."));
         defaultAccounts.initializeForTenant(tenantId);
-        financialLocks.lockForFinancialUpdate(tenantId, candidate.getWorkforceMemberId());
+        financialLocks.lockForFinancialUpdate(tenantId, candidateMemberId);
         Driver lockedDriver = drivers.findByIdAndTenantIdForUpdate(driverId,tenantId)
                 .orElseThrow(()->ApiException.notFound("العامل غير موجود."));
-        if (!candidate.getWorkforceMemberId().equals(lockedDriver.getWorkforceMemberId())) {
+        if (!candidateMemberId.equals(lockedDriver.getWorkforceMemberId())) {
             throw ApiException.conflict("تم تغيير ربط العامل بالقوى العاملة أثناء العملية. أعد المحاولة.");
         }
         workforceMembers.findByIdAndTenantIdForUpdate(lockedDriver.getWorkforceMemberId(), tenantId)
