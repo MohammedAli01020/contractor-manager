@@ -128,20 +128,39 @@ public class ShiftService {
     /** القيم التي سيقترحها النموذج قبل الحفظ. */
     @Transactional
     public ShiftDefaultsResponse defaults(Long tenantId, Long driverId, Long equipmentId, ShiftType type) {
-        return defaults(tenantId, driverId, equipmentId, type, null, null);
+        return defaults(tenantId, driverId, null, equipmentId, type, null, null);
     }
 
     @Transactional
     public ShiftDefaultsResponse defaults(Long tenantId, Long driverId, Long equipmentId, ShiftType type,
                                           Long siteId, LocalDate shiftDate) {
-        if (driverId == null && equipmentId == null) {
-            throw ApiException.badRequest("اختار سائقًا أو معدة لحساب القيم الافتراضية.");
+        return defaults(tenantId, driverId, null, equipmentId, type, siteId, shiftDate);
+    }
+
+    @Transactional
+    public ShiftDefaultsResponse defaults(Long tenantId, Long driverId, Long workforceMemberId,
+                                          Long equipmentId, ShiftType type, Long siteId, LocalDate shiftDate) {
+        if (driverId == null && workforceMemberId == null && equipmentId == null) {
+            throw ApiException.badRequest("اختار شخصًا أو معدة لحساب القيم الافتراضية.");
         }
-        Driver driver = driverId == null ? null : drivers.findByIdAndTenantId(driverId, tenantId)
-                .orElseThrow(() -> ApiException.notFound("السائق أو العامل غير موجود."));
-        WorkforceMember member = driver == null ? null : workforceMembers
-                .findByIdAndTenantId(driver.getWorkforceMemberId(), tenantId)
-                .orElseThrow(() -> ApiException.conflict("هوية العامل غير موجودة في القوى العاملة."));
+        Driver driver = driverId != null
+                ? drivers.findByIdAndTenantId(driverId, tenantId)
+                    .orElseThrow(() -> ApiException.notFound("السائق أو العامل غير موجود."))
+                : workforceMemberId == null ? null
+                    : drivers.findByWorkforceMemberIdAndTenantId(workforceMemberId, tenantId).orElse(null);
+        WorkforceMember member = workforceMemberId != null
+                ? workforceMembers.findByIdAndTenantId(workforceMemberId, tenantId)
+                    .orElseThrow(() -> ApiException.notFound("الشخص غير موجود في القوى العاملة."))
+                : driver == null ? null : workforceMembers
+                    .findByIdAndTenantId(driver.getWorkforceMemberId(), tenantId)
+                    .orElseThrow(() -> ApiException.conflict("هوية العامل غير موجودة في القوى العاملة."));
+        if (driver != null && member != null
+                && !member.getId().equals(driver.getWorkforceMemberId())) {
+            throw ApiException.conflict("معرّف السائق لا يتطابق مع هوية الشخص في القوى العاملة.");
+        }
+        if (workforceMemberId != null && driver == null && member == null) {
+            throw ApiException.notFound("الشخص غير موجود في القوى العاملة.");
+        }
         Equipment item = equipmentId == null ? null : equipment.findByIdAndTenantId(equipmentId, tenantId)
                 .orElseThrow(() -> ApiException.notFound("المعدة غير موجودة."));
         BigDecimal suggestedWage = null;
@@ -149,10 +168,10 @@ public class ShiftService {
         String compensationBasis = null;
         BigDecimal compensationRate = null;
         String compensationUnitCode = null;
-        if (driver != null) {
+        if (member != null) {
             if (siteId != null) {
                 LocalDate date = shiftDate == null ? today() : shiftDate;
-                Shift preview = new Shift(tenantId, date, type, siteId, driverId, equipmentId);
+                Shift preview = new Shift(tenantId, date, type, siteId, driver == null ? null : driver.getId(), equipmentId);
                 compensationResolver.resolveAndApply(tenantId, member, driver, date, siteId, type, null, preview);
                 compensationBasis = preview.getCompensationBasis();
                 compensationRate = preview.getCompensationRate();
