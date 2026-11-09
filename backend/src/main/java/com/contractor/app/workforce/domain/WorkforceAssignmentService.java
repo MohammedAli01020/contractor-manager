@@ -127,8 +127,25 @@ public class WorkforceAssignmentService {
         if (!role.isActive() && Boolean.TRUE.equals(request.getShiftEligible())) {
             throw ApiException.conflict("لا يمكن تفعيل أهلية الوردية لدور غير نشط.");
         }
-        role.setShiftEligible(Boolean.TRUE.equals(request.getShiftEligible()));
-        return WorkforceRoleResponse.from(roles.saveAndFlush(role));
+        boolean wasEligible = role.isShiftEligible();
+        boolean nowEligible = Boolean.TRUE.equals(request.getShiftEligible());
+        role.setShiftEligible(nowEligible);
+        WorkforceRole saved = roles.saveAndFlush(role);
+        if (!wasEligible && nowEligible) {
+            // Existing active assignments become shift candidates immediately.
+            List<WorkforceAssignment> activeAssignments =
+                    assignments.findAllByTenantIdAndWorkforceRoleIdAndStatus(
+                            tenantId, roleId, WorkforceAssignmentStatus.ACTIVE);
+            for (WorkforceAssignment assignment : activeAssignments) {
+                Driver linked = drivers.findByWorkforceMemberIdAndTenantIdForUpdate(
+                        assignment.getWorkforceMemberId(), tenantId).orElse(null);
+                WorkforceMember member = lockMember(tenantId, assignment.getWorkforceMemberId());
+                if (member.isActive()) {
+                    ensureOperationalDriver(member, saved, linked);
+                }
+            }
+        }
+        return WorkforceRoleResponse.from(saved);
     }
 
     @Transactional
