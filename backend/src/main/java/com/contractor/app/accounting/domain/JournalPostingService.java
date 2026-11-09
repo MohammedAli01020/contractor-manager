@@ -331,7 +331,9 @@ public class JournalPostingService {
                     || a.getDebit().compareTo(b.debit) != 0
                     || a.getCredit().compareTo(b.credit) != 0
                     || !Objects.equals(a.getDriverId(), b.driverId)
-                    || !Objects.equals(a.getWorkforceMemberId(), b.workforceMemberId)
+                    // Historical immutable lines predate workforce_member_id and remain NULL.
+                    || (a.getWorkforceMemberId() != null
+                    && !Objects.equals(a.getWorkforceMemberId(), b.workforceMemberId))
                     || !Objects.equals(a.getEquipmentId(), b.equipmentId)) {
                 return false;
             }
@@ -352,7 +354,9 @@ public class JournalPostingService {
                     || oldLine.getDebit().compareTo(newLine.credit) != 0
                     || oldLine.getCredit().compareTo(newLine.debit) != 0
                     || !Objects.equals(oldLine.getDriverId(), newLine.driverId)
-                    || !Objects.equals(oldLine.getWorkforceMemberId(), newLine.workforceMemberId)
+                    // Permit exact reversal of immutable pre-V57 lines whose Workforce dimension is NULL.
+                    || (oldLine.getWorkforceMemberId() != null
+                    && !Objects.equals(oldLine.getWorkforceMemberId(), newLine.workforceMemberId))
                     || !Objects.equals(oldLine.getEquipmentId(), newLine.equipmentId)) {
                 throw ApiException.badRequest("قيم القيد العكسي لا تطابق القيد الأصلي.");
             }
