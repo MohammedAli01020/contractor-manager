@@ -111,7 +111,7 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
   Map<String, dynamic> _currentShiftCandidate() => {
         'id': _driverId,
         'workforceMemberId': _workforceMemberId,
-        'name': widget.shift?.driverName ?? 'العامل الحالي',
+        'name': widget.shift?.personName ?? 'العامل الحالي',
         'workerType': 'DRIVER',
         'availability': 'AVAILABLE',
         'liveStatus': 'AVAILABLE',
