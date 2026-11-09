@@ -69,7 +69,9 @@ class ShiftCorrectionSnapshotMigrationIntegrationTest {
 
         assertThat(jdbc.queryForList(
                 "SELECT tenant_id, idempotency_key, old_compensation_basis, new_compensation_basis, "
-                        + "old_compensation_rate, new_compensation_rate "
+                        + "old_compensation_rate, new_compensation_rate, "
+                        + "old_earning_workforce_ledger_entry_id, reversed_earning_workforce_ledger_entry_id, "
+                        + "replacement_earning_workforce_ledger_entry_id "
                         + "FROM shift_corrections ORDER BY tenant_id"))
                 .hasSize(2)
                 .allSatisfy(row -> {
@@ -78,6 +80,10 @@ class ShiftCorrectionSnapshotMigrationIntegrationTest {
                     assertThat(row.get("new_compensation_basis")).isNull();
                     assertThat(row.get("old_compensation_rate")).isNull();
                     assertThat(row.get("new_compensation_rate")).isNull();
+                    // V59 must not rewrite immutable historical correction audit rows.
+                    assertThat(row.get("old_earning_workforce_ledger_entry_id")).isNull();
+                    assertThat(row.get("reversed_earning_workforce_ledger_entry_id")).isNull();
+                    assertThat(row.get("replacement_earning_workforce_ledger_entry_id")).isNull();
                 });
 
         assertThat(jdbc.queryForObject(
@@ -97,6 +103,12 @@ class ShiftCorrectionSnapshotMigrationIntegrationTest {
         assertThat(jdbc.queryForObject(
                 "SELECT COUNT(*) FROM flyway_schema_history WHERE version='51' AND success=1",
                 Integer.class)).isEqualTo(1);
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.TRIGGERS "
+                        + "WHERE TRIGGER_SCHEMA=DATABASE() AND TRIGGER_NAME IN "
+                        + "('trg_shift_corrections_workforce_refs_insert', "
+                        + "'trg_shift_corrections_workforce_refs_guard')",
+                Integer.class)).isEqualTo(2);
     }
 
     private static long insertTenant(JdbcTemplate jdbc, String name) {

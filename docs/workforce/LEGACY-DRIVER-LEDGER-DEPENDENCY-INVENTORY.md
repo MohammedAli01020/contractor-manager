@@ -128,3 +128,14 @@ The current code does not yet have one uniform lock order across every workflow:
 
 This is not a reason to add an isolated Workforce lock to one command. Before native cutover, define and test a single cross-workflow lock protocol that accounts for shift serialization, canonical member serialization, and equipment reservation. Update all competing commands consistently in one coordinated change and add opposing-order concurrency tests to detect deadlocks. The existing Driver-first comments describe the compatibility-phase order; they are not a complete canonical lock protocol.
 
+## Workforce correction references (V59)
+
+- V59 adds three nullable canonical references to `shift_corrections`: original earning, reversal, and replacement earning Workforce ledger row IDs. The existing `*_earning_ledger_entry_id` columns remain legacy Driver ledger IDs and are not reinterpreted.
+- V59 adds tenant-scoped composite foreign keys to `workforce_ledger_entries(tenant_id, id)`. The composite unique index is intentional because the correction references must be tenant-safe.
+- Existing APPLIED correction audit rows are not backfilled or updated. V44's guard rejects updates to APPLIED rows; preserving their immutable historical state takes priority. Their original legacy IDs remain valid, and their new Workforce references stay NULL.
+- New correction creation resolves the original mirrored row through `legacy_source_entry_id` and validates tenant, Workforce member, legacy Driver provenance, shift, journal, type, amount, and balance effect before recording its canonical ID.
+- Newly appended reversal/replacement movements are resolved immediately after the legacy insert (the V56 trigger mirrors them in the same transaction), and their Workforce IDs are stored in the correction row.
+- V59 adds database guards on correction INSERT and the APPLYING -> APPLIED transition. They validate the exact canonical rows against the expected legacy provenance, Driver-to-Workforce mapping, shift, journal, movement type, amount, and effect. V44 continues to validate legacy references and protect applied audit rows.
+- This is still a compatibility-stage change: legacy remains the writer, V56 remains enabled, and no ledger cutover or table retirement occurs.
+- Integration assertions were added for positive corrections, repeated correction chains, zero-wage transitions, and preservation of historical correction rows. They have not yet been executed in this environment.
+
