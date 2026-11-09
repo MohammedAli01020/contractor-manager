@@ -76,3 +76,7 @@ The V56 mirror migration, Workforce entity/repository, reconciliation pack, V57 
 No production database has been changed. No branch has been merged and `main` has not been modified.
 
 - The correction integration test also attempts direct UPDATE and DELETE operations against a mirrored Workforce ledger row and expects the V56 append-only trigger to reject both. Corrections therefore preserve audit evidence by appending compensating movements rather than mutating prior rows.
+
+## Native ledger write preparation — V58
+
+V58 prepares the Workforce ledger schema for native entries by allowing `legacy_source_entry_id` and `legacy_driver_id` to be NULL together. Existing mirrored movements keep both values, and a CHECK constraint prevents partial provenance. The V56 trigger and all current legacy writers remain active. No financial write path has been cut over; shift completion, advance recovery, and corrections still require a separately tested atomic migration with Workforce-scoped locking, idempotency, journal links, and correction-chain compatibility.
