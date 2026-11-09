@@ -199,6 +199,42 @@ class DriverLedgerIdempotencyIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void workforceAndLegacyDriverPaymentRoutesShareOneIdempotencyReservationAndMirror() throws Exception {
+        Long driverId = createDriver("cross-route-payment");
+        earn(driverId, "cross-route-payment-earned");
+        Long memberId = jdbcTemplate.queryForObject(
+                "SELECT workforce_member_id FROM drivers WHERE id = ? AND tenant_id = ?",
+                Long.class, driverId, tenantId);
+
+        Map<String, Object> payment = new HashMap<>();
+        payment.put("clientRequestKey", "cross-route-payment-key");
+        payment.put("paymentDate", LocalDate.of(2026, 11, 2));
+        payment.put("amount", new BigDecimal("100.00"));
+        payment.put("paymentAccountId", cashId);
+        payment.put("description", "Cross-route payment retry");
+
+        String workforceRoute = "/api/v1/workforce/members/" + memberId + "/ledger/payments";
+        String driverRoute = "/api/v1/drivers/" + driverId + "/ledger/payments";
+        postJson(workforceRoute, payment, token).andExpect(status().isCreated());
+        postJson(driverRoute, payment, token).andExpect(status().isCreated());
+
+        assertThat(ledger.findByTenantIdAndClientRequestKey(tenantId, "cross-route-payment-key"))
+                .hasValueSatisfying(entry -> assertThat(entry.getDriverId()).isEqualTo(driverId));
+        assertThat(workforceLedger.findByTenantIdAndClientRequestKey(tenantId, "cross-route-payment-key"))
+                .hasValueSatisfying(entry -> {
+                    assertThat(entry.getWorkforceMemberId()).isEqualTo(memberId);
+                    assertThat(entry.getLegacyDriverId()).isEqualTo(driverId);
+                    assertThat(entry.getLegacySourceEntryId()).isNotNull();
+                });
+        assertThat(ledger.findByTenantIdAndDriverIdOrderByTransactionDateAscIdAsc(tenantId, driverId))
+                .filteredOn(entry -> "PAYMENT".equals(entry.getTransactionType())).hasSize(1);
+        assertThat(workforceLedger.findByTenantIdAndWorkforceMemberIdOrderByTransactionDateAscIdAsc(
+                tenantId, memberId)).filteredOn(entry -> "PAYMENT".equals(entry.getTransactionType())).hasSize(1);
+        assertThat(journals.findByTenantIdAndPostingKey(tenantId, "driver-payment:cross-route-payment-key"))
+                .isPresent();
+    }
+
+    @Test
     void workforceLedgerStatementCannotReadAnotherTenantsMember() throws Exception {
         Long driverId = createDriver("tenant-isolation-ledger");
         Long memberId = jdbcTemplate.queryForObject(
