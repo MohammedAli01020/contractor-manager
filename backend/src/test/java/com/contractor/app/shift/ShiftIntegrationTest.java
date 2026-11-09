@@ -324,6 +324,10 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
 
         assertThat(started.path("workforceMemberId").asLong()).isEqualTo(memberId);
         assertThat(started.path("driverId").asLong()).isEqualTo(driverId);
+        String canonicalName = jdbcTemplate.queryForObject(
+                "select full_name from workforce_members where id = ?", String.class, memberId);
+        assertThat(started.path("workforceMemberName").asText()).isEqualTo(canonicalName);
+        assertThat(started.path("driverName").asText()).isEqualTo(canonicalName);
     }
 
     @Test
