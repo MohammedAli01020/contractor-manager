@@ -57,12 +57,14 @@ public class ShiftController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) Long siteId,
             @RequestParam(required = false) Long driverId,
+            @RequestParam(required = false) Long workforceMemberId,
             @RequestParam(required = false) Long equipmentId,
             @RequestParam(required = false) ShiftType type,
             @RequestParam(required = false) ShiftStatus status,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return service.list(CurrentUser.tenantId(), from, to, siteId, driverId, equipmentId, type, status, page, size);
+        return service.list(CurrentUser.tenantId(), from, to, siteId, driverId, workforceMemberId,
+                equipmentId, type, status, page, size);
     }
 
     @GetMapping("/running")
