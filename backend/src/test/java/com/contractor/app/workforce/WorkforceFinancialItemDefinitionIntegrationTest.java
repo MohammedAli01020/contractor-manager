@@ -9,7 +9,6 @@ import java.util.HashMap;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
-import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -57,11 +56,11 @@ class WorkforceFinancialItemDefinitionIntegrationTest extends AbstractIntegratio
                 .param("active", "true")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
                 .andExpect(status().isOk()));
-        assertThat(activeOnly).isEmpty();
+        assertThat(activeOnly.size()).isZero();
 
         JsonNode all = body(getJson("/api/v1/workforce/financial-item-definitions", token)
                 .andExpect(status().isOk()));
-        assertThat(all).hasSize(1);
+        assertThat(all.size()).isEqualTo(1);
     }
 
     @Test
