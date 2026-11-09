@@ -461,7 +461,7 @@ class DriverLedgerIdempotencyIntegrationTest extends AbstractIntegrationTest {
                 .hasSize(1);
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM journal_entries WHERE tenant_id = ? AND source_type IN "
-                        + "('DRIVER_PAYMENT', 'DRIVER_ADVANCE') AND source_id = ?",
+                        + "('DRIVER_PAYMENT', 'DRIVER_ADVANCE_EARNED') AND source_id = ?",
                 Integer.class, tenantId, driverId)).isEqualTo(1);
     }
 
