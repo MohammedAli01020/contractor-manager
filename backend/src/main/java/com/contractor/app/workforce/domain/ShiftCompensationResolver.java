@@ -2,13 +2,11 @@ package com.contractor.app.workforce.domain;
 
 import com.contractor.app.common.error.ApiException;
 import com.contractor.app.common.money.Money;
-import com.contractor.app.driver.domain.Driver;
 import com.contractor.app.shift.domain.Shift;
 import com.contractor.app.shift.domain.ShiftType;
 import com.contractor.app.workforce.infra.CompensationAgreementRepository;
 import com.contractor.app.workforce.infra.CompensationComponentRepository;
 import com.contractor.app.workforce.infra.WorkforceAssignmentRepository;
-import com.contractor.app.workforce.infra.WorkforceMemberRepository;
 import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.List;
@@ -19,7 +17,7 @@ import org.springframework.stereotype.Service;
 
 /**
  * Resolves a shift's contractual wage by its business date and freezes the result on the shift.
- * The legacy driver-rate path is retained only for members who have never had an approved agreement.
+ * The member identity is canonical; the Driver projection is consulted only by the temporary legacy-rate fallback.
  */
 @Service
 public class ShiftCompensationResolver {
@@ -27,7 +25,6 @@ public class ShiftCompensationResolver {
     private final CompensationAgreementRepository agreements;
     private final CompensationComponentRepository components;
     private final WorkforceAssignmentRepository assignments;
-    private final WorkforceMemberRepository members;
 
     public ShiftCompensationResolver(CompensationAgreementRepository agreements,
             CompensationComponentRepository components, WorkforceAssignmentRepository assignments,
@@ -35,21 +32,20 @@ public class ShiftCompensationResolver {
         this.agreements = agreements;
         this.components = components;
         this.assignments = assignments;
-        this.members = members;
     }
 
-    public void resolveAndApply(Long tenantId, Driver driver, LocalDate shiftDate,
-            Long siteId, ShiftType shiftType, BigDecimal requestedWage, Shift shift) {
-        if (driver == null || driver.getWorkforceMemberId() == null || shiftDate == null
+    public void resolveAndApply(Long tenantId, WorkforceMember member, com.contractor.app.driver.domain.Driver legacyDriver,
+            LocalDate shiftDate, Long siteId, ShiftType shiftType, BigDecimal requestedWage, Shift shift) {
+        if (member == null || !tenantId.equals(member.getTenantId()) || shiftDate == null
                 || siteId == null || shiftType == null || shift == null) {
-            throw ApiException.badRequest("تعذر تحديد بيانات العامل والتكليف لحساب الأجر.");
+            throw ApiException.badRequest("تعذر تحديد هوية العامل والتكليف لحساب الأجر.");
+        }
+        if (legacyDriver != null && !member.getId().equals(legacyDriver.getWorkforceMemberId())) {
+            throw ApiException.conflict("سجل التشغيل لا يتطابق مع هوية العامل في القوى العاملة.");
         }
 
-        members.findByIdAndTenantIdForUpdate(driver.getWorkforceMemberId(), tenantId)
-                .orElseThrow(() -> ApiException.notFound("العامل المرتبط بالسائق غير موجود."));
-
         List<CompensationAgreement> memberAgreements =
-                agreements.findAllForWageResolution(tenantId, driver.getWorkforceMemberId());
+                agreements.findAllForWageResolution(tenantId, member.getId());
 
         List<CompensationAgreement> approved = memberAgreements.stream()
                 .filter(a -> a.getStatus() == CompensationAgreementStatus.APPROVED
@@ -65,12 +61,12 @@ public class ShiftCompensationResolver {
             if (!approved.isEmpty()) {
                 throw ApiException.conflict("لا توجد اتفاقية أجر معتمدة وسارية للعامل في تاريخ الوردية. راجع تواريخ الاتفاقيات.");
             }
-            applyLegacyRate(driver, shiftDate, shiftType, requestedWage, shift);
+            applyLegacyRate(legacyDriver, shiftType, requestedWage, shift);
             return;
         }
 
         List<WorkforceAssignment> effectiveAssignments =
-                assignments.findAllForWageResolution(tenantId, driver.getWorkforceMemberId()).stream()
+                assignments.findAllForWageResolution(tenantId, member.getId()).stream()
                 .filter(a -> a.getStatus() != WorkforceAssignmentStatus.CANCELLED)
                 .filter(a -> !a.getEffectiveFrom().isAfter(shiftDate)
                         && (a.getEffectiveTo() == null || !a.getEffectiveTo().isBefore(shiftDate)))
@@ -153,7 +149,10 @@ public class ShiftCompensationResolver {
                 Money.scale(component.getRate()), Money.scale(component.getRate()));
     }
 
-    private static void applyLegacyRate(Driver driver, LocalDate shiftDate, ShiftType shiftType, BigDecimal requestedWage, Shift shift) {
+    private static void applyLegacyRate(com.contractor.app.driver.domain.Driver driver, ShiftType shiftType, BigDecimal requestedWage, Shift shift) {
+        if (driver == null) {
+            throw ApiException.conflict("لا توجد اتفاقية أجر معتمدة وسارية لهذا العامل. أنشئ اتفاقية أجر قبل بدء الوردية.");
+        }
         java.math.BigDecimal rate;
         switch (shiftType) {
             case MORNING: rate = driver.getMorningRate(); break;
