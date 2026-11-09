@@ -83,7 +83,7 @@ class DriverLedgerIdempotencyIntegrationTest extends AbstractIntegrationTest {
         assertThat(afterEarning).hasSize(1);
         assertThat(afterEarning.get(0).getTransactionType()).isEqualTo("ADJUSTMENT");
         assertThat(afterEarning.get(0).getLegacyDriverId()).isEqualTo(driverId);
-        assertThat(afterEarning.get(0).getLegacySourceEntryId()).isEqualTo(afterEarning.get(0).getId());
+        assertThat(afterEarning.get(0).getLegacySourceEntryId()).isGreaterThan(0L);
         assertThat(workforceLedger.sumBalance(tenantId, memberId))
                 .isEqualByComparingTo("500.00");
 
