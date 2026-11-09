@@ -16,6 +16,11 @@ public interface DriverRepository extends JpaRepository<Driver, Long>, JpaSpecif
 
     Optional<Driver> findByWorkforceMemberIdAndTenantId(Long memberId, Long tenantId);
 
+    /** Scalar lookup avoids keeping a stale Driver entity in the persistence context before a later lock. */
+    @Query("select d.workforceMemberId from Driver d where d.id = :id and d.tenantId = :tenantId")
+    Optional<Long> findWorkforceMemberIdByIdAndTenantId(
+            @Param("id") Long id, @Param("tenantId") Long tenantId);
+
     /** Keep the global lock order: driver rows first, then workforce identity rows. */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select d from Driver d where d.id = :id and d.tenantId = :tenantId")
