@@ -581,7 +581,7 @@ public class ShiftService {
             return;
         }
 
-        Set<Long> driverIds = new TreeSet<>(Arrays.asList(shift.getDriverId(), request.getDriverId()));
+        Set<Long> driverIds = new TreeSet<>(Arrays.asList(shift.getDriverId(), requestedDriverId));
         Set<Long> workforceMemberIds = new TreeSet<>();
         Set<Long> equipmentIds = new TreeSet<>(Arrays.asList(shift.getEquipmentId(), request.getEquipmentId()));
 
@@ -602,14 +602,14 @@ public class ShiftService {
                     .orElseThrow(() -> ApiException.notFound("المعدة غير موجودة."));
         }
 
-        Driver requestedDriver = drivers.findByIdAndTenantId(request.getDriverId(), tenantId)
+        Driver requestedDriver = drivers.findByIdAndTenantId(requestedDriverId, tenantId)
                 .orElseThrow(() -> ApiException.notFound("السائق أو العامل غير موجود."));
         if (shifts.existsByTenantIdAndWorkforceMemberIdAndStatusAndIdNot(
                 tenantId, requestedDriver.getWorkforceMemberId(), ShiftStatus.IN_PROGRESS, shift.getId())) {
             throw ApiException.activeShiftConflict("العامل لديه وردية نشطة بالفعل.");
         }
         if (shifts.existsByTenantIdAndDriverIdAndStatusAndIdNot(
-                tenantId, request.getDriverId(), ShiftStatus.IN_PROGRESS, shift.getId())) {
+                tenantId, requestedDriverId, ShiftStatus.IN_PROGRESS, shift.getId())) {
             throw ApiException.activeShiftConflict("السائق أو العامل لديه وردية نشطة بالفعل.");
         }
         if (shifts.existsByTenantIdAndEquipmentIdAndStatusAndIdNot(
