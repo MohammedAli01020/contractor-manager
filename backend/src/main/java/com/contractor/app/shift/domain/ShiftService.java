@@ -366,8 +366,11 @@ public class ShiftService {
         // journal/ledger rows and without recovering advances from a zero earning.
         if (shift.getDriverWage().signum() > 0) {
             // Serialize wage recognition against payments for the same worker.
-            drivers.findByIdAndTenantIdForUpdate(shift.getDriverId(), tenantId)
+            Driver lockedDriver = drivers.findByIdAndTenantIdForUpdate(shift.getDriverId(), tenantId)
                     .orElseThrow(() -> ApiException.notFound("السائق المرتبط بالوردية غير موجود."));
+            workforceMembers.findByIdAndTenantIdForUpdate(lockedDriver.getWorkforceMemberId(), tenantId)
+                    .orElseThrow(() -> ApiException.conflict(
+                            "هوية العامل غير موجودة في القوى العاملة. أوقف العملية وراجع ربط البيانات."));
             defaultAccounts.initializeForTenant(tenantId);
             ChartAccount wageExpense = defaultAccounts.requireSystemAccount(
                     tenantId, SystemAccountCode.DRIVER_WAGE_EXPENSE);
@@ -459,8 +462,11 @@ public class ShiftService {
             restoredStatus = ShiftStatus.COMPLETED;
         } else {
             // وردية أُلغيت أثناء التشغيل: أعد حجز مواردها بنفس ترتيب الأقفال المستخدم عند البدء.
-            drivers.findByIdAndTenantIdForUpdate(shift.getDriverId(), tenantId)
+            Driver lockedDriver = drivers.findByIdAndTenantIdForUpdate(shift.getDriverId(), tenantId)
                     .orElseThrow(() -> ApiException.notFound("السائق أو العامل غير موجود."));
+            workforceMembers.findByIdAndTenantIdForUpdate(lockedDriver.getWorkforceMemberId(), tenantId)
+                    .orElseThrow(() -> ApiException.conflict(
+                            "هوية العامل غير موجودة في القوى العاملة. أوقف العملية وراجع ربط البيانات."));
             equipment.findByIdAndTenantIdForUpdate(shift.getEquipmentId(), tenantId)
                     .orElseThrow(() -> ApiException.notFound("المعدة غير موجودة."));
 
