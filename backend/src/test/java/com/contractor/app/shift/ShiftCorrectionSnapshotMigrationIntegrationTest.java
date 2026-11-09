@@ -1,6 +1,7 @@
 package com.contractor.app.shift;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.sql.PreparedStatement;
 import java.sql.Statement;
@@ -152,6 +153,50 @@ class ShiftCorrectionSnapshotMigrationIntegrationTest {
                         + "'replacement_earning_workforce_ledger_entry_id') "
                         + "AND REFERENCED_COLUMN_NAME='id'))",
                 Integer.class)).isEqualTo(6);
+
+        // Prove the composite FK rejects a reference whose numeric ledger ID exists
+        // but belongs to another tenant. Disable only the snapshot INSERT trigger in
+        // this disposable schema so this test isolates the FK itself; V59's workforce
+        // INSERT trigger remains active and accepts the zero-wage/no-old-ref snapshot.
+        seedWorkforceLedgerRowForTenant(jdbc, firstTenantId, 9000001L);
+        jdbc.execute("DROP TRIGGER trg_shift_corrections_compensation_snapshot_insert");
+        assertThatThrownBy(() -> insertCorrectionWithForeignTenantLedgerReference(
+                jdbc, secondTenantId, 9000001L))
+                .hasMessageContaining("fk_shift_correction_replacement_workforce_ledger");
+    }
+
+    private static void seedWorkforceLedgerRowForTenant(JdbcTemplate jdbc, long tenantId, long ledgerId) {
+        jdbc.execute(connection -> {
+            try (Statement statement = connection.createStatement()) {
+                statement.execute("SET FOREIGN_KEY_CHECKS=0");
+                statement.execute(
+                        "INSERT INTO workforce_ledger_entries (id, tenant_id, workforce_member_id, "
+                                + "transaction_type, transaction_date, amount, balance_effect, description, "
+                                + "client_request_key, shift_id, journal_entry_id, created_by_user_id, "
+                                + "created_at, legacy_source_entry_id, legacy_driver_id) VALUES ("
+                                + ledgerId + ", " + tenantId + ", 1, 'EARNING', '2025-01-01', 100.00, "
+                                + "100.00, 'FK isolation fixture', 'fk-isolation-" + tenantId
+                                + "', 9001, 9001, 1, UTC_TIMESTAMP(6), NULL, NULL)");
+                statement.execute("SET FOREIGN_KEY_CHECKS=1");
+            }
+            return null;
+        });
+    }
+
+    private static void insertCorrectionWithForeignTenantLedgerReference(
+            JdbcTemplate jdbc, long correctionTenantId, long foreignLedgerId) {
+        jdbc.update(
+                "INSERT INTO shift_corrections (tenant_id, shift_id, idempotency_key, reason, status, "
+                        + "actor_user_id, expected_shift_version, old_shift_date, new_shift_date, "
+                        + "old_shift_type, new_shift_type, old_site_id, new_site_id, old_driver_id, "
+                        + "new_driver_id, old_equipment_id, new_equipment_id, old_driver_wage, "
+                        + "new_driver_wage, old_price, new_price, old_equipment_operating_cost, "
+                        + "new_equipment_operating_cost, replacement_earning_workforce_ledger_entry_id, "
+                        + "created_at, updated_at) VALUES (?, 9001, ?, 'cross-tenant FK test', 'APPLYING', "
+                        + "7001, 3, '2025-01-01', '2025-01-01', 'MORNING', 'MORNING', 11, 11, "
+                        + "21, 21, 31, 31, 0.00, 0.00, 500.00, 500.00, 25.00, 25.00, ?, "
+                        + "UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))",
+                correctionTenantId, "cross-tenant-fk-" + correctionTenantId, foreignLedgerId);
     }
 
     private static long insertTenant(JdbcTemplate jdbc, String name) {
