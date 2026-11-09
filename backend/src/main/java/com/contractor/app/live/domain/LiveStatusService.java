@@ -133,7 +133,7 @@ public class LiveStatusService {
             if (onlyFree && !"AVAILABLE".equals(live)) {
                 continue;
             }
-            result.add(new LiveDriverResponse(d.getId(), d.getName(), d.getWorkerType().name(),
+            result.add(new LiveDriverResponse(d.getId(), d.getWorkforceMemberId(), d.getName(), d.getWorkerType().name(),
                     d.getAvailability().name(), d.getUnavailableReason(), live,
                     current == null ? null : current.getId(),
                     current == null ? null : current.getShiftDate(),
@@ -223,7 +223,7 @@ public class LiveStatusService {
                     : driver.getAvailability() == DriverAvailability.UNAVAILABLE ? "UNAVAILABLE" : "AVAILABLE";
             if (onlyFree && !"AVAILABLE".equals(live)) continue;
             String workerType = "WORKER".equals(roleCode) ? "WORKER" : "DRIVER";
-            result.add(new LiveDriverResponse(driver.getId(), driver.getName(), workerType,
+            result.add(new LiveDriverResponse(driver.getId(), driver.getWorkforceMemberId(), driver.getName(), workerType,
                     driver.getAvailability().name(), driver.getUnavailableReason(), live,
                     current == null ? null : current.getId(),
                     current == null ? null : current.getShiftDate(),
