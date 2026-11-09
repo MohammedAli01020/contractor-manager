@@ -212,6 +212,51 @@ class CompensationAgreementWorkflowIntegrationTest extends AbstractIntegrationTe
     }
 
     @Test
+    void compensationAgreementCanUseTenantCatalogDefinitionAndKeepsItsSnapshot() throws Exception {
+        JsonNode definition = body(postJson("/api/v1/workforce/financial-item-definitions", Map.of(
+                "itemCode", "STANDARD_HOURLY_WAGE",
+                "displayName", "أجر الساعة القياسي",
+                "description", "تعريف قابل لإعادة الاستخدام",
+                "family", "EARNING",
+                "calculationMethod", "PER_HOUR",
+                "allowRecurring", true,
+                "allowOneOff", true,
+                "requiresApproval", true), token).andExpect(status().isCreated()));
+
+        long definitionId = definition.path("id").asLong();
+        Map<String, Object> component = new HashMap<>();
+        component.put("financialItemDefinitionId", definitionId);
+        component.put("rate", 145.50);
+        component.put("unitCode", "HOUR");
+        component.put("sortOrder", 0);
+
+        long agreementId = createAgreementWithComponents(workerAssignmentId,
+                "2026-01-01", null, List.of(component));
+        JsonNode agreement = body(getJson("/api/v1/workforce/members/" + memberId
+                + "/compensation-agreements", token).andExpect(status().isOk()));
+        JsonNode createdAgreement = find(agreement, agreementId);
+        JsonNode savedComponent = createdAgreement.path("components").get(0);
+
+        assertThat(savedComponent.path("financialItemDefinitionId").asLong()).isEqualTo(definitionId);
+        assertThat(savedComponent.path("componentCode").asText()).isEqualTo("STANDARD_HOURLY_WAGE");
+        assertThat(savedComponent.path("displayName").asText()).isEqualTo("أجر الساعة القياسي");
+        assertThat(savedComponent.path("basis").asText()).isEqualTo("HOUR");
+        assertThat(savedComponent.path("rate").decimalValue()).isEqualByComparingTo("145.50");
+
+        Map<String, Object> deactivate = new HashMap<>();
+        deactivate.put("version", definition.path("version").asLong());
+        deactivate.put("displayName", definition.path("displayName").asText());
+        deactivate.put("description", definition.path("description").asText());
+        deactivate.put("allowRecurring", true);
+        deactivate.put("allowOneOff", true);
+        deactivate.put("requiresApproval", true);
+        putJson("/api/v1/workforce/financial-item-definitions/" + definitionId,
+                deactivate, token).andExpect(status().isOk());
+        post("/api/v1/workforce/financial-item-definitions/" + definitionId + "/deactivate",
+                definition.path("version").asLong(), token);
+    }
+
+    @Test
     void anotherTenantCannotReadOrAttachAgreementToThisMember() throws Exception {
         String otherToken = registerTenant("Other Compensation Co", uniqueName("othercomp"))
                 .path("accessToken").asText();
