@@ -378,9 +378,9 @@ public class ShiftService {
                     "استحقاق أجر السائق عن الوردية رقم " + shift.getId(), null,
                     java.util.Arrays.asList(
                             new JournalLineRequest(wageExpense.getId(), "مصروف أجر الوردية",
-                                    shift.getDriverWage(), BigDecimal.ZERO, shift.getDriverId(), null),
+                                    shift.getDriverWage(), BigDecimal.ZERO, shift.getDriverId(), shift.getWorkforceMemberId(), null),
                             new JournalLineRequest(driverPayable.getId(), "مستحق للسائق عن الوردية",
-                                    BigDecimal.ZERO, shift.getDriverWage(), shift.getDriverId(), null))));
+                                    BigDecimal.ZERO, shift.getDriverWage(), shift.getDriverId(), shift.getWorkforceMemberId(), null))));
             shift.setDriverWageJournalEntryId(wageJournal.getId());
             driverLedger.saveAndFlush(new DriverLedgerEntry(tenantId, shift.getDriverId(), "EARNING",
                     shift.getShiftDate(), shift.getDriverWage(), shift.getDriverWage(),
@@ -398,9 +398,9 @@ public class ShiftService {
                                 "استرداد جزء من سلفة العامل من أجر الوردية رقم " + shift.getId(), null,
                                 java.util.Arrays.asList(
                                         new JournalLineRequest(driverPayable.getId(), "خصم سلفة من مستحق العامل",
-                                                recovery, BigDecimal.ZERO, shift.getDriverId(), null),
+                                                recovery, BigDecimal.ZERO, shift.getDriverId(), shift.getWorkforceMemberId(), null),
                                         new JournalLineRequest(advancesAsset.getId(), "تخفيض رصيد سلف العامل",
-                                                BigDecimal.ZERO, recovery, shift.getDriverId(), null))));
+                                                BigDecimal.ZERO, recovery, shift.getDriverId(), shift.getWorkforceMemberId(), null))));
                 driverLedger.saveAndFlush(new DriverLedgerEntry(tenantId, shift.getDriverId(), "ADVANCE_RECOVERY",
                         shift.getShiftDate(), recovery, recovery.negate(),
                         "استرداد سلفة من أجر الوردية رقم " + shift.getId(), recoveryKey,
