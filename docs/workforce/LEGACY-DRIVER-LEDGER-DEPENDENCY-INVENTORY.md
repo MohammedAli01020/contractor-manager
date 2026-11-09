@@ -178,3 +178,17 @@ This is not a reason to add an isolated Workforce lock to one command. Before na
 - The run followed the test fixes in `805c4b7` (native-provenance insert binding), `9d4999c` (correction-chain row count), and `e8f599b` (MySQL CHECK-constraint exception translation).
 - This successful CI run supersedes the earlier statements above that these specific integration tests had not yet been executed. It does not establish that every test or build target outside this Backend Maven CI workflow has passed.
 - The current architecture remains unchanged: Driver ledger is still the application write authority, V56 mirror remains active, and no legacy table or trigger has been removed. No production database was accessed or changed.
+
+## Native payment/advance cutover gate — 2026-11-09
+
+A proposed isolated switch of the Workforce payment/advance endpoint to append native rows was reviewed and deliberately not retained. Source inspection found that this would be unsafe while the legacy Driver payment/advance endpoints remain active:
+
+- The legacy endpoints still call `DriverLedgerService`, calculate balances from `driver_ledger_entries`, and insert rows mirrored by V56.
+- A native Workforce payment/advance would update only `workforce_ledger_entries`. A later legacy endpoint call would calculate a stale Driver balance that excludes that native movement and could permit an overpayment or an earned-balance advance beyond the true balance.
+- A member-only lock is also insufficient during the transition because shift finish and correction still serialize through the Driver projection. The transitional order must remain default-account initialization -> Driver projection lock (when one exists) -> Workforce member lock. Generic Workforce members without a Driver projection still require the canonical member lock.
+- Therefore payment/advance writer cutover must be coordinated across both HTTP route families in one transaction-safe change. The legacy Driver routes must become compatibility adapters to the same canonical command (with an explicitly reviewed response/ID compatibility contract), or be safely retired after client migration. They must not remain independent writers.
+- The canonical writer must also preserve historical retry behavior for existing mirrored rows, request-key uniqueness, fingerprint checks, account validation, journal posting, and concurrency across the two route families.
+
+The isolated implementation was reverted before retaining a split-writer state. The Workforce entity now has a constructor capable of creating native rows with both provenance fields NULL; this is schema/entity preparation only and is not called by the active command service. Current production behavior on this branch remains unchanged: Workforce payment/advance commands still delegate to the legacy Driver writer, and V56 remains the mirror.
+
+Next safe implementation unit: introduce a shared canonical payment/advance command and route both Workforce and Driver controllers through it, preserving or explicitly versioning the legacy response contract; add mixed-route race/retry tests before enabling the cutover. Do not remove the Driver projection lock until shift completion and correction have moved to the same canonical lock protocol.
