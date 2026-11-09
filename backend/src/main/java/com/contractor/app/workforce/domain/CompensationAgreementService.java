@@ -8,11 +8,15 @@ import com.contractor.app.workforce.infra.CompensationAgreementRepository;
 import com.contractor.app.workforce.infra.CompensationComponentRepository;
 import com.contractor.app.workforce.infra.WorkforceAssignmentRepository;
 import com.contractor.app.workforce.infra.WorkforceMemberRepository;
+import com.contractor.app.workforce.infra.WorkforceFinancialItemDefinitionRepository;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.stream.Collectors;
+import com.contractor.app.workforce.domain.WorkforceFinancialItemDefinition;
+import com.contractor.app.workforce.domain.WorkforceFinancialItemFamily;
+import com.contractor.app.workforce.domain.WorkforceFinancialItemCalculationMethod;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,15 +27,18 @@ public class CompensationAgreementService {
     private final WorkforceAssignmentRepository assignments;
     private final CompensationAgreementRepository agreements;
     private final CompensationComponentRepository components;
+    private final WorkforceFinancialItemDefinitionRepository financialItems;
 
     public CompensationAgreementService(WorkforceMemberRepository members,
                                         WorkforceAssignmentRepository assignments,
                                         CompensationAgreementRepository agreements,
-                                        CompensationComponentRepository components) {
+                                        CompensationComponentRepository components,
+                                        WorkforceFinancialItemDefinitionRepository financialItems) {
         this.members = members;
         this.assignments = assignments;
         this.agreements = agreements;
         this.components = components;
+        this.financialItems = financialItems;
     }
 
     @Transactional(readOnly = true)
@@ -234,15 +241,50 @@ public class CompensationAgreementService {
                                 List<CompensationComponentRequest> requests) {
         for (CompensationComponentRequest request : requests) {
             try {
-                components.save(new CompensationComponent(tenantId, agreementId,
-                        request.getComponentCode(), request.getDisplayName(), request.getBasis(),
-                        request.getRate(), request.getUnitCode(), request.getShiftType(),
-                        request.getSortOrder() == null ? 0 : request.getSortOrder()));
+                Long definitionId = request.getFinancialItemDefinitionId();
+                String code = request.getComponentCode();
+                String name = request.getDisplayName();
+                CompensationBasis basis = request.getBasis();
+
+                if (definitionId != null) {
+                    WorkforceFinancialItemDefinition definition = financialItems
+                            .findByIdAndTenantIdForUpdate(definitionId, tenantId)
+                            .orElseThrow(() -> ApiException.notFound("تعريف البند المالي غير موجود."));
+                    if (!definition.isActive()) {
+                        throw ApiException.conflict("لا يمكن استخدام بند مالي معطل في اتفاقية جديدة.");
+                    }
+                    if (definition.getFamily() != WorkforceFinancialItemFamily.EARNING) {
+                        throw ApiException.badRequest("اتفاقيات الأجور تقبل بنود الاستحقاق فقط.");
+                    }
+                    basis = toCompensationBasis(definition.getCalculationMethod());
+                    code = definition.getItemCode();
+                    name = definition.getDisplayName();
+                } else if (code == null || code.trim().isEmpty()
+                        || name == null || name.trim().isEmpty() || basis == null) {
+                    throw ApiException.badRequest("كود واسم وطريقة حساب مكون الأجر مطلوبة عند عدم اختيار بند من الكتالوج.");
+                }
+
+                components.save(new CompensationComponent(tenantId, agreementId, definitionId,
+                        code, name, basis, request.getRate(), request.getUnitCode(),
+                        request.getShiftType(), request.getSortOrder() == null ? 0 : request.getSortOrder()));
             } catch (IllegalArgumentException ex) {
                 throw ApiException.badRequest(ex.getMessage());
             }
         }
         components.flush();
+    }
+
+    private CompensationBasis toCompensationBasis(WorkforceFinancialItemCalculationMethod method) {
+        switch (method) {
+            case FIXED: return CompensationBasis.FIXED;
+            case PER_HOUR: return CompensationBasis.HOUR;
+            case PER_DAY: return CompensationBasis.DAY;
+            case PER_SHIFT: return CompensationBasis.SHIFT;
+            case PER_QUANTITY: return CompensationBasis.QUANTITY;
+            case MANUAL:
+            default:
+                throw ApiException.badRequest("البند اليدوي لا يمكن ربطه بمكون اتفاقية أجر محسوب.");
+        }
     }
 
     private CompensationAgreement lockAgreement(Long tenantId, Long memberId, Long agreementId) {
