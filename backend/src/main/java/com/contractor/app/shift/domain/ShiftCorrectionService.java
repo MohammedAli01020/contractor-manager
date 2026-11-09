@@ -286,7 +286,7 @@ public class ShiftCorrectionService {
             List<JournalLineRequest> reversalLines = new ArrayList<>();
             for (JournalLine line : originalLines) {
                 reversalLines.add(new JournalLineRequest(line.getAccountId(), "عكس: " + line.getDescription(),
-                        line.getCredit(), line.getDebit(), line.getDriverId(), line.getEquipmentId()));
+                        line.getCredit(), line.getDebit(), line.getDriverId(), line.getWorkforceMemberId(), line.getEquipmentId()));
             }
             JournalEntry reversal = posting.post(tenantId, actorId, new JournalPostingRequest(
                     "shift-wage-correction-reversal-" + correction.getId(),
@@ -311,9 +311,9 @@ public class ShiftCorrectionService {
                     "أجر الوردية المصحح رقم " + shiftId + " (تصحيح " + correction.getId() + ")", null,
                     java.util.Arrays.asList(
                         new JournalLineRequest(wageExpense.getId(), "مصروف أجر الوردية المصحح",
-                                newWage, BigDecimal.ZERO, shift.getDriverId(), null),
+                                newWage, BigDecimal.ZERO, shift.getDriverId(), shift.getWorkforceMemberId(), null),
                         new JournalLineRequest(driverPayable.getId(), "مستحق السائق بعد التصحيح",
-                                BigDecimal.ZERO, newWage, shift.getDriverId(), null))));
+                                BigDecimal.ZERO, newWage, shift.getDriverId(), shift.getWorkforceMemberId(), null))));
             correction.setReplacementWageJournalEntryId(replacement.getId());
             DriverLedgerEntry replacementEarning = ledger.saveAndFlush(new DriverLedgerEntry(
                     tenantId, shift.getDriverId(), "EARNING", request.getShiftDate(), newWage, newWage,
