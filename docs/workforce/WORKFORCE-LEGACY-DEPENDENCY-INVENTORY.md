@@ -25,18 +25,18 @@ The canonical person identity is linked through `drivers.workforce_member_id`, a
 
 **Conclusion:** Driver is currently a compatibility plus operational aggregate, not merely a read-only view. Before removing the table, move its remaining operational fields and invariants to an explicit Workforce operational model (or another justified resource model), migrate every consumer, and only then decide whether the projection can become a view or be removed.
 
-### 2. Shift API and schema still require `driver_id`
+### 2. Shift API and schema retain `driver_id` as an internal compatibility projection
 
 The current source has these dependencies:
 
-- `Shift` maps `driver_id` as non-null and its constructor accepts Driver ID.
-- `ShiftRequest` requires `driverId`.
-- `ShiftController` accepts `driverId` as a list filter.
-- `ShiftService.list/defaults/start` accept Driver IDs and resolve tenant-scoped Driver rows.
-- The mobile shift editor stores `_driverId`, sends `driverId` in the save payload, and uses legacy driver IDs to preserve editing of historical shifts.
-- Existing shift uniqueness and active-resource constraints are keyed by `driver_id`; they must be redesigned around canonical Workforce identity before the column can be removed.
+- `Shift` still maps `driver_id` as non-null, and the persistence constructor still stores the Driver projection ID.
+- `ShiftRequest` accepts `workforceMemberId` as the canonical identity. A legacy `driverId` is optional; when both are supplied, the backend rejects mismatches.
+- `ShiftController` accepts both IDs for legacy list filtering and canonical member filtering. Defaults lookup supports `workforceMemberId` without `driverId`.
+- `ShiftService.start/update` resolve a tenant-scoped Driver projection internally from `workforceMemberId`; the new Flutter command sends the canonical member ID without `driverId`.
+- Flutter still uses the projection in candidate/defaults compatibility paths and to render/edit historical data where necessary; it no longer sends the legacy ID in the new shift command.
+- Active-shift uniqueness is already enforced for `workforce_member_id` by V55. The legacy Driver constraint remains an additional compatibility guard, not the canonical identity rule.
 
-The shift row already has `workforce_member_id`, but coexistence does not make `driver_id` redundant while request validation, queries, constructors, uniqueness constraints, and clients still depend on it.
+Therefore, the API command identity has moved to Workforce, but the shift aggregate and persistence schema are not yet Driver-independent. Do not remove `driver_id` until constructors, lifecycle services, candidate/live-status consumers, historical compatibility, and the legacy unique/FK constraints have been migrated.
 
 ### 3. Financial ledger is only partially migrated
 
@@ -61,7 +61,7 @@ New postings should carry the canonical Workforce dimension and preserve Driver 
 | Legacy object/path | Current reason it remains | Required migration before retirement |
 |---|---|---|
 | `drivers` table | Operational fields, availability, rates, DriverService CRUD, shift locking and compatibility endpoints | Move required operational state to canonical Workforce/resource model; migrate all APIs, services, reports, tests and mobile screens; prove no runtime reads/writes |
-| `shifts.driver_id` | Required Shift entity/request field, list/default/start flows, live status, mobile payloads, unique active-shift constraints | Make `workforce_member_id` the sole command/query identity; redesign uniqueness and locking; preserve legacy API compatibility during rollout; migrate historical references safely |
+| `shifts.driver_id` | Required Shift persistence/FK field and internal Driver projection; legacy list filter and live-status compatibility | Remove Driver projection from Shift persistence/lifecycle; make canonical member identity authoritative in every consumer; retain V55 member uniqueness and retire legacy FK/index only after migration |
 | `driver_ledger_entries` | Sole active financial writer and source for current legacy ledger operations/corrections | Approved single-writer cutover to Workforce ledger; migrate every reader/report/client; run tenant-level reconciliation and rollback rehearsal |
 | V56 mirror trigger | Keeps Workforce ledger synchronized while legacy writer is authoritative | Remove only after no legacy writer exists and the Workforce writer is validated |
 | `journal_lines.driver_id` | Historical provenance and legacy compatibility; posted lines are immutable | Keep historical provenance; decide separately whether new postings need it; do not mutate old posted journals |
@@ -176,3 +176,14 @@ Validation status at documentation time:
 - Backend CI for canonical response-name mapping and its integration assertion is running.
 - Flutter CI for canonical-name parsing and shift UI updates is running.
 - No schema migration was needed; this is a read-path ownership change only.
+
+
+### Implementation progress — canonical shift command and response contract (2026-11-09)
+
+- The shift request now accepts `workforceMemberId` without `driverId`; the backend resolves the tenant-scoped Driver projection internally. Legacy clients that send only `driverId` remain supported, and conflicting dual identifiers are rejected.
+- Flutter sends the canonical member ID for create/update commands. The editor also loads defaults by canonical member ID, including the no-Driver-ID path.
+- Shift responses now source the person's display name from `WorkforceMember` and expose `workforceMemberName`; `driverName` remains a compatibility alias populated from the same canonical identity.
+- The latest backend validation for the canonical name response and test passed on `5da525cd`. Flutter validation for the canonical/legacy name parsing and display passed on `73b22df7`; canonical command payload validation passed on `6ac93498` and defaults loading passed on `b405ab31`.
+- The branch head is `3f48b04f` (documentation-only follow-up). No schema deletion, ledger writer cutover, PR merge, `main` update, or deployment occurred.
+
+**Next implementation boundary:** remove Driver from the shift aggregate's internal lifecycle, not merely from the mobile payload. Start with an explicit audit of `finish`, `cancel`, `reinstate`, correction, bulk-finish, and live-status code paths and their repository methods. Keep V55's canonical active-member uniqueness and resource lock ordering intact. The `driver_id` FK remains until that audit proves all paths no longer require the projection.
