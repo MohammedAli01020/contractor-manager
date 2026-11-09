@@ -300,6 +300,19 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
     }
 
     @Test
+    void defaultsEndpointAcceptsCanonicalWorkforceMemberIdWithoutDriverId() throws Exception {
+        Long memberId = jdbcTemplate.queryForObject(
+                "select workforce_member_id from drivers where id = ?", Long.class, driverId);
+
+        getJson("/api/v1/shifts/defaults?workforceMemberId=" + memberId
+                + "&equipmentId=" + equipmentId + "&siteId=" + siteId
+                + "&shiftDate=" + day(1) + "&shiftType=EVENING", token)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.driverWage").value(175.0))
+                .andExpect(jsonPath("$.price").value(1200.0));
+    }
+
+    @Test
     void shiftCanBeStartedUsingCanonicalWorkforceMemberId() throws Exception {
         Long memberId = jdbcTemplate.queryForObject(
                 "select workforce_member_id from drivers where id = ?", Long.class, driverId);
