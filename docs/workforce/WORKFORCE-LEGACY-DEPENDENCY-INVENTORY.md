@@ -2,7 +2,7 @@
 
 **Date:** 2026-11-09  
 **Working branch:** `feature/workforce-ledger-unification`  
-**Status:** Source-level inventory; no cutover or deletion authorized.
+**Status:** Historical source-level inventory; retirement direction is now approved by `ADR-WF-GREENFIELD-RESET-AND-LEGACY-RETIREMENT.md`.
 
 ## Purpose
 
@@ -77,7 +77,7 @@ New postings should carry the canonical Workforce dimension and preserve Driver 
 6. **Migrate all financial reads and reports** to the canonical Workforce ledger and reconcile each tenant/member against legacy balances and journal links.
 7. **Remove compatibility trigger and old tables/columns only in a later, separately reviewed migration**, after clean reconciliation, verified backups, tested rollback, and explicit product-owner approval.
 
-## Explicit non-actions
+## Supersession note\n\nThe original recommendation assumed live tenant data had to be preserved. The product owner has since clarified that current development data is disposable. Therefore, use the greenfield reset sequence in the new ADR instead of building a zero-downtime tenant migration platform. The dependency findings below remain valid and must still be resolved before dropping schema objects.\n\n## Explicit non-actions
 
 This inventory does not authorize:
 
