@@ -285,6 +285,21 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
     }
 
     @Test
+    void shiftsCanBeFilteredByCanonicalWorkforceMemberId() throws Exception {
+        Long memberId = jdbcTemplate.queryForObject(
+                "select workforce_member_id from drivers where id = ?", Long.class, driverId);
+        startShift(token, shiftBody(siteId, driverId, equipmentId, day(1), "MORNING"));
+
+        JsonNode response = body(getJson("/api/v1/shifts?workforceMemberId=" + memberId, token)
+                .andExpect(status().isOk()));
+
+        assertThat(response.path("content").isArray()).isTrue();
+        assertThat(response.path("content")).hasSize(1);
+        assertThat(response.path("content").get(0).path("workforceMemberId").asLong())
+                .isEqualTo(memberId);
+    }
+
+    @Test
     void shiftCanBeStartedUsingCanonicalWorkforceMemberId() throws Exception {
         Long memberId = jdbcTemplate.queryForObject(
                 "select workforce_member_id from drivers where id = ?", Long.class, driverId);
