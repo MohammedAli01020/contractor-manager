@@ -86,6 +86,10 @@ class WorkforceMemberMigrationIntegrationTest {
         assertThat(jdbc.queryForObject(
                 "SELECT COUNT(*) FROM workforce_members WHERE tenant_id = ?",
                 Integer.class, tenantId)).isEqualTo(1);
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM workforce_financial_locks "
+                        + "WHERE tenant_id = ? AND workforce_member_id = ?",
+                Integer.class, tenantId, ((Number) row.get("member_id")).longValue())).isEqualTo(1);
     }
 
     private long insertAndReturnId(JdbcTemplate jdbc, String sql, Object... values) {
