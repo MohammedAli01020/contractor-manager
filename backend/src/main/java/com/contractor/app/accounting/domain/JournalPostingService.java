@@ -355,9 +355,7 @@ public class JournalPostingService {
                     || oldLine.getDebit().compareTo(newLine.credit) != 0
                     || oldLine.getCredit().compareTo(newLine.debit) != 0
                     || !Objects.equals(oldLine.getDriverId(), newLine.driverId)
-                    // Permit exact reversal of immutable pre-V57 lines whose Workforce dimension is NULL.
-                    || (oldLine.getWorkforceMemberId() != null
-                    && !Objects.equals(oldLine.getWorkforceMemberId(), newLine.workforceMemberId))
+                    || !Objects.equals(oldLine.getWorkforceMemberId(), newLine.workforceMemberId)
                     || !Objects.equals(oldLine.getEquipmentId(), newLine.equipmentId)) {
                 throw ApiException.badRequest("قيم القيد العكسي لا تطابق القيد الأصلي.");
             }
