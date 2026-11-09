@@ -21,6 +21,7 @@ import com.contractor.app.driver.domain.Driver;
 import com.contractor.app.driver.domain.DriverAvailability;
 import com.contractor.app.driver.infra.DriverRepository;
 import com.contractor.app.workforce.domain.ShiftCompensationResolver;
+import com.contractor.app.workforce.infra.WorkforceMemberRepository;
 import com.contractor.app.equipment.domain.Equipment;
 import com.contractor.app.equipment.domain.EquipmentStatus;
 import com.contractor.app.equipment.infra.EquipmentRepository;
@@ -63,6 +64,7 @@ public class ShiftService {
     private final ShiftRepository shifts;
     private final SiteRepository sites;
     private final DriverRepository drivers;
+    private final WorkforceMemberRepository workforceMembers;
     private final EquipmentRepository equipment;
     private final AuditService audit;
     private final JournalPostingService journalPosting;
@@ -73,7 +75,7 @@ public class ShiftService {
     private final ShiftCompensationResolver compensationResolver;
 
     public ShiftService(ShiftRepository shifts, SiteRepository sites, DriverRepository drivers,
-                        EquipmentRepository equipment, AuditService audit,
+                        WorkforceMemberRepository workforceMembers, EquipmentRepository equipment, AuditService audit,
                         JournalPostingService journalPosting, JournalEntryRepository journalEntries,
                         DriverLedgerEntryRepository driverLedger,
                         DefaultChartOfAccountsService defaultAccounts,
@@ -82,6 +84,7 @@ public class ShiftService {
         this.shifts = shifts;
         this.sites = sites;
         this.drivers = drivers;
+        this.workforceMembers = workforceMembers;
         this.equipment = equipment;
         this.audit = audit;
         this.journalPosting = journalPosting;
@@ -175,9 +178,13 @@ public class ShiftService {
     public ShiftResponse start(Long tenantId, ShiftRequest request) {
         LocalDate date = request.getShiftDate() == null ? today() : request.getShiftDate();
         assertNotFuture(date);
-        // Serialize starts for the same driver/equipment across concurrent requests and instances.
-        drivers.findByIdAndTenantIdForUpdate(request.getDriverId(), tenantId)
+        // Global lock order: legacy Driver -> canonical WorkforceMember -> Equipment.
+        // Driver remains a compatibility/operational projection during the migration.
+        Driver lockedDriver = drivers.findByIdAndTenantIdForUpdate(request.getDriverId(), tenantId)
                 .orElseThrow(() -> ApiException.notFound("السائق أو العامل غير موجود."));
+        workforceMembers.findByIdAndTenantIdForUpdate(lockedDriver.getWorkforceMemberId(), tenantId)
+                .orElseThrow(() -> ApiException.conflict(
+                        "هوية العامل غير موجودة في القوى العاملة. أوقف العملية وراجع الربط."));
         equipment.findByIdAndTenantIdForUpdate(request.getEquipmentId(), tenantId)
                 .orElseThrow(() -> ApiException.notFound("المعدة غير موجودة."));
 
@@ -187,6 +194,7 @@ public class ShiftService {
         // establishing a MySQL REPEATABLE READ snapshot before waiting for a competing start.
         requireSite(tenantId, request.getSiteId(), null);
         assertDriverNotRunning(tenantId, request.getDriverId());
+        assertWorkforceMemberNotRunning(tenantId, driver.getWorkforceMemberId());
         assertEquipmentNotRunning(tenantId, request.getEquipmentId());
 
         Shift shift = new Shift(tenantId, date, request.getShiftType(), request.getSiteId(), request.getDriverId(),
@@ -532,6 +540,13 @@ public class ShiftService {
         }
     }
 
+    private void assertWorkforceMemberNotRunning(Long tenantId, Long workforceMemberId) {
+        if (shifts.existsByTenantIdAndWorkforceMemberIdAndStatus(
+                tenantId, workforceMemberId, ShiftStatus.IN_PROGRESS)) {
+            throw ApiException.activeShiftConflict("العامل لديه وردية نشطة بالفعل.");
+        }
+    }
+
     private void assertEquipmentNotRunning(Long tenantId, Long equipmentId) {
         if (shifts.existsByTenantIdAndEquipmentIdAndStatus(tenantId, equipmentId, ShiftStatus.IN_PROGRESS)) {
             throw ApiException.activeShiftConflict("المعدة مستخدمة في وردية نشطة بالفعل.");
@@ -548,17 +563,32 @@ public class ShiftService {
         }
 
         Set<Long> driverIds = new TreeSet<>(Arrays.asList(shift.getDriverId(), request.getDriverId()));
+        Set<Long> workforceMemberIds = new TreeSet<>();
         Set<Long> equipmentIds = new TreeSet<>(Arrays.asList(shift.getEquipmentId(), request.getEquipmentId()));
 
+        // Preserve the same lock order used by WorkforceIdentityService.
         for (Long driverId : driverIds) {
-            drivers.findByIdAndTenantIdForUpdate(driverId, tenantId)
+            Driver lockedDriver = drivers.findByIdAndTenantIdForUpdate(driverId, tenantId)
                     .orElseThrow(() -> ApiException.notFound("السائق أو العامل غير موجود."));
+            workforceMemberIds.add(lockedDriver.getWorkforceMemberId());
+        }
+        workforceMemberIds.add(shift.getWorkforceMemberId());
+        for (Long workforceMemberId : workforceMemberIds) {
+            workforceMembers.findByIdAndTenantIdForUpdate(workforceMemberId, tenantId)
+                    .orElseThrow(() -> ApiException.conflict(
+                            "هوية العامل غير موجودة في القوى العاملة. أوقف العملية وراجع الربط."));
         }
         for (Long equipmentId : equipmentIds) {
             equipment.findByIdAndTenantIdForUpdate(equipmentId, tenantId)
                     .orElseThrow(() -> ApiException.notFound("المعدة غير موجودة."));
         }
 
+        Driver requestedDriver = drivers.findByIdAndTenantId(request.getDriverId(), tenantId)
+                .orElseThrow(() -> ApiException.notFound("السائق أو العامل غير موجود."));
+        if (shifts.existsByTenantIdAndWorkforceMemberIdAndStatusAndIdNot(
+                tenantId, requestedDriver.getWorkforceMemberId(), ShiftStatus.IN_PROGRESS, shift.getId())) {
+            throw ApiException.activeShiftConflict("العامل لديه وردية نشطة بالفعل.");
+        }
         if (shifts.existsByTenantIdAndDriverIdAndStatusAndIdNot(
                 tenantId, request.getDriverId(), ShiftStatus.IN_PROGRESS, shift.getId())) {
             throw ApiException.activeShiftConflict("السائق أو العامل لديه وردية نشطة بالفعل.");
