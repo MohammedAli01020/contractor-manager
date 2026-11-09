@@ -106,3 +106,25 @@ The following details were verified directly in `ShiftService`, `ShiftCorrection
 
 No application code, migration, or database was changed as part of this review. These findings are source inspection only; builds and tests remain unrun.
 
+## Database-enforced correction dependencies (verified 2026-11-09)
+
+The application repository is not the only legacy dependency. The migration history installs database triggers that directly query `driver_ledger_entries`:
+
+- V29's `trg_shifts_protect_completed` validates the old, reversed, and replacement earning rows against the legacy table before allowing a completed-shift correction.
+- V35's `trg_driver_ledger_validate_shift_correction` authorizes correction reversal and replacement inserts by joining `shift_corrections`, posted correction journals, and legacy earning rows.
+- V30 adds `CORRECTION_REVERSAL` to the legacy table's transaction-type CHECK constraint.
+- `shift_corrections.old_earning_ledger_entry_id`, `reversed_earning_ledger_entry_id`, and `replacement_earning_ledger_entry_id` currently store legacy ledger primary keys. They are not Workforce ledger IDs, even though a mirror row can be found through `legacy_source_entry_id`.
+
+Consequently, changing only `ShiftCorrectionService` to insert Workforce rows would fail to preserve the database's authorization/integrity envelope. A future cutover must introduce explicit Workforce movement references (or another stable tenant-scoped reference design), replace the V29/V35 trigger logic in a reviewed forward migration, and test both allowed and rejected correction paths against MySQL 8. Do not reinterpret the existing correction ID columns as Workforce IDs.
+
+## Lock-order caveat
+
+The current code does not yet have one uniform lock order across every workflow:
+
+- Shift start: Driver -> WorkforceMember -> Equipment.
+- Shift finish: Shift -> Driver (for positive wage).
+- Completed-shift correction: Shift -> Driver.
+- Driver payment/advance: Driver (after default-account initialization).
+
+This is not a reason to add an isolated Workforce lock to one command. Before native cutover, define and test a single cross-workflow lock protocol that accounts for shift serialization, canonical member serialization, and equipment reservation. Update all competing commands consistently in one coordinated change and add opposing-order concurrency tests to detect deadlocks. The existing Driver-first comments describe the compatibility-phase order; they are not a complete canonical lock protocol.
+
