@@ -27,6 +27,7 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
   List<Map<String, dynamic>> _equipment = [];
   List<Map<String, dynamic>> _sites = [];
   int? _driverId;
+  int? _workforceMemberId;
   int? _equipmentId;
   int? _siteId;
   String _type = 'MORNING';
@@ -49,6 +50,7 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
     _type = shift?.shiftType ?? 'MORNING';
     _date = shift?.shiftDate ?? _today();
     _driverId = shift?.driverId;
+    _workforceMemberId = shift?.workforceMemberId;
     _equipmentId = shift?.equipmentId;
     _siteId = shift?.siteId;
     _price.text = shift?.price.toStringAsFixed(2) ?? '';
@@ -108,6 +110,7 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
 
   Map<String, dynamic> _currentShiftCandidate() => {
         'id': _driverId,
+        'workforceMemberId': _workforceMemberId,
         'name': widget.shift?.driverName ?? 'العامل الحالي',
         'workerType': 'DRIVER',
         'availability': 'AVAILABLE',
@@ -145,6 +148,15 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
       if (!mounted || requestId != _workforceCandidatesRequestId) return;
       setState(() => _error = _message(e));
     }
+  }
+
+  int? _workforceMemberIdForDriver(int driverId) {
+    for (final candidate in _drivers) {
+      if ((candidate['id'] as num?)?.toInt() == driverId) {
+        return (candidate['workforceMemberId'] as num?)?.toInt();
+      }
+    }
+    return null;
   }
 
   Future<void> _loadDefaults() async {
@@ -280,6 +292,7 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
         'shiftType': _type,
         'siteId': _siteId,
         'driverId': _driverId,
+        if (_workforceMemberId != null) 'workforceMemberId': _workforceMemberId,
         'equipmentId': _equipmentId,
         'price': _price.text.trim().isEmpty ? null : double.parse(_price.text.trim()),
         if (!_hourlyCompensation && !_quantityCompensation)
@@ -378,7 +391,11 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
                         selectedId: _driverId,
                         kind: 'driver',
                         onChanged: (v) {
-                          setState(() { _driverId = v; _defaultsLoaded = false; });
+                          setState(() {
+                            _driverId = v;
+                            _workforceMemberId = v == null ? null : _workforceMemberIdForDriver(v);
+                            _defaultsLoaded = false;
+                          });
                           _loadDefaults();
                         },
                       ),
