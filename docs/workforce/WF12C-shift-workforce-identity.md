@@ -60,3 +60,16 @@ The mismatch count must be zero, and the composite FK must reject mismatched ide
 ## Deliberately out of scope
 
 This phase does not migrate driver-ledger entries, journal dimensions, payments, advances, recoveries, or idempotency keys to Workforce IDs. Those require separate reviewed stages. It also does not remove the legacy Driver projection.
+
+## Active-shift uniqueness — V55 verification (2026-11-09)
+
+Migration `V55__prevent_duplicate_active_workforce_shifts.sql` was applied successfully to the isolated local WF06 test database (`contractor_manager_wf06_test`, MySQL 8.0.44).
+
+- A verified pre-migration database dump was taken before applying V55. The dump is retained locally; no production database was involved.
+- The migration history records V55 as successful. The generated `active_workforce_member_id` column is STORED, and `uq_shifts_one_active_workforce_member` is a tenant-scoped unique index.
+- The test database retained all 15 shifts: 13 COMPLETED and 2 IN_PROGRESS. A duplicate-active-Workforce-member preflight query returned no rows.
+- GitHub Actions Backend CI run [780](https://github.com/MohammedAli01020/contractor-manager/actions/runs/42580463622) passed. The run covered 272 backend tests, including the active-shift concurrency tests and the migration integration test proving the Workforce unique constraint independently. That integration test drops the legacy Driver unique index only inside its isolated test schema; it does not alter the WF06 test database.
+- Manual API check returned HTTP 409 `ACTIVE_SHIFT_CONFLICT` when attempting a conflicting start using an already-active legacy Driver ID. This confirms the API conflict response, but that particular request was rejected by the legacy Driver guard; it is not presented as a direct manual proof of the Workforce guard.
+- Manual Flutter test confirmed that workers already assigned to active shifts appear unavailable and cannot be selected when starting another shift.
+
+**Result:** the active-shift protection is verified at the database, CI/integration-test, API-conflict, and manual Flutter availability levels. The legacy Driver compatibility path remains intentionally present. This verification does not authorize deleting Driver tables, columns, APIs, ledger structures, or historical data.
