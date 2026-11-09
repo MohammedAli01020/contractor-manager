@@ -273,3 +273,53 @@ A focused implementation was added on the working branch after the initial revie
 The existing uq_drivers_tenant_workforce_member constraint in V36 already prevents multiple Driver projections for one Workforce member within a tenant. V55 adds the canonical shift-level invariant rather than relying on that transitional uniqueness as the final guarantee.
 
 **Verification status:** source changes committed to this feature branch; CI/integration execution has not yet been run from this editing session. Do not treat the new concurrency tests or migration as verified until the branch CI passes against MySQL. V6's driver constraint and legacy Driver references remain intentionally in place. No table/column deletion, production migration, main-branch change, or PR merge was performed.
+
+## 12. Focused repository dependency audit — 2026-11-09
+
+**Audit ref:** `feature/wf12c-shift-workforce-identity`, commit `81173e801515c4cce0a5ad8ce97eed01ff17c123`. This is a focused source/schema audit of the current branch, not yet a proof that every reference across every file, report, export, integration, or deployed client has been enumerated. No runtime code or database was changed by this audit.
+
+### 12.1 Confirmed active runtime dependencies
+
+| Area | Confirmed dependency | Classification | Retirement prerequisite |
+|---|---|---|---|
+| Shift creation/update | `ShiftService` accepts `driverId`, loads/locks `DriverRepository`, and copies the linked `workforceMemberId` to the shift. | Active compatibility + operational dependency | Change request/DTO/resource resolution and locking to canonical Workforce member IDs; preserve a temporary adapter only for old clients. |
+| Shift completion and wage posting | `ShiftService` loads the Driver, resolves wage/compensation through the driver-linked identity, writes `driver_id` into journal dimensions, and inserts `driver_ledger_entries` earnings/recoveries. | Active financial dependency | Workforce-native earning/recovery posting and reconciliation, with immutable historical snapshots and equivalent idempotency/uniqueness/concurrency protections. |
+| Active shift checks | Shift service and repository still check `driver_id` as well as `workforce_member_id`; V55 independently enforces the Workforce active-shift uniqueness key. | Active transition guard | Remove the Driver check only after all shift operations and clients use canonical Workforce IDs and equivalent tests pass. V55 must remain. |
+| Shift reassignment/correction paths | Shift service still locks/loads legacy Driver rows and queries shifts by Driver ID in at least one active-shift lookup path. | Active operational dependency | Migrate all such paths to Workforce member identity and prove stable lock ordering and race behavior. |
+| Worker ledger | `DriverLedgerService`, `DriverLedgerEntryRepository`, `DriverLedgerEntry` and `driver_ledger_entries` are live code paths for statements, payments, advances, earnings and advance recovery. Ledger rows are keyed by `driver_id`. | Active financial source of truth today | Design and implement one Workforce Ledger; migrate every transaction type, opening/closing balance and journal link; reconcile per person and tenant before cutover. |
+| Journal dimensions | `JournalLine.driverId` maps to `journal_lines.driver_id`; `JournalPostingService` validates a supplied Driver ID through `DriverRepository` and persists it. | Historical accounting dimension + active posting validation | Add Workforce dimension for new postings, preserve posted historical values, prove mapping/reconciliation, then remove Driver validation only when new posting paths no longer send it. |
+| Driver CRUD | `DriverController` exposes `/api/v1/drivers`; `DriverService` still owns driver create/update/delete and synchronizes the linked Workforce identity. | Active compatibility surface and legacy write path | Make Workforce CRUD authoritative; migrate any driver-specific operational attributes; deprecate route after mobile/web consumers move and usage is measured. |
+| Driver ledger API | `DriverLedgerController` exposes `/api/v1/drivers/{driverId}/ledger` for statement, advance and payment operations. | Active financial API | Provide Workforce-member ledger API with equivalent authorization/idempotency semantics; keep an adapter only during a defined client migration window. |
+| Live operational API | `LiveController` exposes `/drivers`; `LiveStatusService` still returns legacy Driver IDs because shift FKs and current mobile flow use them, while it consults Workforce assignments/roles to determine eligibility. | Compatibility projection, not yet a fully Workforce-native contract | Return canonical Workforce member IDs and update consumers; do not break current shift selection before the mobile/API contract is migrated together. |
+| Flutter driver management | `drivers_screen.dart` and `driver_edit_dialog.dart` call `/drivers`, use legacy IDs and provide a separate driver-management surface. | Active client dependency | Consolidate create/edit/delete and navigation into Workforce directory/member flows; verify permissions and existing customer workflows before hiding the legacy screen. |
+| Flutter shifts | `shift_editor_screen.dart` still stores/sends `driverId` and consumes the live candidate IDs as legacy driver IDs. | Active client/API compatibility | Switch the end-to-end contract to Workforce member ID (including edit-existing-shift behavior and conflict UX), with regression coverage. |
+| Workforce identity bridge | `WorkforceIdentityService` still uses `DriverRepository` to find/lock a linked Driver; Driver create/update synchronizes Workforce identity. | Transitional identity adapter | Replace with explicit Workforce-to-operational-role/assignment relationships; preserve uniqueness and prevent duplicate person records. |
+
+### 12.2 Schema and migration dependencies confirmed
+
+- V20 creates `driver_ledger_entries` with required `driver_id`, a FK to `drivers`, a shift link and journal link, plus tenant-scoped idempotency/journal uniqueness.
+- V22 adds the unique earning-per-shift key, a composite FK tying ledger movement to the exact shift/tenant/driver tuple, and append-only update/delete triggers. These are financial integrity controls, not disposable legacy clutter.
+- V36 creates `workforce_members`, backfills/links each Driver to a Workforce member, makes `drivers.workforce_member_id` required and unique per tenant, and adds a tenant-safe FK. It does not retire Driver.
+- V52 backfills Workforce role/assignment data from legacy Driver relationships; V53 creates/backfills operational Driver projections from Workforce assignments. This confirms that Driver is currently still used as an operational projection/adapter.
+- V54 adds required `shifts.workforce_member_id` but deliberately retains `shifts.driver_id` and a composite FK ensuring both point to the same Workforce identity through the Driver projection.
+- V55 adds an independent stored generated active-Workforce key and tenant-scoped unique index. It prevents duplicate active shifts by Workforce member but does not remove the Driver FK or Driver-based runtime dependencies.
+- `JournalLine.driver_id` and ledger history are referenced by financial services. No migration in this sequence has moved ledger rows or journal dimensions to Workforce identity.
+
+### 12.3 What is safe to conclude now
+
+1. **Driver is not merely unused legacy data.** It remains an active operational compatibility projection and, more importantly, a live dependency in shift lifecycle and financial posting.
+2. **The legacy driver ledger is still the active worker financial ledger.** Replacing/deleting it now would break statements, advances, payments, earnings/recoveries and journal linkage.
+3. **Historical journal-line Driver dimensions must be preserved.** Do not null, rewrite, or drop `journal_lines.driver_id` while posted history and validation depend on it.
+4. **V55 does not make Driver removable.** It adds the canonical Workforce uniqueness guarantee while the old guard and FK remain in place.
+5. **No deletion is safe or approved at this point.** This audit did not execute SQL, modify code, drop constraints, delete rows, or change production.
+
+### 12.4 Remaining inventory work before proposing deletion migrations
+
+- Enumerate every repository occurrence of Driver IDs/entities across all backend modules, scheduled jobs, exports, reporting queries, security/authorization checks, audit metadata, and integration boundaries; map each to a concrete owner and replacement.
+- Inspect every Flyway migration and trigger that references `drivers`, `driver_id`, `driver_ledger_entries`, and journal-line dimensions, including constraints added outside V20/V22/V36/V52-V55.
+- Trace all ledger transaction types and balance semantics, including recoverable/non-recoverable advances, payments, adjustments, correction reversals, shift earnings and recoveries. Build a transaction-by-transaction migration matrix.
+- Inventory Flutter navigation, all API calls/models/tests, platform-owner/admin web, exports and any external clients. Add usage telemetry or a measurable deprecation window before removing compatibility routes.
+- Inspect every tenant's data with read-only mapping/duplicate/orphan/reconciliation queries. A single successful WF06 test database is not evidence that all customer tenants are clean.
+- Design the Workforce Ledger and journal dimension changes separately for review. Require restore-tested backups, populated-database migration tests, tenant isolation, idempotency, concurrency, append-only and immutable-journal tests before cutover.
+
+**Next step:** complete the exhaustive path-by-path inventory and transaction mapping matrix. Then present the Workforce Ledger schema/API cutover plan for explicit review. Do not start a deletion migration until those deliverables and the exit criteria in section 8 are satisfied.
