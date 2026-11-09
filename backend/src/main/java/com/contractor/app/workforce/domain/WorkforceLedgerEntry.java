@@ -3,6 +3,7 @@ package com.contractor.app.workforce.domain;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import javax.persistence.Column;
 import javax.persistence.Entity;
 import javax.persistence.GeneratedValue;
@@ -68,6 +69,25 @@ public class WorkforceLedgerEntry {
     private Long legacyDriverId;
 
     protected WorkforceLedgerEntry() {
+    }
+
+    public WorkforceLedgerEntry(Long tenantId, Long workforceMemberId, String transactionType,
+            LocalDate transactionDate, BigDecimal amount, BigDecimal balanceEffect, String description,
+            String clientRequestKey, Long shiftId, Long journalEntryId, Long createdByUserId) {
+        this.tenantId = tenantId;
+        this.workforceMemberId = workforceMemberId;
+        this.transactionType = transactionType;
+        this.transactionDate = transactionDate;
+        this.amount = amount;
+        this.balanceEffect = balanceEffect;
+        this.description = description;
+        this.clientRequestKey = clientRequestKey;
+        this.shiftId = shiftId;
+        this.journalEntryId = journalEntryId;
+        this.createdByUserId = createdByUserId;
+        this.createdAt = LocalDateTime.now(ZoneOffset.UTC);
+        this.legacySourceEntryId = null;
+        this.legacyDriverId = null;
     }
 
     public Long getId() { return id; }
