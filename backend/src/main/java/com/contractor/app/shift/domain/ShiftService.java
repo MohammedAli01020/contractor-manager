@@ -83,6 +83,7 @@ public class ShiftService {
                         DriverLedgerEntryRepository driverLedger,
                         DefaultChartOfAccountsService defaultAccounts,
                         ShiftCompensationResolver compensationResolver,
+                        WorkforceFinancialLockService financialLocks,
                         @Value("${app.business-timezone:Africa/Cairo}") String businessTimezone) {
         this.shifts = shifts;
         this.sites = sites;
