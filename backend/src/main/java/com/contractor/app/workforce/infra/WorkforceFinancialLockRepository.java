@@ -6,11 +6,14 @@ import javax.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.QueryHint;
+import org.springframework.data.jpa.repository.QueryHints;
 import org.springframework.data.repository.query.Param;
 
 public interface WorkforceFinancialLockRepository extends JpaRepository<WorkforceFinancialLock, Long> {
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @QueryHints(@QueryHint(name = "javax.persistence.lock.timeout", value = "10000"))
     @Query("select l from WorkforceFinancialLock l "
             + "where l.tenantId = :tenantId and l.workforceMemberId = :memberId")
     Optional<WorkforceFinancialLock> findByTenantAndMemberForUpdate(
