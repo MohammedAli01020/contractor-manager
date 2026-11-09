@@ -10,7 +10,7 @@
 
 A contractor SaaS must support different compensation policies without requiring a code change for every customer. One company may use transport allowance, meal allowance, remote-site allowance, production bonus, absence deduction, or a custom item that another company does not use.
 
-The existing design already recognizes a limited set of worker statement movements (including bonus/allowance and approved deduction) and tenant-configurable expense categories. Those capabilities are not the same as a complete tenant-configurable Workforce financial-item engine.
+The existing code already has compensation components attached to individual compensation agreements, a Driver-keyed worker ledger with several controlled movement types, and an expense record carrying a free-form `category_code`. These are useful foundations, but they are not a reusable tenant-owned Workforce financial-item catalog. In particular, the expense `category_code` is stored as text on each expense; the inspected entity/schema do not establish a dedicated tenant category-definition table.
 
 This ADR proposes the product/domain model. It does not claim that the engine is implemented.
 
@@ -179,3 +179,66 @@ Those actions require separate implementation review, tests, and explicit approv
 5. What local payroll/legal rules need review by a qualified Egyptian accountant before deductions, penalties, or payroll exports are enabled?
 
 **Approval rule:** This ADR remains proposed until the product owner explicitly approves it. No implementation is inferred from discussion alone.
+
+
+## 14. Repository inventory — source-level findings (2026-11-09)
+
+Reviewed the current branch source and migrations at the time of this update. This is a code/schema inventory, not a claim that every tenant's live data has been inspected.
+
+### 14.1 Existing compensation agreements and components
+
+- `compensation_agreements` are tenant-scoped and Workforce-member keyed. They have effective dates, currency, source, approval metadata, replacement linkage, and optional assignment scope.
+- `compensation_components` belong to one agreement; they are not currently reusable catalog definitions shared across agreements.
+- Each component has `component_code`, `display_name`, `basis`, `rate`, `unit_code`, optional `shift_type`, and ordering.
+- Existing basis enum values are `SHIFT`, `HOUR`, `DAY`, `QUANTITY`, and `FIXED`.
+- Components are created inside a compensation-agreement draft and the agreement must be approved before use. The controller exposes list/create-draft/approve/approve-replacement/cancel operations; it does not expose a tenant-wide item catalog.
+- `ShiftCompensationResolver` currently resolves one matching SHIFT, HOUR, or QUANTITY component for a shift. Although DAY and FIXED are valid component basis values in the entity/schema, the inspected shift resolver does not apply them. This is a functional coverage gap to address in a separately designed compensation-resolution phase, not by silently assuming these bases already work.
+- The resolver freezes component/agreement identity, code, display name, basis, unit, rate, and amount on the shift snapshot. This is a useful historical-snapshot pattern to preserve.
+
+### 14.2 Existing worker ledger
+
+The active application writer is still `DriverLedgerService`, persisting `driver_ledger_entries`. The inspected service confirms these behaviors:
+
+- `PAYMENT`: reduces earned payable and posts a journal against the worker-payable account and selected cash/bank account.
+- `ADVANCE` (request mode `AGAINST_EARNED`): reduces earned payable and is rejected if it exceeds available payable.
+- `RECOVERABLE_ADVANCE` (request mode `RECOVERABLE`): posts to the recoverable-worker-advances asset account and has zero effect on earned payable.
+- `EARNING`: created by shift completion through the shift financial workflow.
+- `ADVANCE_RECOVERY`: exists in the database movement taxonomy for recoverable advance recovery.
+- `ADJUSTMENT`: exists in the database movement taxonomy, but must not be treated as an unrestricted generic custom item.
+- Correction reversal movements are part of the later correction migrations/workflow and must remain append-only and linked to their source correction/journal.
+
+The ledger currently has a controlled transaction-type column and signed `balance_effect`; it does not store a reusable financial-item definition ID, item-rule snapshot, approval workflow for arbitrary additions/deductions, or tenant-defined display taxonomy. V56 mirrors the legacy Driver writer into `workforce_ledger_entries`; that mirror is not a Workforce-native writer.
+
+### 14.3 Existing expenses are not Workforce items
+
+- `expenses.category_code` is a required text field (40 chars) with a nonblank check; the inspected schema does not establish a foreign key to a tenant-owned category-definition table.
+- Expense creation selects a tenant-owned EXPENSE chart account, creates an expense source record, and posts a journal in one transaction.
+- Expense payment is a separate source/payment workflow with a selected cash/bank account and its own journal.
+- This is a company-expense/supplier-payable workflow. It must not be reused as the worker's compensation-item engine or confused with a reimbursement workflow.
+
+### 14.4 Gap matrix
+
+| Capability | Current source evidence | Assessment |
+|---|---|---|
+| Workforce identity as agreement owner | Agreement uses tenant + Workforce member | Present |
+| Effective-dated and approved compensation agreement | Agreement lifecycle and replacement service | Present |
+| Agreement-scoped compensation components | Component entity and draft request | Present |
+| Reusable tenant-wide item catalog | No catalog entity/API found in reviewed paths | Missing |
+| Tenant-defined additions and deductions as one-off worker items | No dedicated definition/application flow found in reviewed paths | Missing |
+| Controlled advance/payment semantics | Driver ledger service + journals | Present, still Driver-ledger writer |
+| Recoverable advance balance separate from payable | Separate account and zero payable effect | Present |
+| Generic expense category master | Expense stores free-form category code in inspected schema | Not established |
+| Custody/asset accountability lifecycle | No dedicated Workforce custody model identified in this focused inventory | Not established |
+| Reimbursement lifecycle for Workforce members | No dedicated reimbursement model identified in this focused inventory | Not established |
+| Component snapshot on shift | Shift compensation snapshot resolver | Present for supported resolver bases |
+| DAY/FIXED shift-resolution behavior | Enum/schema accept values; inspected resolver does not apply them | Gap |
+| Approval and audit for arbitrary one-off additions/deductions | No dedicated workflow identified | Missing |
+
+### 14.5 Consequences for the implementation design
+
+1. Do not replace `CompensationComponent` with the new catalog. Keep agreement-specific component terms as the effective-dated contractual configuration, then let them reference a reusable tenant catalog definition where appropriate.
+2. Do not put arbitrary tenant labels into `transaction_type`. Keep the ledger's canonical movement families controlled, and attach a catalog item reference plus immutable item/rule snapshot to the movement/application record.
+3. Do not route reimbursements, custody, earned-pay advances, or recoverable advances through a generic addition/deduction endpoint. They have distinct liabilities/assets and lifecycle rules.
+4. Do not infer that free-form `category_code` on expenses is a configurable category master. A separate expense-category project, if desired, should remain distinct from Workforce item definitions.
+5. Before any schema proposal is finalized, inspect every current writer/reader and all tenant data for actual movement types, journal-account mappings, corrections, and compensation component usage. The source-level findings above do not replace that inventory.
+6. First implementation unit after product approval should be a catalog/domain contract and exact schema/API design review. It must not change the active ledger writer or create new financial postings until the coordinated Workforce-ledger writer transition is separately approved and tested.
