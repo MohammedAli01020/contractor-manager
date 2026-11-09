@@ -307,3 +307,38 @@ No runtime code or schema was changed by this documentation update. The next imp
 - `pay` retains the same Driver -> WorkforceMember order with one member lock; the duplicate lock call has been removed.
 - These lock changes are included in the successful CI-tested branch head `a04c5ea38645a2e6108ac36759e2c9eb7d1fb2f9`.
 - No table, trigger, endpoint, or provenance field was removed. Driver ledger remains the sole application writer and V56 remains the mirror.
+
+
+## Runtime dependency review — follow-up source inspection (2026-11-09)
+
+The following runtime call sites were re-opened on the branch after the earned-advance concurrency CI passed:
+
+| Runtime area | Confirmed legacy dependency | Workforce-side capability already present | Cutover implication |
+|---|---|---|---|
+| Shift finish | `ShiftService.finish` inserts EARNING and ADVANCE_RECOVERY into `DriverLedgerEntryRepository`, and calculates recoverable balance from Driver ledger | Shift carries `workforceMemberId`; journal lines include both Driver and Workforce IDs; V56 mirrors both movements | Move earning and recovery together to one Workforce-native transaction; retain zero-wage behavior and current recovery cap |
+| Active shift reinstatement | Re-reserves Driver, WorkforceMember, then Equipment; no ledger write | Uses canonical Workforce member lock before Equipment | Preserve resource lock order while changing ledger writer |
+| Active shift reassignment | Locks affected Drivers in sorted order, then Workforce members in sorted order, then Equipment in sorted order | Uses Workforce IDs for member-level active-shift conflict checks | Any unified lock refactor must preserve stable multi-resource ordering |
+| Completed-shift correction | Reads original Driver earning, checks later legacy payment/advance/recovery activity, then appends legacy reversal/replacement rows | Resolves each inserted legacy movement to its mirror and stores canonical Workforce row IDs in V59 correction references | Cannot switch correction writes alone: V29/V35 DB triggers still validate legacy IDs and legacy rows |
+| Driver profile update/deactivation | Locks Driver and synchronizes linked Workforce identity | Canonical member is locked by `WorkforceIdentityService.synchronizeFromDriver` | Existing Driver -> Workforce identity lock order must remain compatible with ledger commands |
+| Workforce identity update | Locks linked Driver projection first (if present), then Workforce member | Canonical identity remains the Workforce member | Keep Driver -> Workforce order during compatibility phase; native cutover must coordinate all linked operations |
+| Journal posting | Validates any supplied Driver ID and resolves/validates Workforce member linkage; stores both dimensions when supplied | Journal lines already support Workforce member without Driver ID | Native ledger commands can post canonical Workforce-only lines, but compatibility routes must preserve existing journal validation and historical references |
+| Trial balance | Uses journal/account aggregation; no direct Driver ledger repository dependency found in the inspected service | Workforce identity is already present on journal lines | Ledger cutover should not change general-ledger trial balance semantics |
+
+### Confirmed boundary
+
+- In the inspected runtime services, direct Driver-ledger writes remain concentrated in `DriverLedgerService`, `ShiftService.finish`, and `ShiftCorrectionService.correct`.
+- `WorkforceLedgerCommandService` is still a compatibility adapter: it resolves the Driver projection and delegates to `DriverLedgerService`. It is not a Workforce-native writer.
+- `WorkforceLedgerQueryService` reads the Workforce ledger for member statements and balances.
+- `ShiftCorrectionService` already validates mirrored Workforce rows and persists V59 canonical correction references, but its source rows and database authorization triggers remain legacy-dependent.
+- This is a targeted runtime inspection of the financial/shift/identity services listed above, not yet an exhaustive search of every report, export, scheduled task, mobile client, or migration file. The full-tree/client inventory gate remains open.
+
+### Updated next implementation order
+
+1. Complete a repository-wide search for Driver-ledger references across API consumers, reports, exports, scheduled tasks, tests, and migration triggers; classify historical-only references separately.
+2. Design the shared native Workforce financial command and its compatibility boundary. Preserve the legacy route response contract and request-key retry behavior.
+3. Move payment and both advance types only as a coordinated cutover across Driver and Workforce route families; no independent writers and no dual-write.
+4. Move shift earning and recoverable-advance recovery in the same coordinated lock/transaction protocol.
+5. Move correction chain lookup and posting only after replacing V29/V35 database trigger dependencies with reviewed tenant-safe Workforce references.
+6. Run MySQL 8 migration/integration tests and full cross-workflow concurrency suite, then per-tenant reconciliation and backup/rollback rehearsal.
+
+No application code, migration, trigger, endpoint, or database was changed by this source-inspection update.
