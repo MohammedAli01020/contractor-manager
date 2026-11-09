@@ -1,10 +1,10 @@
 # WF13 — Configurable Workforce Items: Schema and API Contract Draft
 
-- **Status:** Draft for product/architecture review — not approved for implementation
+- **Status:** Partially implemented on the working branch; application lifecycle and posting remain design-only and require separate review
 - **Date:** 2026-11-09
 - **Branch:** `feature/workforce-ledger-unification`
 - **Related ADR:** `ADR-WF-13-CONFIGURABLE-WORKFORCE-FINANCIAL-ITEMS.md`
-- **Important:** This document is a logical contract, not executable DDL, a Flyway migration, or permission to change financial writers.
+- **Implementation boundary:** The definition catalog and optional compensation-component link now have Flyway migrations V60/V61 and backend CRUD/integration coverage on this branch. The application lifecycle below remains a proposed contract only. No financial writer or ledger posting was changed.
 
 ## 1. Design boundary
 
@@ -14,8 +14,8 @@ Keep the existing concepts distinct:
 
 - `CompensationAgreement`: effective-dated contractual terms for one Workforce member and optional assignment.
 - `CompensationComponent`: agreement-specific rate/term used to resolve contractual compensation.
-- `WorkforceFinancialItemDefinition` (proposed): reusable tenant-owned definition such as Transport Allowance or Meal Allowance.
-- `WorkforceFinancialItemApplication` (proposed): one application of a definition to one person/period/source, including approval and calculation snapshot.
+- `WorkforceFinancialItemDefinition` (implemented on this branch): reusable tenant-owned definition such as Transport Allowance or Meal Allowance.
+- `WorkforceFinancialItemApplication` (proposed; not implemented): one application of a definition to one person/period/source, including approval and calculation snapshot.
 - Workforce ledger/journal: authoritative posted financial effect, through the separately approved canonical writer boundary.
 
 A definition is not a financial movement. A draft or pending application is not a posted balance movement.
@@ -42,13 +42,13 @@ A definition is not a financial movement. A draft or pending application is not 
 - Multi-currency posting until the accounting foundation supports it end-to-end.
 - Automatic retroactive recalculation of previously approved or posted periods.
 
-## 3. Proposed logical schema
+## 3. Logical schema and implementation status
 
-Names below are provisional. Final names, column types, indexes, FK ordering, and MySQL constraints must be reviewed against the complete repository before writing a migration.
+Catalog table `workforce_financial_item_definitions` is implemented by V60. The compensation link is implemented by V61. The application table remains provisional; its final columns, indexes, FK ordering, and MySQL constraints must be reviewed against the complete repository before writing a migration.
 
-### 3.1 `workforce_financial_item_definitions`
+### 3.1 `workforce_financial_item_definitions` — implemented
 
-One row represents a tenant's reusable item definition.
+One row represents a tenant's reusable item definition. V60 implements tenant-scoped code uniqueness, controlled family/method values, recurring/one-off flags, approval flag, active state, and optimistic versioning. Backend endpoints provide list/get/create/update/deactivate with tenant isolation. The implementation currently exposes `EARNING` and `DEDUCTION` families and bounded methods `FIXED`, `PER_HOUR`, `PER_DAY`, `PER_SHIFT`, `PER_QUANTITY`, `MANUAL`.
 
 | Field | Proposed type | Rule |
 |---|---|---|
@@ -75,9 +75,9 @@ Required constraints:
 - No hard delete once referenced; deactivate instead.
 - A definition's family and accounting semantics cannot be changed after use. Create a replacement definition if semantics need to change.
 
-### 3.2 Compensation agreement integration
+### 3.2 Compensation agreement integration — partially implemented
 
-Do not replace `compensation_components`.
+V61 adds nullable `financial_item_definition_id` to `compensation_components` with a tenant-safe composite FK. Existing agreement-local components remain supported. Catalog links currently permit only `PER_HOUR`, `PER_SHIFT`, and `PER_QUANTITY`, mapped to existing resolver bases `HOUR`, `SHIFT`, and `QUANTITY`; `PER_DAY`, `FIXED`, and `MANUAL` are rejected for agreement links until the resolver has matching tested semantics. Do not replace `compensation_components`.
 
 Proposed evolution: add nullable `financial_item_definition_id` to `compensation_components` after a compatibility review.
 
@@ -204,11 +204,11 @@ These are proposed route shapes only. Do not implement them before request/respo
 
 ## 8. Implementation gates
 
-No implementation begins until:
+Catalog and agreement-link implementation is limited to the scope described above. No application lifecycle or posting implementation begins until:
 - Product owner approves the item families and v1 scope.
 - Full code/data inventory identifies all current movement writers/readers and tenant usage.
 - Exact account mapping is reviewed with accounting domain rules.
 - The canonical Workforce ledger writer transition is separately designed and approved.
 - MySQL migration constraints and rollback are tested on disposable copies.
 
-This draft intentionally creates no database objects, endpoints, financial movements, or production changes.
+Current branch status: V60/V61 and catalog/agreement backend endpoints are present; their CI run for commit `7ffd3bf04a3c2318aefd74e1dc3ec800cacc112d` was still in progress at the time this document update was prepared. The application table, application APIs, approval workflow, ledger posting, and production rollout are not implemented. This branch work does not authorize production migration or a ledger-writer cutover.
