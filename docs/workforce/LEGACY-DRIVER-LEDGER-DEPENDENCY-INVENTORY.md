@@ -150,3 +150,13 @@ This is not a reason to add an isolated Workforce lock to one command. Before na
 - `ShiftCorrectionSnapshotMigrationIntegrationTest` now asserts that all three canonical references have composite `(tenant_id, id)` foreign keys, and that the referenced composite unique index exists. This verifies the schema-level tenant boundary.
 - The integration tests also cover positive corrections, repeated correction chains, zero-wage transitions, and preservation of historical correction rows. They have not been executed in this environment.
 - This remains a compatibility-stage design: legacy remains the writer, V56 remains enabled, and no ledger cutover or table retirement occurs.
+
+
+### V44/V59 MySQL 8 compatibility review
+
+- V44 remains the authoritative legacy correction guard: it rejects every UPDATE or DELETE of an APPLIED correction and validates legacy journal/Driver-ledger references on APPLYING-to-APPLIED.
+- V59 adds separate BEFORE INSERT and BEFORE UPDATE guards. The update guard validates the canonical Workforce mirror during APPLYING-to-APPLIED; after APPLIED, V44 rejects all updates, including attempts to alter the new Workforce reference columns.
+- V56 declares both `workforce_ledger_entries.id` and `tenant_id` as signed `BIGINT NOT NULL`; V59 uses the same signed `BIGINT` type for the three nullable reference columns and adds the referenced composite unique key `(tenant_id, id)`. The composite FK column order matches the unique key.
+- V59's trigger queries other tables (`workforce_ledger_entries` and `drivers`) and does not query the mutating `shift_corrections` table, avoiding MySQL's mutating-table restriction.
+- The two UPDATE guards are separate MySQL triggers with distinct names. V59 does not drop or replace V44's audit guard; both constraints remain active.
+- GitHub Actions returned no PR workflow runs and no status checks for the current branch commit. No MySQL container, Flyway migration, or test suite was executed during this review. Runtime compatibility therefore remains unverified until the disposable MySQL 8 integration test runs.
