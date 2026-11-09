@@ -274,3 +274,12 @@ No runtime code or schema was changed by this documentation update. The next imp
 - GitHub Actions run [42624589685](https://github.com/MohammedAli01020/contractor-manager/actions/runs/42624589685) completed with conclusion `success` for commit `99b07cade4753a0168f7a29f13ceb6ded0c02256`. The complete `Backend Maven Tests` job passed, including the Maven test execution and all required migration/integration execution gates.
 - Because the successful run is on the commit after the corrected recoverable-advance test, it validates both the corrected finish-vs-recoverable-advance test and the new identity-update-vs-payment test as part of the backend suite.
 - These results validate the tested compatibility-phase lock and mirror behavior only. Driver ledger remains the application write authority; V56 remains enabled; no legacy table, trigger, route, or provenance column was removed.
+
+
+### Completed-shift correction vs payment concurrency — CI result (2026-11-09)
+
+- Commit `321cb89ee262e04b6f8e0ef08bfa33ca01ddf663` adds `concurrentCompletedShiftCorrectionAndPaymentSerializeWithoutDeadlock` to `ShiftIntegrationTest`.
+- The test races a completed-shift wage correction against a payment for the same driver. If correction wins, the replacement wage is the basis for the payment and the resulting payable balance is 110.00. If payment wins, correction is rejected with HTTP 409 and the original wage remains the basis for the payment.
+- It also asserts exactly one payment ledger movement, correction/reversal rows only when correction is applied, and equality between the Driver ledger balance and the V56 Workforce mirror.
+- GitHub Actions run [42632185443](https://github.com/MohammedAli01020/contractor-manager/actions/runs/42632185443) completed with conclusion `success` on 2026-11-09. The complete `Backend Maven Tests` job passed, including the newly added concurrency test and the required migration/integration execution gates.
+- This is compatibility-phase validation only: Driver ledger remains the sole application writer and V56 remains the Workforce mirror. No legacy table, trigger, route, or provenance column was removed.
