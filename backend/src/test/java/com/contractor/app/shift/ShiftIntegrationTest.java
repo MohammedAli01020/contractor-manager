@@ -1773,8 +1773,6 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
         assertThat(workforceBalance).isEqualByComparingTo(payableBalance);
     }
 
-}
-
 
     @Test
     void concurrentCompletedShiftCorrectionAndRecoverableAdvanceSerializeWithoutDeadlock() throws Exception {
@@ -1880,3 +1878,5 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
                 BigDecimal.class, tenantId, memberId);
         assertThat(workforceBalance).isEqualByComparingTo(payableBalance);
     }
+
+}
