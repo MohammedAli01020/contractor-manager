@@ -135,3 +135,8 @@ Validation at the time of this note:
 - Added an integration test for enabling a custom role and seeing its assigned member appear in shift candidates.
 
 This is an incremental compatibility bridge, not retirement of `drivers` or `shifts.driver_id`. The remaining identity and financial dependencies described above still apply.
+
+- Added the tenant-admin mobile screen `WorkforceRoleManagementScreen`, reachable from the Workforce directory toolbar.
+- Admins can create custom roles and turn shift eligibility on/off. The app sends the optimistic-lock `version` and refreshes after conflicts; non-admin users do not see the management entry point.
+- The first Backend CI execution of the new role integration test passed Maven tests (7 tests, 0 failures/errors/skips) but its workflow guard still expected six tests. The guard was updated to seven; the rerun is pending.
+- Flutter CI for the mobile role-management screen is running on Flutter 3.3.3.
