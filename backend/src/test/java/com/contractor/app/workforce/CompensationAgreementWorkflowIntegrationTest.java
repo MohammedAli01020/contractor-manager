@@ -250,10 +250,27 @@ class CompensationAgreementWorkflowIntegrationTest extends AbstractIntegrationTe
         deactivate.put("allowRecurring", true);
         deactivate.put("allowOneOff", true);
         deactivate.put("requiresApproval", true);
-        putJson("/api/v1/workforce/financial-item-definitions/" + definitionId,
-                deactivate, token).andExpect(status().isOk());
-        post("/api/v1/workforce/financial-item-definitions/" + definitionId + "/deactivate",
-                definition.path("version").asLong(), token);
+        JsonNode updatedDefinition = body(putJson(
+                "/api/v1/workforce/financial-item-definitions/" + definitionId,
+                deactivate, token).andExpect(status().isOk()));
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(
+                "/api/v1/workforce/financial-item-definitions/" + definitionId + "/deactivate")
+                .param("version", updatedDefinition.path("version").asText())
+                .header(org.springframework.http.HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isOk());
+
+        Map<String, Object> rejectedComponent = new HashMap<>();
+        rejectedComponent.put("financialItemDefinitionId", definitionId);
+        rejectedComponent.put("rate", 150);
+        rejectedComponent.put("unitCode", "HOUR");
+        rejectedComponent.put("sortOrder", 0);
+        Map<String, Object> rejectedAgreement = new HashMap<>();
+        rejectedAgreement.put("workforceAssignmentId", workerAssignmentId);
+        rejectedAgreement.put("effectiveFrom", "2027-01-01");
+        rejectedAgreement.put("currencyCode", "EGP");
+        rejectedAgreement.put("components", List.of(rejectedComponent));
+        postJson("/api/v1/workforce/members/" + memberId + "/compensation-agreements",
+                rejectedAgreement, token).andExpect(status().isConflict());
     }
 
     @Test
