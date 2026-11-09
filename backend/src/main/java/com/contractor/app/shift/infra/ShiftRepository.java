@@ -15,6 +15,11 @@ public interface ShiftRepository extends JpaRepository<Shift, Long>, JpaSpecific
 
     Optional<Shift> findByIdAndTenantId(Long id, Long tenantId);
 
+    /** Scalar read avoids retaining a stale Shift entity before waiting on the financial mutex. */
+    @Query("select s.workforceMemberId from Shift s where s.id = :id and s.tenantId = :tenantId")
+    Optional<Long> findWorkforceMemberIdByIdAndTenantId(
+            @Param("id") Long id, @Param("tenantId") Long tenantId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select s from Shift s where s.id = :id and s.tenantId = :tenantId")
     Optional<Shift> findByIdAndTenantIdForUpdate(@Param("id") Long id, @Param("tenantId") Long tenantId);
