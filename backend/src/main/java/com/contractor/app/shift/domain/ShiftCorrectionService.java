@@ -118,17 +118,17 @@ public class ShiftCorrectionService {
             return shiftService.get(tenantId, shiftId);
         }
 
-        Shift preview = shifts.findByIdAndTenantId(shiftId, tenantId)
+        Long candidateMemberId = shifts.findWorkforceMemberIdByIdAndTenantId(shiftId, tenantId)
                 .orElseThrow(() -> ApiException.notFound("الوردية غير موجودة."));
-        if (preview.getWorkforceMemberId() == null) {
+        if (candidateMemberId == null) {
             throw ApiException.conflict("الوردية لا تحتوي على ربط موثوق بهوية العامل؛ راجع بيانات القوى العاملة.");
         }
         // Keep tenant/account initialization ahead of the shared financial mutex.
         defaultAccounts.initializeForTenant(tenantId);
-        financialLocks.lockForFinancialUpdate(tenantId, preview.getWorkforceMemberId());
+        financialLocks.lockForFinancialUpdate(tenantId, candidateMemberId);
         Shift shift = shifts.findByIdAndTenantIdForUpdate(shiftId, tenantId)
                 .orElseThrow(() -> ApiException.notFound("الوردية غير موجودة."));
-        if (!preview.getWorkforceMemberId().equals(shift.getWorkforceMemberId())) {
+        if (!candidateMemberId.equals(shift.getWorkforceMemberId())) {
             throw ApiException.conflict("تم تغيير ربط العامل بالوردية أثناء بدء التصحيح. أعد تحميل الوردية وحاول مجددًا.");
         }
         // Recheck after acquiring the shift lock: a concurrent retry may have committed meanwhile.
