@@ -140,3 +140,18 @@ This is an incremental compatibility bridge, not retirement of `drivers` or `shi
 - Admins can create custom roles and turn shift eligibility on/off. The app sends the optimistic-lock `version` and refreshes after conflicts; non-admin users do not see the management entry point.
 - The first Backend CI execution of the new role integration test passed Maven tests (7 tests, 0 failures/errors/skips) but its workflow guard still expected six tests. The guard was updated to seven; the rerun is pending.
 - Flutter CI for the mobile role-management screen is running on Flutter 3.3.3.
+
+
+### Implementation progress — canonical shift defaults and mobile loading
+
+- `GET /api/v1/shifts/defaults` now accepts `workforceMemberId` independently of the legacy `driverId`. When both are supplied, the backend verifies that they identify the same tenant-scoped person.
+- The legacy defaults overloads remain compatible; a canonical member can be resolved without a Driver projection for compensation-agreement lookup. The temporary legacy-rate fallback still requires the projection.
+- Flutter now sends `workforceMemberId` when loading defaults. A follow-up review found that the editor's early-return and suggested-wage conditions still assumed `driverId`; both now recognize the canonical member ID.
+- Added backend integration coverage for loading defaults by canonical member ID without sending `driverId`.
+- The shift editor's save command and operational shift lifecycle still require the Driver projection today. This change is deliberately limited to defaults lookup and does not claim that shift creation or the full shift aggregate is Driver-independent.
+- Existing V55 already enforces one active shift per tenant/Workforce member with a generated column and unique index. Keep it; do not create a duplicate uniqueness migration. V6's legacy active-driver constraint remains as a compatibility guard until the Driver dependency is retired.
+
+Validation:
+- Backend CI passed for `1cdd54232a40ee0a831a4ffbbe830d943befbd08`, including the canonical defaults integration test.
+- Flutter CI passed for `b405ab312059d65ee58e238260e4d40f0c07eee5`.
+- The branch remains isolated; no PR merge, main-branch change, or deployment was performed.
