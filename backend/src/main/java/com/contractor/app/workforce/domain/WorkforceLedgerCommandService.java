@@ -17,6 +17,7 @@ import com.contractor.app.common.security.AuthenticatedUser;
 import com.contractor.app.common.security.CurrentUser;
 import com.contractor.app.driver.api.dto.DriverLedgerAdvanceRequest;
 import com.contractor.app.driver.api.dto.DriverLedgerPaymentRequest;
+import com.contractor.app.driver.infra.DriverRepository;
 import com.contractor.app.workforce.api.dto.WorkforceLedgerEntryResponse;
 import com.contractor.app.workforce.infra.WorkforceLedgerEntryRepository;
 import com.contractor.app.workforce.infra.WorkforceMemberRepository;
@@ -38,6 +39,7 @@ public class WorkforceLedgerCommandService {
     private static final BigDecimal ZERO = new BigDecimal("0.00");
 
     private final WorkforceMemberRepository members;
+    private final DriverRepository drivers;
     private final WorkforceLedgerEntryRepository ledger;
     private final ChartAccountRepository accounts;
     private final JournalLineRepository journalLines;
@@ -45,11 +47,12 @@ public class WorkforceLedgerCommandService {
     private final JournalPostingService journals;
     private final DefaultChartOfAccountsService defaultAccounts;
 
-    public WorkforceLedgerCommandService(WorkforceMemberRepository members,
+    public WorkforceLedgerCommandService(WorkforceMemberRepository members, DriverRepository drivers,
             WorkforceLedgerEntryRepository ledger, ChartAccountRepository accounts,
             JournalLineRepository journalLines, FinancialIdempotencyService idempotency,
             JournalPostingService journals, DefaultChartOfAccountsService defaultAccounts) {
         this.members = members;
+        this.drivers = drivers;
         this.ledger = ledger;
         this.accounts = accounts;
         this.journalLines = journalLines;
@@ -58,8 +61,9 @@ public class WorkforceLedgerCommandService {
         this.defaultAccounts = defaultAccounts;
     }
 
-    // Defaults are initialized before the canonical member lock. Balances are read only
-    // after that lock under READ_COMMITTED, serializing payments/advances for one person.
+    // Transitional lock order: initialize defaults, lock an existing Driver projection first,
+    // then lock the canonical Workforce member. This serializes with legacy shift finish,
+    // correction, and shift-start paths until those workflows also become Workforce-native.
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public WorkforceLedgerEntryResponse pay(Long memberId, DriverLedgerPaymentRequest request) {
         AuthenticatedUser user = CurrentUser.get();
@@ -88,6 +92,8 @@ public class WorkforceLedgerCommandService {
                 RequestFingerprint.of("WORKFORCE_PAYMENT", memberId, request.getPaymentDate(), amount,
                         description, request.getPaymentAccountId()));
         defaultAccounts.initializeForTenant(tenantId);
+        drivers.findByWorkforceMemberIdAndTenantIdForUpdate(memberId, tenantId);
+        drivers.findByWorkforceMemberIdAndTenantIdForUpdate(memberId, tenantId);
         WorkforceMember member = members.findByIdAndTenantIdForUpdate(memberId, tenantId)
                 .orElseThrow(() -> ApiException.notFound("العامل غير موجود."));
         Optional<WorkforceLedgerEntry> prior = ledger.findByTenantIdAndClientRequestKey(tenantId, key);
