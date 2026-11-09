@@ -2,6 +2,7 @@ package com.contractor.app.workforce.api;
 
 import com.contractor.app.common.security.CurrentUser;
 import com.contractor.app.workforce.api.dto.WorkforceLedgerEntryResponse;
+import com.contractor.app.workforce.api.dto.WorkforceLedgerBalanceResponse;
 import com.contractor.app.workforce.domain.WorkforceLedgerQueryService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
@@ -26,5 +27,10 @@ public class WorkforceLedgerController {
     @GetMapping
     public List<WorkforceLedgerEntryResponse> statement(@PathVariable Long memberId) {
         return service.statement(CurrentUser.tenantId(), memberId);
+    }
+
+    @GetMapping("/balance")
+    public WorkforceLedgerBalanceResponse balance(@PathVariable Long memberId) {
+        return service.balance(CurrentUser.tenantId(), memberId);
     }
 }
