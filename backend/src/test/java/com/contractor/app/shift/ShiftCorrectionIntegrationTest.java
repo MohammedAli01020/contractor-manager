@@ -377,6 +377,35 @@ class ShiftCorrectionIntegrationTest extends AbstractShiftIntegrationTest {
                         + "AND transaction_type='EARNING' AND amount=190.00 AND balance_effect=190.00",
                 Integer.class, tenantId, shiftId)).isEqualTo(1);
         assertThat(ledger.sumBalance(tenantId, driverId)).isEqualByComparingTo("190.00");
+        // Zero -> positive must start a fresh canonical earning reference; it must not
+        // invent an old/reversal Workforce row for the preceding zero-wage correction.
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM shift_corrections c "
+                        + "JOIN workforce_ledger_entries replacement_w "
+                        + "ON replacement_w.tenant_id=c.tenant_id "
+                        + "AND replacement_w.id=c.replacement_earning_workforce_ledger_entry_id "
+                        + "AND replacement_w.legacy_source_entry_id=c.replacement_earning_ledger_entry_id "
+                        + "AND replacement_w.transaction_type='EARNING' "
+                        + "AND replacement_w.amount=190.00 "
+                        + "WHERE c.tenant_id=? AND c.shift_id=? "
+                        + "AND c.old_driver_wage=0 "
+                        + "AND c.old_earning_workforce_ledger_entry_id IS NULL "
+                        + "AND c.reversed_earning_workforce_ledger_entry_id IS NULL "
+                        + "AND c.replacement_earning_workforce_ledger_entry_id IS NOT NULL",
+                Integer.class, tenantId, shiftId)).isEqualTo(1);
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM workforce_ledger_entries "
+                        + "WHERE tenant_id=? AND workforce_member_id=? AND shift_id=? "
+                        + "AND transaction_type='EARNING' AND amount=190.00",
+                Integer.class, tenantId,
+                jdbc.queryForObject("SELECT workforce_member_id FROM shifts WHERE tenant_id=? AND id=?",
+                        Long.class, tenantId, shiftId), shiftId)).isEqualTo(1);
+        assertThat(jdbc.queryForObject(
+                "SELECT SUM(balance_effect) FROM workforce_ledger_entries "
+                        + "WHERE tenant_id=? AND workforce_member_id=?",
+                BigDecimal.class, tenantId,
+                jdbc.queryForObject("SELECT workforce_member_id FROM shifts WHERE tenant_id=? AND id=?",
+                        Long.class, tenantId, shiftId))).isEqualByComparingTo("190.00");
     }
 
 
