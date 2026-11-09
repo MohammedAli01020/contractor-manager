@@ -170,3 +170,11 @@ This is not a reason to add an isolated Workforce lock to one command. Before na
 - The test's foreign Workforce row is produced by normal completion in a separately registered tenant. Its update is rejected by the composite `(tenant_id, id)` FK, while the local correction remains unchanged.
 - The assertion now expects Spring's `DataIntegrityViolationException` translation for an integrity-constraint violation, rather than the generic `UncategorizedSQLException` type.
 - This is source-level review only. No MySQL 8 execution, Flyway run, or test result is claimed; GitHub currently reports no workflow runs or status checks for the reviewed commit.
+
+## CI validation update (2026-11-09)
+
+- GitHub Actions run [42610054263](https://github.com/MohammedAli01020/contractor-manager/actions/runs/42610054263) completed successfully for branch `feature/workforce-ledger-unification` at commit `e8f599b60fda3f68abc7c73300dcac6c30f7a7da`.
+- The `Backend Maven Tests` job and its required execution gates completed successfully, including the WF12B operational projection migration, MySQL accounting, V24 migration, financial idempotency, shift wage/zero-cost equipment, chart tenant isolation, trial balance, Workforce member/role/assignment, compensation agreement, WF-08A/WF-08B correction, and WF12C Workforce identity migration test gates.
+- The run followed the test fixes in `805c4b7` (native-provenance insert binding), `9d4999c` (correction-chain row count), and `e8f599b` (MySQL CHECK-constraint exception translation).
+- This successful CI run supersedes the earlier statements above that these specific integration tests had not yet been executed. It does not establish that every test or build target outside this Backend Maven CI workflow has passed.
+- The current architecture remains unchanged: Driver ledger is still the application write authority, V56 mirror remains active, and no legacy table or trigger has been removed. No production database was accessed or changed.
