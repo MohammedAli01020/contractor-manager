@@ -109,6 +109,7 @@ class ShiftsApi {
 
   Future<Map<String, dynamic>> fetchDefaults({
     int? driverId,
+    int? workforceMemberId,
     int? equipmentId,
     int? siteId,
     String? shiftDate,
@@ -118,6 +119,7 @@ class ShiftsApi {
       '/shifts/defaults',
       queryParameters: {
         if (driverId != null) 'driverId': driverId,
+        if (workforceMemberId != null) 'workforceMemberId': workforceMemberId,
         if (equipmentId != null) 'equipmentId': equipmentId,
         if (siteId != null) 'siteId': siteId,
         if (shiftDate != null) 'shiftDate': shiftDate,
