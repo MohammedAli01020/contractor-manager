@@ -138,6 +138,7 @@ This is not a reason to add an isolated Workforce lock to one command. Before na
 - V59 adds database guards on correction INSERT and the APPLYING -> APPLIED transition. They validate the exact canonical rows against the expected legacy provenance, Driver-to-Workforce mapping, shift, journal, movement type, amount, and effect. V44 continues to validate legacy references and protect applied audit rows.
 - This is still a compatibility-stage change: legacy remains the writer, V56 remains enabled, and no ledger cutover or table retirement occurs.
 - Integration assertions were added for positive corrections, repeated correction chains, zero-wage transitions, and preservation of historical correction rows. They have not yet been executed in this environment.
+- A runtime cross-tenant rejection test now creates a real Workforce earning in a second tenant through the public shift lifecycle, then attempts to attach that row to an APPLYING correction in the first tenant. It expects the tenant-scoped replacement FK to reject the update and verifies the reference remains NULL. The test uses a zero-wage shift to avoid inventing financial rows; driver API validation explicitly permits zero rates (only negative rates are rejected). The test itself remains unexecuted.
 
 ## V59 canonical correction references — migration review correction
 
@@ -160,3 +161,12 @@ This is not a reason to add an isolated Workforce lock to one command. Before na
 - V59's trigger queries other tables (`workforce_ledger_entries` and `drivers`) and does not query the mutating `shift_corrections` table, avoiding MySQL's mutating-table restriction.
 - The two UPDATE guards are separate MySQL triggers with distinct names. V59 does not drop or replace V44's audit guard; both constraints remain active.
 - GitHub Actions returned no PR workflow runs and no status checks for the current branch commit. No MySQL container, Flyway migration, or test suite was executed during this review. Runtime compatibility therefore remains unverified until the disposable MySQL 8 integration test runs.
+
+
+### Cross-tenant correction-reference test review (2026-11-09)
+
+- Reviewed `correctionCannotReferenceAnotherTenantsWorkforceLedgerEntry` against the driver request validation, shift lifecycle helpers, and V51/V44/V59 trigger rules.
+- Zero driver rates satisfy `@DecimalMin("0")`; V41/V44/V51 permit the zero-wage completed-shift/correction snapshot without zero-value journal or ledger rows. The helper's snapshot values match the completed SHIFT-basis compensation snapshot.
+- The test's foreign Workforce row is produced by normal completion in a separately registered tenant. Its update is rejected by the composite `(tenant_id, id)` FK, while the local correction remains unchanged.
+- The assertion now expects Spring's `DataIntegrityViolationException` translation for an integrity-constraint violation, rather than the generic `UncategorizedSQLException` type.
+- This is source-level review only. No MySQL 8 execution, Flyway run, or test result is claimed; GitHub currently reports no workflow runs or status checks for the reviewed commit.
