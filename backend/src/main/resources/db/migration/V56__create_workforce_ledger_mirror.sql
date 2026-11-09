@@ -1,7 +1,8 @@
 -- Stage 1 of Workforce ledger unification.
 -- Keep driver_ledger_entries as the temporary write authority while creating a
--- Workforce-keyed mirror. The legacy row ID is preserved as the new row ID and
--- legacy_source_entry_id so shift_corrections references remain traceable.
+-- Workforce-keyed mirror. The new table owns its primary-key sequence; the legacy
+-- row ID is retained only in legacy_source_entry_id for traceability. Independent
+-- sequences are required before any future write cutover to avoid ID collisions.
 -- Do not switch application reads/writes or drop the legacy table in this migration.
 
 CREATE TABLE workforce_ledger_entries (
@@ -69,7 +70,6 @@ CREATE TABLE workforce_ledger_entries (
 -- Preserve every existing ledger movement and its original primary key.
 -- The join is tenant-scoped; never infer Workforce IDs from numeric ID equality.
 INSERT INTO workforce_ledger_entries (
-    id,
     tenant_id,
     workforce_member_id,
     transaction_type,
@@ -86,7 +86,6 @@ INSERT INTO workforce_ledger_entries (
     legacy_driver_id
 )
 SELECT
-    e.id,
     e.tenant_id,
     d.workforce_member_id,
     e.transaction_type,
@@ -117,7 +116,6 @@ AFTER INSERT ON driver_ledger_entries
 FOR EACH ROW
 BEGIN
     INSERT INTO workforce_ledger_entries (
-        id,
         tenant_id,
         workforce_member_id,
         transaction_type,
@@ -134,7 +132,6 @@ BEGIN
         legacy_driver_id
     )
     SELECT
-        NEW.id,
         NEW.tenant_id,
         d.workforce_member_id,
         NEW.transaction_type,
