@@ -28,6 +28,7 @@ import com.contractor.app.shift.api.dto.ShiftResponse;
 import com.contractor.app.shift.infra.ShiftCorrectionRepository;
 import com.contractor.app.shift.infra.ShiftRepository;
 import com.contractor.app.workforce.domain.WorkforceLedgerEntry;
+import com.contractor.app.workforce.domain.WorkforceFinancialLockService;
 import com.contractor.app.workforce.infra.WorkforceLedgerEntryRepository;
 import com.contractor.app.workforce.infra.WorkforceMemberRepository;
 import com.contractor.app.site.domain.Site;
@@ -60,6 +61,7 @@ public class ShiftCorrectionService {
     private final WorkforceMemberRepository workforceMembers;
     private final DriverLedgerEntryRepository ledger;
     private final WorkforceLedgerEntryRepository workforceLedger;
+    private final WorkforceFinancialLockService financialLocks;
     private final JournalEntryRepository journals;
     private final JournalLineRepository journalLines;
     private final JournalPostingService posting;
@@ -74,6 +76,7 @@ public class ShiftCorrectionService {
     public ShiftCorrectionService(ShiftRepository shifts, ShiftCorrectionRepository corrections,
             DriverRepository drivers, WorkforceMemberRepository workforceMembers,
             DriverLedgerEntryRepository ledger, WorkforceLedgerEntryRepository workforceLedger,
+            WorkforceFinancialLockService financialLocks,
             JournalEntryRepository journals,
             JournalLineRepository journalLines, JournalPostingService posting,
             DefaultChartOfAccountsService defaultAccounts, SiteRepository sites,
@@ -86,6 +89,7 @@ public class ShiftCorrectionService {
         this.workforceMembers = workforceMembers;
         this.ledger = ledger;
         this.workforceLedger = workforceLedger;
+        this.financialLocks = financialLocks;
         this.journals = journals;
         this.journalLines = journalLines;
         this.posting = posting;
@@ -114,8 +118,19 @@ public class ShiftCorrectionService {
             return shiftService.get(tenantId, shiftId);
         }
 
+        Shift preview = shifts.findByIdAndTenantId(shiftId, tenantId)
+                .orElseThrow(() -> ApiException.notFound("الوردية غير موجودة."));
+        if (preview.getWorkforceMemberId() == null) {
+            throw ApiException.conflict("الوردية لا تحتوي على ربط موثوق بهوية العامل؛ راجع بيانات القوى العاملة.");
+        }
+        // Keep tenant/account initialization ahead of the shared financial mutex.
+        defaultAccounts.initializeForTenant(tenantId);
+        financialLocks.lockForFinancialUpdate(tenantId, preview.getWorkforceMemberId());
         Shift shift = shifts.findByIdAndTenantIdForUpdate(shiftId, tenantId)
                 .orElseThrow(() -> ApiException.notFound("الوردية غير موجودة."));
+        if (!preview.getWorkforceMemberId().equals(shift.getWorkforceMemberId())) {
+            throw ApiException.conflict("تم تغيير ربط العامل بالوردية أثناء بدء التصحيح. أعد تحميل الوردية وحاول مجددًا.");
+        }
         // Recheck after acquiring the shift lock: a concurrent retry may have committed meanwhile.
         prior = corrections.findByTenantIdAndIdempotencyKey(tenantId, key).orElse(null);
         if (prior != null) {
@@ -194,8 +209,7 @@ public class ShiftCorrectionService {
             }
         }
 
-        // Follow the same tenant -> driver lock order as shift finish and driver payments.
-        defaultAccounts.initializeForTenant(tenantId);
+        // The shared financial mutex is already held before Shift, Driver and Workforce locks.
         Driver lockedDriver = drivers.findByIdAndTenantIdForUpdate(shift.getDriverId(), tenantId)
                 .orElseThrow(() -> ApiException.notFound("السائق المرتبط بالوردية غير موجود."));
         workforceMembers.findByIdAndTenantIdForUpdate(lockedDriver.getWorkforceMemberId(), tenantId)
