@@ -9,6 +9,7 @@ public class JournalLineRequest {
     private BigDecimal debit;
     private BigDecimal credit;
     private Long driverId;
+    private Long workforceMemberId;
     private Long equipmentId;
 
     public JournalLineRequest() {
@@ -42,6 +43,10 @@ public class JournalLineRequest {
 
     public Long getDriverId() {
         return driverId;
+    }
+
+    public Long getWorkforceMemberId() {
+        return workforceMemberId;
     }
 
     public Long getEquipmentId() {
