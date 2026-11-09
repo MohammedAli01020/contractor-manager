@@ -33,6 +33,10 @@ class WorkforceMemberCrudIntegrationTest extends AbstractIntegrationTest {
                 "select count(*) from workforce_members where id = ?", Integer.class, memberId)).isEqualTo(1);
         assertThat(jdbc.queryForObject(
                 "select count(*) from drivers where workforce_member_id = ?", Integer.class, memberId)).isZero();
+        assertThat(jdbc.queryForObject(
+                "select count(*) from workforce_financial_locks where tenant_id = "
+                        + "(select tenant_id from workforce_members where id = ?) "
+                        + "and workforce_member_id = ?", Integer.class, memberId, memberId)).isEqualTo(1);
 
         Map<String, Object> update = identity("Updated Engineer", "01055550002", "NID-CAN-02");
         update.put("version", created.path("version").asLong());
@@ -163,6 +167,9 @@ class WorkforceMemberCrudIntegrationTest extends AbstractIntegrationTest {
         assertThat(jdbc.queryForObject(
                 "select count(*) from workforce_assignments where workforce_member_id = ?",
                 Integer.class, memberId)).isEqualTo(2);
+        assertThat(jdbc.queryForObject(
+                "select count(*) from workforce_financial_locks where workforce_member_id = ?",
+                Integer.class, memberId)).isEqualTo(1);
         assertThat(jdbc.queryForObject(
                 "select count(*) from drivers where workforce_member_id = ?", Integer.class, memberId)).isZero();
 
