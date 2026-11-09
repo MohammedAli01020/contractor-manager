@@ -134,7 +134,7 @@ class DriverLedgerIdempotencyIntegrationTest extends AbstractIntegrationTest {
         JsonNode workforceStatement = body(getJson(
                 "/api/v1/workforce/members/" + memberId + "/ledger", token)
                 .andExpect(status().isOk()));
-        assertThat(workforceStatement).hasSize(3);
+        assertThat(workforceStatement.size()).isEqualTo(3);
         assertThat(workforceStatement.get(0).path("workforceMemberId").asLong()).isEqualTo(memberId);
         assertThat(workforceStatement.get(2).path("transactionType").asText())
                 .isEqualTo("RECOVERABLE_ADVANCE");
