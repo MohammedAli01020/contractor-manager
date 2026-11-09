@@ -395,6 +395,68 @@ class DriverLedgerIdempotencyIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void recoverableAdvanceRetriesAcrossWorkforceAndDriverRoutesCreateOneMovement() throws Exception {
+        Long firstDriver = createDriver("cross-route-advance-workforce-first");
+        Long firstMember = jdbcTemplate.queryForObject(
+                "SELECT workforce_member_id FROM drivers WHERE id = ? AND tenant_id = ?",
+                Long.class, firstDriver, tenantId);
+        Map<String, Object> workforceFirst = new HashMap<>();
+        workforceFirst.put("clientRequestKey", "cross-route-advance-workforce-first-key");
+        workforceFirst.put("advanceDate", LocalDate.of(2026, 11, 2));
+        workforceFirst.put("amount", new BigDecimal("50.00"));
+        workforceFirst.put("paymentAccountId", cashId);
+        workforceFirst.put("description", "Cross-route recoverable advance");
+        workforceFirst.put("advanceType", "RECOVERABLE");
+
+        postJson("/api/v1/workforce/members/" + firstMember + "/ledger/advances",
+                workforceFirst, token).andExpect(status().isCreated());
+        postJson("/api/v1/drivers/" + firstDriver + "/ledger/advances",
+                workforceFirst, token).andExpect(status().isCreated());
+
+        Long secondDriver = createDriver("cross-route-advance-driver-first");
+        Long secondMember = jdbcTemplate.queryForObject(
+                "SELECT workforce_member_id FROM drivers WHERE id = ? AND tenant_id = ?",
+                Long.class, secondDriver, tenantId);
+        Map<String, Object> driverFirst = new HashMap<>(workforceFirst);
+        driverFirst.put("clientRequestKey", "cross-route-advance-driver-first-key");
+
+        postJson("/api/v1/drivers/" + secondDriver + "/ledger/advances",
+                driverFirst, token).andExpect(status().isCreated());
+        postJson("/api/v1/workforce/members/" + secondMember + "/ledger/advances",
+                driverFirst, token).andExpect(status().isCreated());
+
+        for (Long[] identity : Arrays.asList(
+                new Long[] {firstDriver, firstMember},
+                new Long[] {secondDriver, secondMember})) {
+            Long driverId = identity[0];
+            Long memberId = identity[1];
+            String key = driverId.equals(firstDriver)
+                    ? "cross-route-advance-workforce-first-key"
+                    : "cross-route-advance-driver-first-key";
+            assertThat(ledger.findByTenantIdAndClientRequestKey(tenantId, key))
+                    .hasValueSatisfying(entry -> {
+                        assertThat(entry.getDriverId()).isEqualTo(driverId);
+                        assertThat(entry.getTransactionType()).isEqualTo("RECOVERABLE_ADVANCE");
+                    });
+            assertThat(workforceLedger.findByTenantIdAndClientRequestKey(tenantId, key))
+                    .hasValueSatisfying(entry -> {
+                        assertThat(entry.getWorkforceMemberId()).isEqualTo(memberId);
+                        assertThat(entry.getLegacyDriverId()).isEqualTo(driverId);
+                        assertThat(entry.getLegacySourceEntryId()).isNotNull();
+                    });
+            assertThat(ledger.findByTenantIdAndDriverIdOrderByTransactionDateAscIdAsc(tenantId, driverId))
+                    .filteredOn(entry -> "RECOVERABLE_ADVANCE".equals(entry.getTransactionType())).hasSize(1);
+            assertThat(workforceLedger.findByTenantIdAndWorkforceMemberIdOrderByTransactionDateAscIdAsc(
+                    tenantId, memberId))
+                    .filteredOn(entry -> "RECOVERABLE_ADVANCE".equals(entry.getTransactionType())).hasSize(1);
+            assertThat(journals.findByTenantIdAndPostingKey(tenantId, "driver-advance:" + key))
+                    .isPresent();
+            assertThat(workforceLedger.sumRecoverableAdvanceBalance(tenantId, memberId))
+                    .isEqualByComparingTo("50.00");
+        }
+    }
+
+    @Test
     void concurrentMixedRouteAgainstEarnedAdvancesWithDifferentKeysCannotOverdrawOneWorkforceMember() throws Exception {
         Long driverId = createDriver("mixed-route-earned-advance-race");
         earn(driverId, "mixed-route-earned-advance-race-earned");
