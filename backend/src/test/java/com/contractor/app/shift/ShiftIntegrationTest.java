@@ -1596,4 +1596,86 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
         assertThat(workforceBalance).isEqualByComparingTo(payableBalance);
     }
 
+    @Test
+    void concurrentCanonicalIdentityUpdateAndPaymentSerializeWithoutDeadlock() throws Exception {
+        seedCashBalance(new BigDecimal("1000.00"));
+        finishShift(token,
+                startShift(token, shiftBody(siteId, driverId, equipmentId, today().minusDays(1), "MORNING")));
+        long memberId = jdbcTemplate.queryForObject(
+                "SELECT workforce_member_id FROM drivers WHERE tenant_id=? AND id=?",
+                Long.class, tenantId, driverId);
+        JsonNode member = body(getJson("/api/v1/workforce/members/" + memberId, token)
+                .andExpect(status().isOk()));
+        long cashId = chartAccounts.findByTenantIdAndAccountCodeIgnoreCase(tenantId, "1000")
+                .orElseThrow(() -> new IllegalStateException("Missing cash account")).getId();
+
+        Map<String, Object> identityUpdate = new HashMap<>();
+        identityUpdate.put("fullName", "Concurrent Canonical Identity");
+        identityUpdate.put("phone", "01055551234");
+        identityUpdate.put("nationalId", null);
+        identityUpdate.put("notes", "Updated during payment");
+        identityUpdate.put("version", member.path("version").asLong());
+
+        Map<String, Object> payment = new HashMap<>();
+        payment.put("clientRequestKey", "identity-payment-race-" + java.util.UUID.randomUUID());
+        payment.put("paymentDate", today());
+        payment.put("amount", new BigDecimal("100.00"));
+        payment.put("paymentAccountId", cashId);
+        payment.put("description", "Payment racing canonical identity update");
+
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        int identityStatus;
+        int paymentStatus;
+        try {
+            Future<Integer> identity = executor.submit(() -> {
+                ready.countDown();
+                start.await();
+                return putJson("/api/v1/workforce/members/" + memberId, identityUpdate, token)
+                        .andReturn().getResponse().getStatus();
+            });
+            Future<Integer> pay = executor.submit(() -> {
+                ready.countDown();
+                start.await();
+                return postJson("/api/v1/drivers/" + driverId + "/ledger/payments", payment, token)
+                        .andReturn().getResponse().getStatus();
+            });
+            assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+            identityStatus = identity.get(30, TimeUnit.SECONDS);
+            paymentStatus = pay.get(30, TimeUnit.SECONDS);
+        } finally {
+            start.countDown();
+            executor.shutdownNow();
+            executor.awaitTermination(10, TimeUnit.SECONDS);
+        }
+
+        assertThat(identityStatus).isEqualTo(200);
+        assertThat(paymentStatus).isEqualTo(201);
+        Map<String, Object> linkedIdentity = jdbcTemplate.queryForMap(
+                "SELECT d.name, d.phone, wm.full_name, wm.phone "
+                        + "FROM drivers d JOIN workforce_members wm "
+                        + "ON wm.id=d.workforce_member_id AND wm.tenant_id=d.tenant_id "
+                        + "WHERE d.tenant_id=? AND d.id=?",
+                tenantId, driverId);
+        assertThat(linkedIdentity.get("name")).isEqualTo("Concurrent Canonical Identity");
+        assertThat(linkedIdentity.get("full_name")).isEqualTo("Concurrent Canonical Identity");
+        assertThat(linkedIdentity.get("phone")).isEqualTo("01055551234");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM driver_ledger_entries WHERE tenant_id=? AND driver_id=? "
+                        + "AND transaction_type='PAYMENT' AND client_request_key=?",
+                Integer.class, tenantId, driverId, payment.get("clientRequestKey"))).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM workforce_ledger_entries WHERE tenant_id=? AND workforce_member_id=?",
+                Integer.class, tenantId, memberId))
+                .isEqualTo(jdbcTemplate.queryForObject(
+                        "SELECT COUNT(*) FROM driver_ledger_entries WHERE tenant_id=? AND driver_id=?",
+                        Integer.class, tenantId, driverId));
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COALESCE(SUM(balance_effect),0) FROM workforce_ledger_entries "
+                        + "WHERE tenant_id=? AND workforce_member_id=?",
+                BigDecimal.class, tenantId, memberId)).isEqualByComparingTo("50.00");
+    }
+
 }
