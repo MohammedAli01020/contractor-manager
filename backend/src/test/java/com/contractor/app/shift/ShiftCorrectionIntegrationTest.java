@@ -113,6 +113,33 @@ class ShiftCorrectionIntegrationTest extends AbstractShiftIntegrationTest {
                         + "AND balance_effect=-150.00",
                 Integer.class, tenantId, shiftId)).isEqualTo(1);
 
+        // The transactional V56 mirror must preserve the complete correction chain
+        // without reusing legacy IDs as Workforce primary keys.
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM workforce_ledger_entries w "
+                        + "JOIN driver_ledger_entries d ON d.id=w.legacy_source_entry_id "
+                        + "AND d.tenant_id=w.tenant_id "
+                        + "WHERE w.tenant_id=? AND w.workforce_member_id=? AND w.shift_id=? "
+                        + "AND w.transaction_type IN ('EARNING','CORRECTION_REVERSAL') "
+                        + "AND w.legacy_driver_id=? AND w.journal_entry_id=d.journal_entry_id",
+                Integer.class, tenantId, workforceMemberId, shiftId, driverId)).isEqualTo(2);
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM workforce_ledger_entries w "
+                        + "JOIN driver_ledger_entries d ON d.id=w.legacy_source_entry_id "
+                        + "AND d.tenant_id=w.tenant_id "
+                        + "WHERE w.tenant_id=? AND w.workforce_member_id=? AND w.shift_id=? "
+                        + "AND w.transaction_type='EARNING' AND w.amount=180.00 "
+                        + "AND w.balance_effect=180.00 AND w.journal_entry_id=?",
+                Integer.class, tenantId, workforceMemberId, shiftId, replacementJournalId)).isEqualTo(1);
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM workforce_ledger_entries WHERE tenant_id=? "
+                        + "AND workforce_member_id=? AND shift_id=?",
+                Integer.class, tenantId, workforceMemberId, shiftId)).isEqualTo(3);
+        assertThat(jdbc.queryForObject(
+                "SELECT COALESCE(SUM(balance_effect),0) FROM workforce_ledger_entries "
+                        + "WHERE tenant_id=? AND workforce_member_id=?",
+                BigDecimal.class, tenantId, workforceMemberId)).isEqualByComparingTo("180.00");
+
         // A network retry with the same key and payload must replay the completed correction.
         // Numeric scale is not semantically relevant to an idempotent SHIFT wage replay (180.0 == 180.00).
         request.put("driverWage", new BigDecimal("180.0"));
@@ -150,6 +177,20 @@ class ShiftCorrectionIntegrationTest extends AbstractShiftIntegrationTest {
                 "SELECT COUNT(*) FROM driver_ledger_entries WHERE tenant_id=? AND shift_id=? "
                         + "AND transaction_type='CORRECTION_REVERSAL'",
                 Integer.class, tenantId, shiftId)).isEqualTo(2);
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM workforce_ledger_entries WHERE tenant_id=? "
+                        + "AND workforce_member_id=? AND shift_id=? "
+                        + "AND transaction_type IN ('EARNING','CORRECTION_REVERSAL')",
+                Integer.class, tenantId, workforceMemberId, shiftId)).isEqualTo(5);
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM workforce_ledger_entries WHERE tenant_id=? "
+                        + "AND workforce_member_id=? AND shift_id=? "
+                        + "AND transaction_type='CORRECTION_REVERSAL' AND balance_effect=-180.00",
+                Integer.class, tenantId, workforceMemberId, shiftId)).isEqualTo(1);
+        assertThat(jdbc.queryForObject(
+                "SELECT COALESCE(SUM(balance_effect),0) FROM workforce_ledger_entries "
+                        + "WHERE tenant_id=? AND workforce_member_id=?",
+                BigDecimal.class, tenantId, workforceMemberId)).isEqualByComparingTo("210.00");
         assertThat(correctedAgain.path("driverId").asLong()).isEqualTo(driverId);
 
         Long appliedCorrectionId = jdbc.queryForObject(
