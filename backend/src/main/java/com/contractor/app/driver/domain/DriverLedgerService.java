@@ -133,7 +133,7 @@ public class DriverLedgerService {
                         request.getPaymentAccountId()));
         // Match the tenant-then-driver lock order used by shift wage posting.
         defaultAccounts.initializeForTenant(tenantId);
-        drivers.findByIdAndTenantIdForUpdate(driverId,tenantId)
+        Driver lockedDriver = drivers.findByIdAndTenantIdForUpdate(driverId,tenantId)
                 .orElseThrow(()->ApiException.notFound("العامل غير موجود."));
         String ledgerType="AGAINST_EARNED".equals(type)?"ADVANCE":"RECOVERABLE_ADVANCE";
         Optional<DriverLedgerEntry> prior=ledger.findByTenantIdAndClientRequestKey(tenantId,key);
