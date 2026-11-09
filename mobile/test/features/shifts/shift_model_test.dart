@@ -10,10 +10,12 @@ void main() {
       'status': 'IN_PROGRESS',
       'driverId': 7,
       'workforceMemberId': 42,
+      'workforceMemberName': 'Ahmed Ali',
     });
 
     expect(shift.driverId, 7);
     expect(shift.workforceMemberId, 42);
+    expect(shift.personName, 'Ahmed Ali');
   });
 
   test('keeps legacy shift response compatible without workforce identity', () {
@@ -27,5 +29,6 @@ void main() {
 
     expect(shift.driverId, 8);
     expect(shift.workforceMemberId, isNull);
+    expect(shift.personName, 'غير محدد');
   });
 }
