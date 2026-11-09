@@ -109,6 +109,33 @@ class ShiftCorrectionSnapshotMigrationIntegrationTest {
                         + "('trg_shift_corrections_workforce_refs_insert', "
                         + "'trg_shift_corrections_workforce_refs_guard')",
                 Integer.class)).isEqualTo(2);
+
+        // Every canonical reference is protected by a composite tenant+row FK.
+        // Checking both FK columns prevents a valid row ID from another tenant
+        // from being accepted merely because the numeric ID exists.
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(DISTINCT CONSTRAINT_NAME) FROM information_schema.KEY_COLUMN_USAGE "
+                        + "WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='shift_corrections' "
+                        + "AND REFERENCED_TABLE_NAME='workforce_ledger_entries' "
+                        + "AND CONSTRAINT_NAME IN ('fk_shift_correction_old_workforce_ledger', "
+                        + "'fk_shift_correction_reversed_workforce_ledger', "
+                        + "'fk_shift_correction_replacement_workforce_ledger')",
+                Integer.class)).isEqualTo(3);
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.KEY_COLUMN_USAGE "
+                        + "WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='shift_corrections' "
+                        + "AND REFERENCED_TABLE_NAME='workforce_ledger_entries' "
+                        + "AND REFERENCED_COLUMN_NAME IN ('tenant_id','id') "
+                        + "AND CONSTRAINT_NAME IN ('fk_shift_correction_old_workforce_ledger', "
+                        + "'fk_shift_correction_reversed_workforce_ledger', "
+                        + "'fk_shift_correction_replacement_workforce_ledger')",
+                Integer.class)).isEqualTo(6);
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.STATISTICS "
+                        + "WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='workforce_ledger_entries' "
+                        + "AND INDEX_NAME='uq_workforce_ledger_tenant_id' AND NON_UNIQUE=0 "
+                        + "AND COLUMN_NAME IN ('tenant_id','id')",
+                Integer.class)).isEqualTo(2);
     }
 
     private static long insertTenant(JdbcTemplate jdbc, String name) {
