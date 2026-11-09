@@ -92,6 +92,39 @@ class ShiftWorkforceIdentityMigrationIntegrationTest {
                 + ", '2026-01-11', 'MORNING', " + siteId + ", " + driverId + ", "
                 + secondMemberId + ", " + equipmentId + ")"))
                 .isInstanceOf(DataIntegrityViolationException.class);
+
+        // Verify V55 itself is the final guard, independently of the legacy driver guard.
+        assertThat(jdbc.queryForObject("SELECT COUNT(DISTINCT INDEX_NAME) FROM information_schema.STATISTICS "
+                + "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'shifts' "
+                + "AND INDEX_NAME = 'uq_shifts_one_active_workforce_member'",
+                Integer.class)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM information_schema.COLUMNS "
+                + "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'shifts' "
+                + "AND COLUMN_NAME = 'active_workforce_member_id' AND EXTRA LIKE '%STORED GENERATED%'",
+                Integer.class)).isEqualTo(1);
+
+        // Drop only the legacy driver unique index inside this disposable test schema so
+        // the following duplicate proves the Workforce unique index is independently effective.
+        jdbc.execute("ALTER TABLE shifts DROP INDEX uq_shifts_one_active_driver");
+        long secondEquipmentId = insertId(jdbc, "INSERT INTO equipment (tenant_id, code, equipment_type_id) "
+                + "VALUES (" + tenantId + ", 'WF12C-EQ-SECOND', " + equipmentTypeId + ")");
+        jdbc.update("INSERT INTO shifts (tenant_id, shift_date, shift_type, status, started_at, site_id, "
+                + "driver_id, workforce_member_id, equipment_id, wage_source, "
+                + "compensation_component_code, compensation_component_name, compensation_basis, "
+                + "compensation_rate, compensation_calculated_amount) VALUES (" + tenantId
+                + ", '2026-01-12', 'MORNING', 'IN_PROGRESS', '2026-01-12 07:00:00', "
+                + siteId + ", " + driverId + ", " + memberId + ", " + equipmentId
+                + ", 'HISTORICAL_SHIFT_SNAPSHOT', 'HISTORICAL_SHIFT_WAGE', 'Historical recorded shift wage', "
+                + "'SHIFT', 0.00, 0.00)");
+        assertThatThrownBy(() -> jdbc.update("INSERT INTO shifts (tenant_id, shift_date, shift_type, status, "
+                + "started_at, site_id, driver_id, workforce_member_id, equipment_id, wage_source, "
+                + "compensation_component_code, compensation_component_name, compensation_basis, "
+                + "compensation_rate, compensation_calculated_amount) VALUES (" + tenantId
+                + ", '2026-01-12', 'EVENING', 'IN_PROGRESS', '2026-01-12 16:00:00', "
+                + siteId + ", " + driverId + ", " + memberId + ", " + secondEquipmentId
+                + ", 'HISTORICAL_SHIFT_SNAPSHOT', 'HISTORICAL_SHIFT_WAGE', 'Historical recorded shift wage', "
+                + "'SHIFT', 0.00, 0.00)"))
+                .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     private static long insertId(JdbcTemplate jdbc, String sql) {
