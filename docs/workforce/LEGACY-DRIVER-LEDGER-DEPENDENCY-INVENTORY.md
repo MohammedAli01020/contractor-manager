@@ -62,3 +62,11 @@ This is a verified dependency inventory, not a claim that every repository refer
 - The integration test has been added but has not been executed in this environment.
 
 - The same integration test also attempts a row with only `legacy_driver_id` populated and expects a data-integrity failure, exercising the V58 paired-provenance CHECK constraint.
+
+## JPA entity alignment (V58)
+
+- Reviewed `com.contractor.app.workforce.domain.WorkforceLedgerEntry` on this branch.
+- Both `legacySourceEntryId` and `legacyDriverId` are nullable wrapper `Long` fields, mapped to their matching nullable database columns, and marked `updatable = false`.
+- No entity change is required for V58: the mapping already permits both values to be null for a Workforce-native movement while keeping provenance immutable after insertion.
+- Keep both columns during the compatibility and reconciliation period. They are historical traceability fields, not canonical identity. Removing them is a separate schema decision and must wait until legacy references, reconciliation needs, and retention requirements have been reviewed.
+- The next functional cutover work remains shift completion/recovery and completed-shift corrections; do not change the ledger writer until their locking, idempotency, journal, and correction-chain behavior can be preserved in one transaction.
