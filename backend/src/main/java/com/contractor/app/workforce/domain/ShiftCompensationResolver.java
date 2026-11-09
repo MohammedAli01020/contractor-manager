@@ -27,8 +27,7 @@ public class ShiftCompensationResolver {
     private final WorkforceAssignmentRepository assignments;
 
     public ShiftCompensationResolver(CompensationAgreementRepository agreements,
-            CompensationComponentRepository components, WorkforceAssignmentRepository assignments,
-            WorkforceMemberRepository members) {
+            CompensationComponentRepository components, WorkforceAssignmentRepository assignments) {
         this.agreements = agreements;
         this.components = components;
         this.assignments = assignments;
