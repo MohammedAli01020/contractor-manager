@@ -3,7 +3,6 @@ package com.contractor.app.workforce.domain;
 import com.contractor.app.common.error.ApiException;
 import com.contractor.app.common.security.CurrentUser;
 import com.contractor.app.driver.api.dto.DriverLedgerAdvanceRequest;
-import com.contractor.app.driver.api.dto.DriverLedgerEntryResponse;
 import com.contractor.app.driver.api.dto.DriverLedgerPaymentRequest;
 import com.contractor.app.driver.domain.DriverLedgerService;
 import com.contractor.app.driver.infra.DriverRepository;
@@ -40,7 +39,7 @@ public class WorkforceLedgerCommandService {
         Long driverId = drivers.findByWorkforceMemberIdAndTenantId(memberId, tenantId)
                 .orElseThrow(() -> ApiException.notFound("لا يوجد ملف تشغيلي مالي مرتبط بهذا الفرد."))
                 .getId();
-        DriverLedgerEntryResponse ignored = legacyCommands.pay(driverId, request);
+        legacyCommands.pay(driverId, request);
         return responseFor(tenantId, memberId, request.getClientRequestKey());
     }
 
@@ -50,7 +49,7 @@ public class WorkforceLedgerCommandService {
         Long driverId = drivers.findByWorkforceMemberIdAndTenantId(memberId, tenantId)
                 .orElseThrow(() -> ApiException.notFound("لا يوجد ملف تشغيلي مالي مرتبط بهذا الفرد."))
                 .getId();
-        DriverLedgerEntryResponse ignored = legacyCommands.advance(driverId, request);
+        legacyCommands.advance(driverId, request);
         return responseFor(tenantId, memberId, request.getClientRequestKey());
     }
 
