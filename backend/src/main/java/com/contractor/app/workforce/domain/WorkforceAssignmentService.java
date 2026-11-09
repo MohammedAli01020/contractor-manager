@@ -98,8 +98,24 @@ public class WorkforceAssignmentService {
             throw ApiException.conflict("كود الدور مستخدم بالفعل داخل الشركة.");
         }
         WorkforceRole role = new WorkforceRole(tenantId, code, name);
-        role.setShiftEligible(Boolean.TRUE.equals(request.getShiftEligible()));
-        return WorkforceRoleResponse.from(roles.saveAndFlush(role));
+        boolean wasEligible = role.isShiftEligible();
+        boolean nowEligible = Boolean.TRUE.equals(request.getShiftEligible());
+        role.setShiftEligible(nowEligible);
+        WorkforceRole saved = roles.saveAndFlush(role);
+        if (!wasEligible && nowEligible) {
+            // Existing active assignments must become usable immediately when an
+            // administrator enables shift eligibility for this role.
+            List<WorkforceAssignment> activeAssignments = assignments
+                    .findAllByTenantIdAndWorkforceRoleIdAndStatus(
+                            tenantId, roleId, WorkforceAssignmentStatus.ACTIVE);
+            for (WorkforceAssignment assignment : activeAssignments) {
+                Driver linked = drivers.findByWorkforceMemberIdAndTenantIdForUpdate(
+                        assignment.getWorkforceMemberId(), tenantId).orElse(null);
+                WorkforceMember member = lockMember(tenantId, assignment.getWorkforceMemberId());
+                if (member.isActive()) ensureOperationalDriver(member, saved, linked);
+            }
+        }
+        return WorkforceRoleResponse.from(saved);
     }
 
     @Transactional
