@@ -299,6 +299,41 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
     }
 
     @Test
+    void workforceCandidatesExposeCanonicalMemberIdentityAlongsideLegacyProjection() throws Exception {
+        Long memberId = jdbcTemplate.queryForObject(
+                "select workforce_member_id from drivers where id = ?", Long.class, driverId);
+        JsonNode roles = body(getJson("/api/v1/workforce/roles", token).andExpect(status().isOk()));
+        long driverRoleId = 0L;
+        for (JsonNode role : roles) {
+            if ("DRIVER".equals(role.path("code").asText())) {
+                driverRoleId = role.path("id").asLong();
+                break;
+            }
+        }
+        assertThat(driverRoleId).isPositive();
+
+        Map<String, Object> assignmentBody = new HashMap<>();
+        assignmentBody.put("roleId", driverRoleId);
+        assignmentBody.put("siteId", siteId);
+        assignmentBody.put("effectiveFrom", day(30).toString());
+        postJson("/api/v1/workforce/members/" + memberId + "/assignments",
+                assignmentBody, token).andExpect(status().isCreated());
+
+        JsonNode candidates = body(getJson("/api/v1/live/workforce-candidates?shiftDate="
+                + today() + "&siteId=" + siteId, token).andExpect(status().isOk()));
+        JsonNode candidate = null;
+        for (JsonNode item : candidates) {
+            if (item.path("id").asLong() == driverId) {
+                candidate = item;
+                break;
+            }
+        }
+
+        assertThat(candidate).isNotNull();
+        assertThat(candidate.path("workforceMemberId").asLong()).isEqualTo(memberId);
+    }
+
+    @Test
     void startCreatesARunningShiftWithSnapshots() throws Exception {
         JsonNode shift = startShift(token, shiftBody(siteId, driverId, equipmentId, day(1), "MORNING"));
 
