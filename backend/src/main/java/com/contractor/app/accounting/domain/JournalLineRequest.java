@@ -25,6 +25,12 @@ public class JournalLineRequest {
         this.equipmentId = equipmentId;
     }
 
+    public JournalLineRequest(Long accountId, String description, BigDecimal debit, BigDecimal credit,
+                              Long driverId, Long workforceMemberId, Long equipmentId) {
+        this(accountId, description, debit, credit, driverId, equipmentId);
+        this.workforceMemberId = workforceMemberId;
+    }
+
     public Long getAccountId() {
         return accountId;
     }
