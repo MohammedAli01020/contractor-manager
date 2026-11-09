@@ -84,6 +84,41 @@ class WorkforceAssignmentIntegrationTest extends AbstractIntegrationTest {
         assertThat(foundInactive).isTrue();
     }
 
+
+    @Test
+    void customRoleCanBeEnabledForShiftsAndThenAppearsInCandidateList() throws Exception {
+        JsonNode custom = body(postJson("/api/v1/workforce/roles",
+                Map.of("code", "QUALITY_INSPECTOR", "name", "مراقب جودة",
+                        "shiftEligible", false), token).andExpect(status().isCreated()));
+        assertThat(custom.path("shiftEligible").asBoolean()).isFalse();
+
+        LocalDate today = LocalDate.now();
+        body(postJson("/api/v1/workforce/members/" + memberId + "/assignments",
+                assignment(custom.path("id").asLong(), today, null), token)
+                .andExpect(status().isCreated()));
+
+        String candidateUrl = "/api/v1/live/workforce-candidates?shiftDate=" + today
+                + "&siteId=" + siteId;
+        JsonNode before = body(getJson(candidateUrl, token).andExpect(status().isOk()));
+        assertThat(before.toString()).doesNotContain("QUALITY_INSPECTOR");
+
+        JsonNode enabled = body(putJson("/api/v1/workforce/roles/" + custom.path("id").asLong()
+                + "/shift-eligibility",
+                Map.of("shiftEligible", true, "version", custom.path("version").asLong()), token)
+                .andExpect(status().isOk()));
+        assertThat(enabled.path("shiftEligible").asBoolean()).isTrue();
+
+        JsonNode after = body(getJson(candidateUrl, token).andExpect(status().isOk()));
+        boolean found = false;
+        for (JsonNode candidate : after) {
+            if (candidate.path("workforceMemberId").asLong() == memberId) {
+                found = true;
+                assertThat(candidate.path("id").asLong()).isGreaterThan(0);
+            }
+        }
+        assertThat(found).isTrue();
+    }
+
     @Test
     void onePersonCanHoldDifferentRolesButCannotHaveOverlappingSameRole() throws Exception {
         Map<String, Object> driverAssignment = assignment(driverRoleId, LocalDate.of(2026, 1, 1), null);
