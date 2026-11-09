@@ -14,6 +14,8 @@ import com.contractor.app.accounting.infra.ChartAccountRepository;
 import com.contractor.app.accounting.infra.JournalEntryRepository;
 import com.contractor.app.driver.domain.DriverLedgerEntry;
 import com.contractor.app.driver.infra.DriverLedgerEntryRepository;
+import com.contractor.app.workforce.domain.WorkforceLedgerEntry;
+import com.contractor.app.workforce.infra.WorkforceLedgerEntryRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -38,6 +40,7 @@ class DriverLedgerIdempotencyIntegrationTest extends AbstractIntegrationTest {
     @Autowired private JournalEntryRepository journals;
     @Autowired private JournalPostingService postingService;
     @Autowired private DriverLedgerEntryRepository ledger;
+    @Autowired private WorkforceLedgerEntryRepository workforceLedger;
     @Autowired private JdbcTemplate jdbcTemplate;
     @Autowired private FinancialIdempotencyService financialIdempotency;
 
@@ -64,6 +67,37 @@ class DriverLedgerIdempotencyIntegrationTest extends AbstractIntegrationTest {
         equityId = account("3000").getId();
         openLiquidity(cashId, "cash-opening", new BigDecimal("2000.00"));
         openLiquidity(bankId, "bank-opening", new BigDecimal("2000.00"));
+    }
+
+    @Test
+    void workforceLedgerMirrorTracksLegacyEarningsAndPaymentsByCanonicalMember() throws Exception {
+        Long driverId = createDriver("workforce-ledger-mirror");
+        earn(driverId, "workforce-ledger-mirror-earning");
+
+        Long memberId = jdbcTemplate.queryForObject(
+                "SELECT workforce_member_id FROM drivers WHERE id = ? AND tenant_id = ?",
+                Long.class, driverId, tenantId);
+        java.util.List<WorkforceLedgerEntry> afterEarning =
+                workforceLedger.findByTenantIdAndWorkforceMemberIdOrderByTransactionDateAscIdAsc(
+                        tenantId, memberId);
+        assertThat(afterEarning).hasSize(1);
+        assertThat(afterEarning.get(0).getTransactionType()).isEqualTo("ADJUSTMENT");
+        assertThat(afterEarning.get(0).getLegacyDriverId()).isEqualTo(driverId);
+        assertThat(afterEarning.get(0).getLegacySourceEntryId()).isEqualTo(afterEarning.get(0).getId());
+        assertThat(workforceLedger.sumBalance(tenantId, memberId))
+                .isEqualByComparingTo("500.00");
+
+        assertThat(postPayment(driverId, "workforce-ledger-mirror-payment", cashId).andReturn()
+                .getResponse().getStatus()).isEqualTo(201);
+
+        java.util.List<WorkforceLedgerEntry> afterPayment =
+                workforceLedger.findByTenantIdAndWorkforceMemberIdOrderByTransactionDateAscIdAsc(
+                        tenantId, memberId);
+        assertThat(afterPayment).hasSize(2);
+        assertThat(afterPayment).extracting(WorkforceLedgerEntry::getTransactionType)
+                .containsExactly("ADJUSTMENT", "PAYMENT");
+        assertThat(workforceLedger.sumBalance(tenantId, memberId))
+                .isEqualByComparingTo("400.00");
     }
 
     @Test
