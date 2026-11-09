@@ -293,9 +293,9 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
         JsonNode response = body(getJson("/api/v1/shifts?workforceMemberId=" + memberId, token)
                 .andExpect(status().isOk()));
 
-        assertThat(response.path("content").isArray()).isTrue();
-        assertThat(response.path("content")).hasSize(1);
-        assertThat(response.path("content").get(0).path("workforceMemberId").asLong())
+        assertThat(response.path("items").isArray()).isTrue();
+        assertThat(response.path("items")).hasSize(1);
+        assertThat(response.path("items").get(0).path("workforceMemberId").asLong())
                 .isEqualTo(memberId);
     }
 
