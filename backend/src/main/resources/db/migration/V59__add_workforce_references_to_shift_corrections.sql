@@ -52,3 +52,87 @@ ALTER TABLE shift_corrections
         (replacement_earning_ledger_entry_id IS NULL AND replacement_earning_workforce_ledger_entry_id IS NULL)
         OR (replacement_earning_ledger_entry_id IS NOT NULL AND replacement_earning_workforce_ledger_entry_id IS NOT NULL)
     );
+
+-- The existing V44 guard protects legacy references. This companion guard validates
+-- the canonical Workforce references before APPLYING can become APPLIED.
+DROP TRIGGER IF EXISTS trg_shift_corrections_workforce_refs_guard;
+
+CREATE TRIGGER trg_shift_corrections_workforce_refs_guard
+BEFORE UPDATE ON shift_corrections
+FOR EACH ROW
+BEGIN
+    IF OLD.status = 'APPLYING' AND NEW.status = 'APPLIED' THEN
+        IF NEW.old_driver_wage = 0 THEN
+            IF NEW.old_earning_workforce_ledger_entry_id IS NOT NULL
+               OR NEW.reversed_earning_workforce_ledger_entry_id IS NOT NULL THEN
+                SIGNAL SQLSTATE '45000'
+                    SET MESSAGE_TEXT = 'SHIFT_CORRECTION_WORKFORCE_OLD_REFERENCES_INVALID';
+            END IF;
+        ELSE
+            IF NOT EXISTS (
+                SELECT 1
+                  FROM workforce_ledger_entries w
+                  JOIN shifts s
+                    ON s.id = NEW.shift_id
+                   AND s.tenant_id = NEW.tenant_id
+                 WHERE w.id = NEW.old_earning_workforce_ledger_entry_id
+                   AND w.tenant_id = NEW.tenant_id
+                   AND w.legacy_source_entry_id = NEW.old_earning_ledger_entry_id
+                   AND w.legacy_driver_id = NEW.old_driver_id
+                   AND w.workforce_member_id = s.workforce_member_id
+                   AND w.shift_id = NEW.shift_id
+                   AND w.transaction_type = 'EARNING'
+                   AND w.journal_entry_id = NEW.old_wage_journal_entry_id
+                   AND w.amount = NEW.old_driver_wage
+                   AND w.balance_effect = NEW.old_driver_wage
+            ) OR NOT EXISTS (
+                SELECT 1
+                  FROM workforce_ledger_entries w
+                  JOIN shifts s
+                    ON s.id = NEW.shift_id
+                   AND s.tenant_id = NEW.tenant_id
+                 WHERE w.id = NEW.reversed_earning_workforce_ledger_entry_id
+                   AND w.tenant_id = NEW.tenant_id
+                   AND w.legacy_source_entry_id = NEW.reversed_earning_ledger_entry_id
+                   AND w.legacy_driver_id = NEW.old_driver_id
+                   AND w.workforce_member_id = s.workforce_member_id
+                   AND w.shift_id = NEW.shift_id
+                   AND w.transaction_type = 'CORRECTION_REVERSAL'
+                   AND w.journal_entry_id = NEW.wage_reversal_journal_entry_id
+                   AND w.amount = NEW.old_driver_wage
+                   AND w.balance_effect = -NEW.old_driver_wage
+            ) THEN
+                SIGNAL SQLSTATE '45000'
+                    SET MESSAGE_TEXT = 'SHIFT_CORRECTION_WORKFORCE_OLD_REFERENCES_INVALID';
+            END IF;
+        END IF;
+
+        IF NEW.new_driver_wage = 0 THEN
+            IF NEW.replacement_earning_workforce_ledger_entry_id IS NOT NULL THEN
+                SIGNAL SQLSTATE '45000'
+                    SET MESSAGE_TEXT = 'SHIFT_CORRECTION_WORKFORCE_REPLACEMENT_INVALID';
+            END IF;
+        ELSE
+            IF NOT EXISTS (
+                SELECT 1
+                  FROM workforce_ledger_entries w
+                  JOIN shifts s
+                    ON s.id = NEW.shift_id
+                   AND s.tenant_id = NEW.tenant_id
+                 WHERE w.id = NEW.replacement_earning_workforce_ledger_entry_id
+                   AND w.tenant_id = NEW.tenant_id
+                   AND w.legacy_source_entry_id = NEW.replacement_earning_ledger_entry_id
+                   AND w.legacy_driver_id = NEW.new_driver_id
+                   AND w.workforce_member_id = s.workforce_member_id
+                   AND w.shift_id = NEW.shift_id
+                   AND w.transaction_type = 'EARNING'
+                   AND w.journal_entry_id = NEW.replacement_wage_journal_entry_id
+                   AND w.amount = NEW.new_driver_wage
+                   AND w.balance_effect = NEW.new_driver_wage
+            ) THEN
+                SIGNAL SQLSTATE '45000'
+                    SET MESSAGE_TEXT = 'SHIFT_CORRECTION_WORKFORCE_REPLACEMENT_INVALID';
+            END IF;
+        END IF;
+    END IF;
+END;
