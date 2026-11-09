@@ -144,6 +144,20 @@ class DriverLedgerIdempotencyIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void workforceLedgerStatementCannotReadAnotherTenantsMember() throws Exception {
+        Long driverId = createDriver("tenant-isolation-ledger");
+        Long memberId = jdbcTemplate.queryForObject(
+                "SELECT workforce_member_id FROM drivers WHERE id = ? AND tenant_id = ?",
+                Long.class, driverId, tenantId);
+        JsonNode otherTenant = registerTenant(
+                "Other ledger tenant " + uniqueName("tenant"), uniqueName("other-owner"));
+        String otherTenantToken = otherTenant.path("accessToken").asText();
+
+        getJson("/api/v1/workforce/members/" + memberId + "/ledger", otherTenantToken)
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
     void idempotencyReservationRequiresTheOuterFinancialTransaction() {
         assertThatThrownBy(() -> financialIdempotency.reserve(
                 tenantId, "DRIVER_LEDGER", "outside-transaction", "a".repeat(64)))
