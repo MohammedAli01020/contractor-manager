@@ -26,12 +26,14 @@ public class WorkforceIdentityService {
     private final WorkforceMemberRepository members;
     private final DriverRepository drivers;
     private final AuditService audit;
+    private final WorkforceFinancialLockService financialLocks;
 
     public WorkforceIdentityService(WorkforceMemberRepository members, DriverRepository drivers,
-                                    AuditService audit) {
+                                    AuditService audit, WorkforceFinancialLockService financialLocks) {
         this.members = members;
         this.drivers = drivers;
         this.audit = audit;
+        this.financialLocks = financialLocks;
     }
 
     @Transactional
@@ -39,6 +41,7 @@ public class WorkforceIdentityService {
         WorkforceMember member = new WorkforceMember(tenantId, request.getFullName().trim());
         applyIdentity(request, member);
         WorkforceMember saved = members.saveAndFlush(member);
+        financialLocks.createForMember(saved);
         audit.record(tenantId, AuditEntityType.WORKFORCE_MEMBER, saved.getId(),
                 AuditAction.CREATED, null, null, "fullName=" + saved.getFullName());
         return saved;
@@ -95,7 +98,9 @@ public class WorkforceIdentityService {
     public WorkforceMember createForDriver(Driver driver) {
         WorkforceMember member = new WorkforceMember(driver.getTenantId(), driver.getName());
         copyIdentity(driver, member);
-        return members.saveAndFlush(member);
+        WorkforceMember saved = members.saveAndFlush(member);
+        financialLocks.createForMember(saved);
+        return saved;
     }
 
     /**
