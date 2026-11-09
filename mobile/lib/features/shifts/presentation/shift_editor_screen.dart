@@ -142,6 +142,9 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
         if (_driverId != null &&
             !candidates.any((item) => (item['id'] as num?)?.toInt() == _driverId)) {
           _driverId = null;
+          _workforceMemberId = null;
+        } else if (_driverId != null) {
+          _workforceMemberId = _workforceMemberIdForDriver(_driverId!);
         }
       });
     } catch (e) {
