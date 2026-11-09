@@ -67,6 +67,7 @@ public class CompensationAgreementResponse {
 
     public static class Component {
         private final Long id;
+        private final Long financialItemDefinitionId;
         private final String componentCode;
         private final String displayName;
         private final CompensationBasis basis;
@@ -77,6 +78,7 @@ public class CompensationAgreementResponse {
 
         Component(CompensationComponent component) {
             id = component.getId();
+            financialItemDefinitionId = component.getFinancialItemDefinitionId();
             componentCode = component.getComponentCode();
             displayName = component.getDisplayName();
             basis = component.getBasis();
@@ -86,6 +88,7 @@ public class CompensationAgreementResponse {
             sortOrder = component.getSortOrder();
         }
         public Long getId() { return id; }
+        public Long getFinancialItemDefinitionId() { return financialItemDefinitionId; }
         public String getComponentCode() { return componentCode; }
         public String getDisplayName() { return displayName; }
         public CompensationBasis getBasis() { return basis; }
