@@ -723,26 +723,26 @@ public class ShiftService {
 
     private List<ShiftResponse> toResponses(Long tenantId, List<Shift> list) {
         Set<Long> siteIds = new HashSet<>();
-        Set<Long> driverIds = new HashSet<>();
+        Set<Long> workforceMemberIds = new HashSet<>();
         Set<Long> equipmentIds = new HashSet<>();
         for (Shift s : list) {
             siteIds.add(s.getSiteId());
-            driverIds.add(s.getDriverId());
+            workforceMemberIds.add(s.getWorkforceMemberId());
             equipmentIds.add(s.getEquipmentId());
         }
         Map<Long, String> siteNames = new HashMap<>();
         sites.findAllById(siteIds).stream().filter(s -> tenantId.equals(s.getTenantId()))
                 .forEach(s -> siteNames.put(s.getId(), s.getName()));
-        Map<Long, String> driverNames = new HashMap<>();
-        drivers.findAllById(driverIds).stream().filter(d -> tenantId.equals(d.getTenantId()))
-                .forEach(d -> driverNames.put(d.getId(), d.getName()));
+        Map<Long, String> workforceMemberNames = new HashMap<>();
+        workforceMembers.findAllByTenantIdAndIdIn(tenantId, workforceMemberIds)
+                .forEach(member -> workforceMemberNames.put(member.getId(), member.getFullName()));
         Map<Long, Equipment> equipmentById = new HashMap<>();
         equipment.findAllById(equipmentIds).stream().filter(e -> tenantId.equals(e.getTenantId()))
                 .forEach(e -> equipmentById.put(e.getId(), e));
 
         return list.stream().map(s -> {
             Equipment e = equipmentById.get(s.getEquipmentId());
-            return new ShiftResponse(s, siteNames.get(s.getSiteId()), driverNames.get(s.getDriverId()),
+            return new ShiftResponse(s, siteNames.get(s.getSiteId()), workforceMemberNames.get(s.getWorkforceMemberId()),
                     e == null ? null : e.getCode(), e == null ? null : e.getName());
         }).collect(Collectors.toList());
     }
