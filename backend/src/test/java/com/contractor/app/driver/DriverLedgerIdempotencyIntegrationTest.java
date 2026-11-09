@@ -224,6 +224,40 @@ class DriverLedgerIdempotencyIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void workforceLedgerSchemaAcceptsNativeMovementWithoutLegacyDriverProvenance() throws Exception {
+        Long driverId = createDriver("native-workforce-ledger");
+        Long memberId = jdbcTemplate.queryForObject(
+                "SELECT workforce_member_id FROM drivers WHERE id = ? AND tenant_id = ?",
+                Long.class, driverId, tenantId);
+        String key = "native-workforce-adjustment";
+        JournalPostingRequest journalRequest = new JournalPostingRequest(
+                "native-workforce-journal", "WORKFORCE_LEDGER_TEST", memberId,
+                LocalDate.of(2026, 11, 1), "Native Workforce ledger schema test", null,
+                Arrays.asList(
+                        new JournalLineRequest(expenseId, "Workforce expense",
+                                new BigDecimal("25.00"), BigDecimal.ZERO, null, memberId, null),
+                        new JournalLineRequest(payableId, "Workforce payable",
+                                BigDecimal.ZERO, new BigDecimal("25.00"), null, memberId, null)));
+        Long journalId = postingService.post(tenantId, actorId, journalRequest).getId();
+
+        jdbcTemplate.update(
+                "INSERT INTO workforce_ledger_entries (tenant_id, workforce_member_id, transaction_type, "
+                        + "transaction_date, amount, balance_effect, description, client_request_key, shift_id, "
+                        + "journal_entry_id, created_by_user_id, created_at, legacy_source_entry_id, legacy_driver_id) "
+                        + "VALUES (?, ?, 'ADJUSTMENT', ?, ?, ?, ?, ?, NULL, ?, ?, UTC_TIMESTAMP(6), NULL, NULL)",
+                tenantId, memberId, LocalDate.of(2026, 11, 1), new BigDecimal("25.00"),
+                new BigDecimal("25.00"), "Native Workforce movement", key, journalId, actorId);
+
+        WorkforceLedgerEntry nativeEntry = workforceLedger.findByTenantIdAndClientRequestKey(tenantId, key)
+                .orElseThrow(AssertionError::new);
+        assertThat(nativeEntry.getWorkforceMemberId()).isEqualTo(memberId);
+        assertThat(nativeEntry.getLegacySourceEntryId()).isNull();
+        assertThat(nativeEntry.getLegacyDriverId()).isNull();
+        assertThat(workforceLedger.sumBalance(tenantId, memberId)).isEqualByComparingTo("25.00");
+        assertThat(ledger.findByTenantIdAndClientRequestKey(tenantId, key)).isEmpty();
+    }
+
+    @Test
     void idempotencyReservationRequiresTheOuterFinancialTransaction() {
         assertThatThrownBy(() -> financialIdempotency.reserve(
                 tenantId, "DRIVER_LEDGER", "outside-transaction", "a".repeat(64)))
