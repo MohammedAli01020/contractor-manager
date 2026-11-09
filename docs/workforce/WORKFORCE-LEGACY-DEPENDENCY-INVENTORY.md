@@ -155,3 +155,11 @@ Validation:
 - Backend CI passed for `1cdd54232a40ee0a831a4ffbbe830d943befbd08`, including the canonical defaults integration test.
 - Flutter CI passed for `b405ab312059d65ee58e238260e4d40f0c07eee5`.
 - The branch remains isolated; no PR merge, main-branch change, or deployment was performed.
+
+
+### Implementation progress — canonical-only mobile shift commands
+
+- The Flutter shift editor now submits `workforceMemberId` without `driverId` when creating/updating a shift. The backend resolves the tenant-scoped legacy operational projection internally for now.
+- This moves the mobile command contract to canonical Workforce identity while preserving old-client compatibility at the API boundary.
+- The editor still uses the Driver projection ID internally for the current candidate picker and legacy defaults fallback. This is an acknowledged transitional UI dependency, not the identity sent by the new mobile command.
+- Existing backend integration coverage `shiftCanBeStartedUsingCanonicalWorkforceMemberId` removes `driverId` from the request and verifies the canonical member and compatibility projection in the response.
