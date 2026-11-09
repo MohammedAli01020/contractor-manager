@@ -345,18 +345,17 @@ public class ShiftService {
                                 BigDecimal actualHours, BigDecimal actualQuantity) {
         // Resolve the canonical member without a row lock, then serialize all financial
         // activity before taking the Shift/Driver/Workforce row locks.
-        Shift preview = shifts.findByIdAndTenantId(id, tenantId)
+        Long candidateMemberId = shifts.findWorkforceMemberIdByIdAndTenantId(id, tenantId)
                 .orElseThrow(() -> ApiException.notFound(NOT_FOUND));
-        if (preview.getWorkforceMemberId() == null) {
+        if (candidateMemberId == null) {
             throw ApiException.conflict("الوردية لا تحتوي على ربط موثوق بهوية العامل؛ راجع بيانات القوى العاملة.");
         }
-        preview.requireVersion(version);
         // Account initialization may lock tenant/account rows, so it must precede the mutex.
         defaultAccounts.initializeForTenant(tenantId);
-        financialLocks.lockForFinancialUpdate(tenantId, preview.getWorkforceMemberId());
+        financialLocks.lockForFinancialUpdate(tenantId, candidateMemberId);
 
         Shift shift = findForUpdate(tenantId, id);
-        if (!preview.getWorkforceMemberId().equals(shift.getWorkforceMemberId())) {
+        if (!candidateMemberId.equals(shift.getWorkforceMemberId())) {
             throw ApiException.conflict("تم تغيير ربط العامل بالوردية أثناء بدء الإنهاء. أعد تحميل الوردية وحاول مجددًا.");
         }
         if (shift.getStatus() != ShiftStatus.IN_PROGRESS) {
