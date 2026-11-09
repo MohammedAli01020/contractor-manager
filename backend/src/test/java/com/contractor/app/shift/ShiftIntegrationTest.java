@@ -1572,8 +1572,10 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
                         + "WHERE tenant_id=? AND driver_id=?",
                 BigDecimal.class, tenantId, driverId);
         assertThat(recoverableOutstanding).isIn(new BigDecimal("0.00"), new BigDecimal("75.00"));
-        assertThat(payableBalance.add(recoverableOutstanding))
-                .isEqualByComparingTo("150.00");
+        BigDecimal recoveredAmount = new BigDecimal("75.00").subtract(recoverableOutstanding);
+        assertThat(payableBalance.add(recoveredAmount)).isEqualByComparingTo("150.00");
+        assertThat(payableBalance).isEqualByComparingTo(
+                recoverableOutstanding.signum() == 0 ? "75.00" : "150.00");
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM driver_ledger_entries WHERE tenant_id=? AND driver_id=? "
                         + "AND transaction_type='ADVANCE_RECOVERY' AND shift_id=?",
