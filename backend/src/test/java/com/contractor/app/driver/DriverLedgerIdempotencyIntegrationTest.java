@@ -582,6 +582,21 @@ class DriverLedgerIdempotencyIntegrationTest extends AbstractIntegrationTest {
         assertThat(workforceLedger.sumBalance(tenantId, memberId)).isEqualByComparingTo("25.00");
         assertThat(ledger.findByTenantIdAndClientRequestKey(tenantId, key)).isEmpty();
 
+        // Native Workforce rows must already obey the same append-only financial
+        // invariant as mirrored rows, before the application writer is switched.
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "UPDATE workforce_ledger_entries SET description = ? WHERE id = ?",
+                "Attempted mutation", nativeEntry.getId()))
+                .isInstanceOf(org.springframework.dao.DataAccessException.class)
+                .hasMessageContaining("WORKFORCE_LEDGER_IS_APPEND_ONLY");
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "DELETE FROM workforce_ledger_entries WHERE id = ?", nativeEntry.getId()))
+                .isInstanceOf(org.springframework.dao.DataAccessException.class)
+                .hasMessageContaining("WORKFORCE_LEDGER_IS_APPEND_ONLY");
+        assertThat(workforceLedger.findByTenantIdAndClientRequestKey(tenantId, key))
+                .hasValueSatisfying(entry -> assertThat(entry.getDescription())
+                        .isEqualTo("Native Workforce movement"));
+
         Long partialProvenanceJournalId = postingService.post(tenantId, actorId,
                 new JournalPostingRequest("native-workforce-partial-provenance-journal",
                         "WORKFORCE_LEDGER_TEST", memberId, LocalDate.of(2026, 11, 1),
