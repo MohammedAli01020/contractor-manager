@@ -395,6 +395,77 @@ class DriverLedgerIdempotencyIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void concurrentPaymentAndAgainstEarnedAdvanceCannotSpendTheSameWorkforceBalanceTwice() throws Exception {
+        Long driverId = createDriver("payment-earned-advance-race");
+        earn(driverId, "payment-earned-advance-race-earned");
+        Long memberId = jdbcTemplate.queryForObject(
+                "SELECT workforce_member_id FROM drivers WHERE id = ? AND tenant_id = ?",
+                Long.class, driverId, tenantId);
+
+        Map<String, Object> payment = new HashMap<>();
+        payment.put("clientRequestKey", "payment-earned-advance-race-payment");
+        payment.put("paymentDate", LocalDate.of(2026, 11, 6));
+        payment.put("amount", new BigDecimal("300.00"));
+        payment.put("paymentAccountId", cashId);
+        payment.put("description", "Payment racing earned-balance advance");
+
+        Map<String, Object> advance = new HashMap<>();
+        advance.put("clientRequestKey", "payment-earned-advance-race-advance");
+        advance.put("advanceDate", LocalDate.of(2026, 11, 6));
+        advance.put("amount", new BigDecimal("300.00"));
+        advance.put("paymentAccountId", cashId);
+        advance.put("description", "Against-earned advance racing payment");
+        advance.put("advanceType", "AGAINST_EARNED");
+
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<Integer> paymentResult = executor.submit(() -> {
+                ready.countDown();
+                if (!start.await(10, java.util.concurrent.TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("Timed out waiting to start payment.");
+                }
+                return postJson("/api/v1/drivers/" + driverId + "/ledger/payments", payment, token)
+                        .andReturn().getResponse().getStatus();
+            });
+            Future<Integer> advanceResult = executor.submit(() -> {
+                ready.countDown();
+                if (!start.await(10, java.util.concurrent.TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("Timed out waiting to start advance.");
+                }
+                return postJson("/api/v1/drivers/" + driverId + "/ledger/advances", advance, token)
+                        .andReturn().getResponse().getStatus();
+            });
+            assertThat(ready.await(10, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+            assertThat(Arrays.asList(
+                    paymentResult.get(30, java.util.concurrent.TimeUnit.SECONDS),
+                    advanceResult.get(30, java.util.concurrent.TimeUnit.SECONDS)))
+                    .containsExactlyInAnyOrder(201, 400);
+        } finally {
+            start.countDown();
+            executor.shutdownNow();
+        }
+
+        assertThat(ledger.sumBalance(tenantId, driverId)).isEqualByComparingTo("200.00");
+        assertThat(workforceLedger.sumBalance(tenantId, memberId)).isEqualByComparingTo("200.00");
+        assertThat(ledger.findByTenantIdAndDriverIdOrderByTransactionDateAscIdAsc(tenantId, driverId))
+                .filteredOn(entry -> "PAYMENT".equals(entry.getTransactionType())
+                        || "ADVANCE".equals(entry.getTransactionType()))
+                .hasSize(1);
+        assertThat(workforceLedger.findByTenantIdAndWorkforceMemberIdOrderByTransactionDateAscIdAsc(
+                tenantId, memberId))
+                .filteredOn(entry -> "PAYMENT".equals(entry.getTransactionType())
+                        || "ADVANCE".equals(entry.getTransactionType()))
+                .hasSize(1);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM journal_entries WHERE tenant_id = ? AND source_type IN "
+                        + "('DRIVER_PAYMENT', 'DRIVER_ADVANCE') AND source_id = ?",
+                Integer.class, tenantId, driverId)).isEqualTo(1);
+    }
+
+    @Test
     void recoverableAdvanceRetriesAcrossWorkforceAndDriverRoutesCreateOneMovement() throws Exception {
         Long firstDriver = createDriver("cross-route-advance-workforce-first");
         Long firstMember = jdbcTemplate.queryForObject(
