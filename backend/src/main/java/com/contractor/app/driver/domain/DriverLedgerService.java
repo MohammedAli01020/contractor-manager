@@ -93,9 +93,6 @@ public class DriverLedgerService {
         workforceMembers.findByIdAndTenantIdForUpdate(lockedDriver.getWorkforceMemberId(), tenantId)
                 .orElseThrow(() -> ApiException.conflict(
                         "هوية العامل غير موجودة في القوى العاملة. أوقف العملية وراجع ربط البيانات."));
-        workforceMembers.findByIdAndTenantIdForUpdate(lockedDriver.getWorkforceMemberId(), tenantId)
-                .orElseThrow(() -> ApiException.conflict(
-                        "هوية العامل غير موجودة في القوى العاملة. أوقف العملية وراجع ربط البيانات."));
         Optional<DriverLedgerEntry> prior=ledger.findByTenantIdAndClientRequestKey(tenantId,key);
         if(prior.isPresent()) {
             DriverLedgerEntry p=prior.get();
@@ -145,6 +142,9 @@ public class DriverLedgerService {
         defaultAccounts.initializeForTenant(tenantId);
         Driver lockedDriver = drivers.findByIdAndTenantIdForUpdate(driverId,tenantId)
                 .orElseThrow(()->ApiException.notFound("العامل غير موجود."));
+        workforceMembers.findByIdAndTenantIdForUpdate(lockedDriver.getWorkforceMemberId(), tenantId)
+                .orElseThrow(() -> ApiException.conflict(
+                        "هوية العامل غير موجودة في القوى العاملة. أوقف العملية وراجع ربط البيانات."));
         String ledgerType="AGAINST_EARNED".equals(type)?"ADVANCE":"RECOVERABLE_ADVANCE";
         Optional<DriverLedgerEntry> prior=ledger.findByTenantIdAndClientRequestKey(tenantId,key);
         if(prior.isPresent()) {
