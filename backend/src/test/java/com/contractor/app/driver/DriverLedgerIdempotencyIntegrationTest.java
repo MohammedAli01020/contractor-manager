@@ -153,6 +153,51 @@ class DriverLedgerIdempotencyIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void workforcePaymentAndRecoverableAdvanceCommandsUseCanonicalMemberRouteAndMirrorOnce() throws Exception {
+        Long driverId = createDriver("workforce-command-adapter");
+        earn(driverId, "workforce-command-earning");
+        Long memberId = jdbcTemplate.queryForObject(
+                "SELECT workforce_member_id FROM drivers WHERE id = ? AND tenant_id = ?",
+                Long.class, driverId, tenantId);
+
+        Map<String, Object> payment = new HashMap<>();
+        payment.put("clientRequestKey", "workforce-command-payment");
+        payment.put("paymentDate", LocalDate.of(2026, 11, 1));
+        payment.put("amount", new BigDecimal("100.00"));
+        payment.put("paymentAccountId", cashId);
+        payment.put("description", "Workforce payment");
+        String route = "/api/v1/workforce/members/" + memberId + "/ledger";
+        assertThat(postJson(route + "/payments", payment, token).andReturn()
+                .getResponse().getStatus()).isEqualTo(201);
+        assertThat(postJson(route + "/payments", payment, token).andReturn()
+                .getResponse().getStatus()).isEqualTo(201);
+
+        Map<String, Object> advance = new HashMap<>();
+        advance.put("clientRequestKey", "workforce-command-recoverable");
+        advance.put("advanceDate", LocalDate.of(2026, 11, 1));
+        advance.put("amount", new BigDecimal("75.00"));
+        advance.put("paymentAccountId", cashId);
+        advance.put("description", "Workforce recoverable advance");
+        advance.put("advanceType", "RECOVERABLE");
+        JsonNode createdAdvance = body(postJson(route + "/advances", advance, token)
+                .andExpect(status().isCreated()));
+        assertThat(createdAdvance.path("workforceMemberId").asLong()).isEqualTo(memberId);
+        assertThat(createdAdvance.has("driverId")).isFalse();
+
+        assertThat(ledger.findByTenantIdAndClientRequestKey(tenantId, "workforce-command-payment"))
+                .isPresent();
+        assertThat(workforceLedger.findByTenantIdAndClientRequestKey(tenantId, "workforce-command-payment"))
+                .isPresent();
+        assertThat(workforceLedger.findByTenantIdAndClientRequestKey(tenantId, "workforce-command-recoverable"))
+                .isPresent();
+        assertThat(workforceLedger.findByTenantIdAndWorkforceMemberIdOrderByTransactionDateAscIdAsc(
+                tenantId, memberId)).hasSize(3);
+        assertThat(workforceLedger.sumBalance(tenantId, memberId)).isEqualByComparingTo("400.00");
+        assertThat(workforceLedger.sumRecoverableAdvanceBalance(tenantId, memberId))
+                .isEqualByComparingTo("75.00");
+    }
+
+    @Test
     void workforceLedgerStatementCannotReadAnotherTenantsMember() throws Exception {
         Long driverId = createDriver("tenant-isolation-ledger");
         Long memberId = jdbcTemplate.queryForObject(
