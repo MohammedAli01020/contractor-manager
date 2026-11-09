@@ -49,6 +49,10 @@ public class JournalLineRequest {
         return workforceMemberId;
     }
 
+    public void setWorkforceMemberId(Long workforceMemberId) {
+        this.workforceMemberId = workforceMemberId;
+    }
+
     public Long getEquipmentId() {
         return equipmentId;
     }
