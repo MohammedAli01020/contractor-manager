@@ -185,8 +185,7 @@ class _WorkforceRoleManagementScreenState
                                 ),
                                 subtitle: Text(
                                   '$code • ${role['systemDefined'] == true ? 'دور أساسي' : 'دور مخصص'}'
-                                  '
-${eligible ? 'يمكنه استلام ورديات' : 'لا يستلم ورديات'}',
+                                  '\n${eligible ? 'يمكنه استلام ورديات' : 'لا يستلم ورديات'}',
                                 ),
                                 isThreeLine: true,
                                 secondary: const Icon(Icons.badge_outlined),
