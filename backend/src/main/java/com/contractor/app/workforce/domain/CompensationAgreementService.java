@@ -276,14 +276,14 @@ public class CompensationAgreementService {
 
     private CompensationBasis toCompensationBasis(WorkforceFinancialItemCalculationMethod method) {
         switch (method) {
-            case FIXED: return CompensationBasis.FIXED;
             case PER_HOUR: return CompensationBasis.HOUR;
-            case PER_DAY: return CompensationBasis.DAY;
             case PER_SHIFT: return CompensationBasis.SHIFT;
             case PER_QUANTITY: return CompensationBasis.QUANTITY;
+            case FIXED:
+            case PER_DAY:
             case MANUAL:
             default:
-                throw ApiException.badRequest("البند اليدوي لا يمكن ربطه بمكون اتفاقية أجر محسوب.");
+                throw ApiException.badRequest("طريقة حساب هذا البند غير مدعومة بعد في محرك احتساب الورديات؛ استخدم ساعة أو وردية أو كمية.");
         }
     }
 
