@@ -163,3 +163,16 @@ Validation:
 - This moves the mobile command contract to canonical Workforce identity while preserving old-client compatibility at the API boundary.
 - The editor still uses the Driver projection ID internally for the current candidate picker and legacy defaults fallback. This is an acknowledged transitional UI dependency, not the identity sent by the new mobile command.
 - Existing backend integration coverage `shiftCanBeStartedUsingCanonicalWorkforceMemberId` removes `driverId` from the request and verifies the canonical member and compatibility projection in the response.
+
+
+### Implementation progress — canonical Workforce names in shift reads
+
+- Shift response mapping now reads the display name from the tenant-scoped `WorkforceMember` record, not from `Driver`.
+- Added `workforceMemberName` to shift responses. The old `driverName` response field remains as a compatibility alias populated from the canonical name.
+- Flutter's shift model now prefers `workforceMemberName` and falls back to `driverName` for older server responses. Shift lists, bulk finish, correction summary, and editor fallback display the canonical person name.
+- Added backend coverage asserting the canonical name and compatibility alias, plus mobile model coverage for canonical and legacy response shapes.
+
+Validation status at documentation time:
+- Backend CI for canonical response-name mapping and its integration assertion is running.
+- Flutter CI for canonical-name parsing and shift UI updates is running.
+- No schema migration was needed; this is a read-path ownership change only.
