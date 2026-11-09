@@ -192,3 +192,7 @@ A proposed isolated switch of the Workforce payment/advance endpoint to append n
 The isolated implementation was reverted before retaining a split-writer state. The Workforce entity now has a constructor capable of creating native rows with both provenance fields NULL; this is schema/entity preparation only and is not called by the active command service. Current production behavior on this branch remains unchanged: Workforce payment/advance commands still delegate to the legacy Driver writer, and V56 remains the mirror.
 
 Next safe implementation unit: introduce a shared canonical payment/advance command and route both Workforce and Driver controllers through it, preserving or explicitly versioning the legacy response contract; add mixed-route race/retry tests before enabling the cutover. Do not remove the Driver projection lock until shift completion and correction have moved to the same canonical lock protocol.
+
+### Cross-route idempotency regression coverage — 2026-11-09
+
+Added an integration test that submits the same payment first through the Workforce member route and then through the legacy Driver route. It asserts that the retry reuses the original Driver-ledger movement and journal, and that exactly one mirrored Workforce row exists with complete legacy provenance. This protects the current compatibility behavior while the shared-writer cutover is designed. The test has been committed but has not yet been observed in a new CI run.
