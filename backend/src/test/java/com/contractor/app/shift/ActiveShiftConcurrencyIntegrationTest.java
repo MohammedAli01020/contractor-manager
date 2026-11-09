@@ -125,6 +125,51 @@ class ActiveShiftConcurrencyIntegrationTest extends AbstractShiftIntegrationTest
         assertThat(jdbcTemplate.update("UPDATE equipment SET notes = 'checked' WHERE id = ?", equipment)).isEqualTo(1);
     }
 
+    @Test
+    void concurrentStartsForSameWorkforceMemberOnDifferentEquipmentAllowOnlyOneActiveShift() throws Exception {
+        String token = registerTenant("Workforce Start Race Co", uniqueName("owner")).path("accessToken").asText();
+        long site = createSite(token, "Main");
+        long driver = createDriver(token, "Workforce Driver", "150", "175", "200");
+        long type = createType(token, "Excavator");
+        long equipmentA = createEquipment(token, "EX-WF-RACE-A", type, "500", "1200");
+        long equipmentB = createEquipment(token, "EX-WF-RACE-B", type, "500", "1200");
+        long workforceMemberId = jdbcTemplate.queryForObject(
+                "SELECT workforce_member_id FROM drivers WHERE id = ?", Long.class, driver);
+
+        runRace(
+                () -> postJson("/api/v1/shifts",
+                        shiftBody(site, driver, equipmentA, today().minusDays(1), "MORNING"), token).andReturn(),
+                () -> postJson("/api/v1/shifts",
+                        shiftBody(site, driver, equipmentB, today().minusDays(1), "EVENING"), token).andReturn());
+
+        int activeForMember = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM shifts WHERE workforce_member_id = ? AND status = 'IN_PROGRESS'",
+                Integer.class, workforceMemberId);
+        assertThat(activeForMember).isEqualTo(1);
+    }
+
+    @Test
+    void concurrentStartsForSameEquipmentWithDifferentWorkforceMembersAllowOnlyOneActiveShift()
+            throws Exception {
+        String token = registerTenant("Equipment Start Race Co", uniqueName("owner")).path("accessToken").asText();
+        long site = createSite(token, "Main");
+        long driverA = createDriver(token, "Driver A", "150", "175", "200");
+        long driverB = createDriver(token, "Driver B", "150", "175", "200");
+        long type = createType(token, "Excavator");
+        long equipment = createEquipment(token, "EX-SHARED-RACE", type, "500", "1200");
+
+        runRace(
+                () -> postJson("/api/v1/shifts",
+                        shiftBody(site, driverA, equipment, today().minusDays(1), "MORNING"), token).andReturn(),
+                () -> postJson("/api/v1/shifts",
+                        shiftBody(site, driverB, equipment, today().minusDays(1), "EVENING"), token).andReturn());
+
+        int activeForEquipment = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM shifts WHERE equipment_id = ? AND status = 'IN_PROGRESS'",
+                Integer.class, equipment);
+        assertThat(activeForEquipment).isEqualTo(1);
+    }
+
     private void runRace(Callable<MvcResult> firstRequest, Callable<MvcResult> secondRequest) throws Exception {
         ExecutorService executor = Executors.newFixedThreadPool(2);
         CountDownLatch ready = new CountDownLatch(2);
