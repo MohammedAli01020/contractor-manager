@@ -1423,4 +1423,80 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
     }
 
 
+
+    @Test
+    void concurrentShiftFinishAndDriverPaymentSerializeWithoutDeadlock() throws Exception {
+        seedCashBalance(new BigDecimal("2000.00"));
+        JsonNode started = startShift(token,
+                shiftBody(siteId, driverId, equipmentId, today().minusDays(1), "MORNING"));
+        long shiftId = started.path("id").asLong();
+        long memberId = jdbcTemplate.queryForObject(
+                "SELECT workforce_member_id FROM drivers WHERE tenant_id=? AND id=?",
+                Long.class, tenantId, driverId);
+        long cashId = chartAccounts.findByTenantIdAndAccountCodeIgnoreCase(tenantId, "1000")
+                .orElseThrow(() -> new IllegalStateException("Missing cash account")).getId();
+
+        Map<String, Object> payment = new HashMap<>();
+        payment.put("clientRequestKey", "finish-payment-race-" + java.util.UUID.randomUUID());
+        payment.put("paymentDate", today());
+        payment.put("amount", new BigDecimal("100.00"));
+        payment.put("paymentAccountId", cashId);
+        payment.put("description", "Payment racing shift completion");
+
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        int finishStatus;
+        int paymentStatus;
+        try {
+            Future<Integer> finish = executor.submit(() -> {
+                ready.countDown();
+                start.await();
+                return postJson("/api/v1/shifts/" + shiftId + "/finish",
+                        versionBody(started.path("version").asLong()), token)
+                        .andReturn().getResponse().getStatus();
+            });
+            Future<Integer> pay = executor.submit(() -> {
+                ready.countDown();
+                start.await();
+                return postJson("/api/v1/drivers/" + driverId + "/ledger/payments",
+                        payment, token).andReturn().getResponse().getStatus();
+            });
+            assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+            finishStatus = finish.get(30, TimeUnit.SECONDS);
+            paymentStatus = pay.get(30, TimeUnit.SECONDS);
+        } finally {
+            start.countDown();
+            executor.shutdownNow();
+        }
+
+        assertThat(finishStatus).isEqualTo(200);
+        assertThat(paymentStatus == 201 || paymentStatus == 400).isTrue();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM shifts WHERE tenant_id=? AND id=? AND status='COMPLETED'",
+                Integer.class, tenantId, shiftId)).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM driver_ledger_entries WHERE tenant_id=? AND driver_id=? "
+                        + "AND shift_id=? AND transaction_type='EARNING'",
+                Integer.class, tenantId, driverId, shiftId)).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM driver_ledger_entries WHERE tenant_id=? AND driver_id=? "
+                        + "AND transaction_type='PAYMENT' AND client_request_key=?",
+                Integer.class, tenantId, driverId, payment.get("clientRequestKey")))
+                .isEqualTo(paymentStatus == 201 ? 1 : 0);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM workforce_ledger_entries WHERE tenant_id=? "
+                        + "AND workforce_member_id=?",
+                Integer.class, tenantId, memberId))
+                .isEqualTo(jdbcTemplate.queryForObject(
+                        "SELECT COUNT(*) FROM driver_ledger_entries WHERE tenant_id=? AND driver_id=?",
+                        Integer.class, tenantId, driverId));
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COALESCE(SUM(balance_effect),0) FROM workforce_ledger_entries "
+                        + "WHERE tenant_id=? AND workforce_member_id=?",
+                BigDecimal.class, tenantId, memberId))
+                .isEqualByComparingTo(paymentStatus == 201 ? "50.00" : "150.00");
+    }
+
 }
