@@ -365,13 +365,16 @@ public class ShiftService {
         // Zero is an explicit operational wage: complete the shift without zero-value
         // journal/ledger rows and without recovering advances from a zero earning.
         if (shift.getDriverWage().signum() > 0) {
+            // Initialize defaults before taking Driver/Workforce locks. If defaults are missing,
+            // initialization may lock the tenant row; doing that after the Driver lock would
+            // invert the account-initialization -> Driver lock order used by payments/advances.
+            defaultAccounts.initializeForTenant(tenantId);
             // Serialize wage recognition against payments for the same worker.
             Driver lockedDriver = drivers.findByIdAndTenantIdForUpdate(shift.getDriverId(), tenantId)
                     .orElseThrow(() -> ApiException.notFound("السائق المرتبط بالوردية غير موجود."));
             workforceMembers.findByIdAndTenantIdForUpdate(lockedDriver.getWorkforceMemberId(), tenantId)
                     .orElseThrow(() -> ApiException.conflict(
                             "هوية العامل غير موجودة في القوى العاملة. أوقف العملية وراجع ربط البيانات."));
-            defaultAccounts.initializeForTenant(tenantId);
             ChartAccount wageExpense = defaultAccounts.requireSystemAccount(
                     tenantId, SystemAccountCode.DRIVER_WAGE_EXPENSE);
             ChartAccount driverPayable = defaultAccounts.requireSystemAccount(
