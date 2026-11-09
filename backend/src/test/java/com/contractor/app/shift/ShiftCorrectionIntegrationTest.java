@@ -61,6 +61,53 @@ class ShiftCorrectionIntegrationTest extends AbstractShiftIntegrationTest {
     }
 
     @Test
+    void correctionCannotReferenceAnotherTenantsWorkforceLedgerEntry() throws Exception {
+        // Create a real mirrored Workforce earning in a second tenant through the
+        // public shift lifecycle; no hand-crafted ledger rows or disabled FK checks.
+        JsonNode otherTenant = registerTenant("Other Correction Co", uniqueName("other-correction"));
+        String otherToken = otherTenant.path("accessToken").asText();
+        long otherTenantId = otherTenant.path("user").path("tenantId").asLong();
+        long otherSiteId = createSite(otherToken, "Other Correction Site");
+        long otherDriverId = createDriver(otherToken, "Other Correction Driver", "150", "175", "200");
+        long otherTypeId = createType(otherToken, "Other Correction Excavator");
+        long otherEquipmentId = createEquipment(otherToken, "OTHER-COR-01", otherTypeId, "500", "1200");
+        JsonNode otherCompleted = finishShift(otherToken, startShift(otherToken,
+                shiftBody(otherSiteId, otherDriverId, otherEquipmentId, today().minusDays(1), "MORNING")));
+        long otherShiftId = otherCompleted.path("id").asLong();
+        Long foreignWorkforceLedgerId = jdbc.queryForObject(
+                "SELECT id FROM workforce_ledger_entries WHERE tenant_id=? AND shift_id=? "
+                        + "AND transaction_type='EARNING'",
+                Long.class, otherTenantId, otherShiftId);
+        assertThat(foreignWorkforceLedgerId).isNotNull();
+
+        // Use a zero-wage completed shift in this tenant so the correction can be
+        // inserted in APPLYING state without manufacturing legacy earning references.
+        long zeroDriverId = createDriver(token, "Zero Wage Correction Driver", "0", "0", "0");
+        JsonNode ownCompleted = finishShift(token, startShift(token,
+                shiftBody(siteId, zeroDriverId, equipmentId, today().minusDays(1), "MORNING")));
+        long ownShiftId = ownCompleted.path("id").asLong();
+        assertThat(ownCompleted.path("driverWage").decimalValue()).isEqualByComparingTo("0.00");
+
+        String idempotencyKey = "cross-tenant-ledger-" + UUID.randomUUID();
+        insertCorrectionSnapshotDirectly(tenantId, ownShiftId, idempotencyKey, BigDecimal.ZERO);
+        Long correctionId = jdbc.queryForObject(
+                "SELECT id FROM shift_corrections WHERE tenant_id=? AND idempotency_key=?",
+                Long.class, tenantId, idempotencyKey);
+
+        assertThatThrownBy(() -> jdbc.update(
+                "UPDATE shift_corrections SET replacement_earning_workforce_ledger_entry_id=? "
+                        + "WHERE tenant_id=? AND id=? AND status='APPLYING'",
+                foreignWorkforceLedgerId, tenantId, correctionId))
+                .isInstanceOf(UncategorizedSQLException.class)
+                .hasMessageContaining("fk_shift_correction_replacement_workforce_ledger");
+
+        assertThat(jdbc.queryForObject(
+                "SELECT replacement_earning_workforce_ledger_entry_id FROM shift_corrections "
+                        + "WHERE tenant_id=? AND id=?",
+                Long.class, tenantId, correctionId)).isNull();
+    }
+
+    @Test
     void adminCorrectionReversesOriginalAndPostsReplacementExactlyOnce() throws Exception {
         JsonNode started = startShift(token,
                 shiftBody(siteId, driverId, equipmentId, today().minusDays(1), "MORNING"));
