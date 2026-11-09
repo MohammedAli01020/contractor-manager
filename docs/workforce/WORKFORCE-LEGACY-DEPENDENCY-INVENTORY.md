@@ -90,3 +90,36 @@ This inventory does not authorize:
 ## Immediate next implementation unit
 
 The next safe code unit is not a table drop or financial cutover. It is a focused **Workforce-native shift identity contract**: define request/response compatibility, member lookup/authorization, active-shift uniqueness, lock order, and test cases. Implement it only after the remaining shift consumers and constraints have been enumerated and reviewed.
+
+
+## Implementation progress — 2026-11-09
+
+The first mobile/API identity bridge is now implemented on
+`feature/workforce-ledger-unification`:
+
+- `LiveDriverResponse` exposes both the legacy operational `id` and
+  canonical `workforceMemberId`.
+- `/live/workforce-candidates` returns the canonical member ID alongside the
+  Driver projection ID; the projection is still required by the current
+  `shifts.driver_id` FK and operational services.
+- Flutter shift editing reads `workforceMemberId` from shift responses and
+  candidate rows, and submits it with the legacy `driverId`. The backend
+  resolves and validates the pair; older clients can still submit only
+  `driverId`.
+- A backend integration test asserts that a workforce candidate exposes the
+  canonical member ID corresponding to its Driver projection.
+- Flutter CI now includes this branch so subsequent mobile changes receive
+  the repository's Flutter 3.3.3 test and analysis checks.
+
+**Important remaining limitation:** the current candidate query still starts
+from active Driver projections. It does not yet make every Workforce member
+eligible for a shift merely because the person exists in the directory.
+Shift eligibility remains role/assignment-based, and the operational
+projection dependency must be removed in a later shift-domain redesign.
+This bridge does not authorize retiring `drivers` or `shifts.driver_id`.
+
+Validation at the time of this note:
+- The preceding Backend CI run for the shift request identity changes passed.
+- Backend CI for the new live-candidate response and its integration test is
+  running.
+- Flutter CI for the mobile identity bridge is running.
