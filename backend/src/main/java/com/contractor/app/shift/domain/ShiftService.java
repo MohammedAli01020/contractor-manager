@@ -21,6 +21,7 @@ import com.contractor.app.driver.domain.Driver;
 import com.contractor.app.driver.domain.DriverAvailability;
 import com.contractor.app.driver.infra.DriverRepository;
 import com.contractor.app.workforce.domain.ShiftCompensationResolver;
+import com.contractor.app.workforce.domain.WorkforceFinancialLockService;
 import com.contractor.app.workforce.domain.WorkforceMember;
 import com.contractor.app.workforce.infra.WorkforceMemberRepository;
 import com.contractor.app.equipment.domain.Equipment;
@@ -74,6 +75,7 @@ public class ShiftService {
     private final DefaultChartOfAccountsService defaultAccounts;
     private final ZoneId businessZone;
     private final ShiftCompensationResolver compensationResolver;
+    private final WorkforceFinancialLockService financialLocks;
 
     public ShiftService(ShiftRepository shifts, SiteRepository sites, DriverRepository drivers,
                         WorkforceMemberRepository workforceMembers, EquipmentRepository equipment, AuditService audit,
@@ -93,6 +95,7 @@ public class ShiftService {
         this.driverLedger = driverLedger;
         this.defaultAccounts = defaultAccounts;
         this.compensationResolver = compensationResolver;
+        this.financialLocks = financialLocks;
         this.businessZone = ZoneId.of(businessTimezone);
     }
 
@@ -339,7 +342,22 @@ public class ShiftService {
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public ShiftResponse finish(Long tenantId, Long id, Long version, Long actorUserId,
                                 BigDecimal actualHours, BigDecimal actualQuantity) {
+        // Resolve the canonical member without a row lock, then serialize all financial
+        // activity before taking the Shift/Driver/Workforce row locks.
+        Shift preview = shifts.findByIdAndTenantId(id, tenantId)
+                .orElseThrow(() -> ApiException.notFound(NOT_FOUND));
+        if (preview.getWorkforceMemberId() == null) {
+            throw ApiException.conflict("الوردية لا تحتوي على ربط موثوق بهوية العامل؛ راجع بيانات القوى العاملة.");
+        }
+        preview.requireVersion(version);
+        // Account initialization may lock tenant/account rows, so it must precede the mutex.
+        defaultAccounts.initializeForTenant(tenantId);
+        financialLocks.lockForFinancialUpdate(tenantId, preview.getWorkforceMemberId());
+
         Shift shift = findForUpdate(tenantId, id);
+        if (!preview.getWorkforceMemberId().equals(shift.getWorkforceMemberId())) {
+            throw ApiException.conflict("تم تغيير ربط العامل بالوردية أثناء بدء الإنهاء. أعد تحميل الوردية وحاول مجددًا.");
+        }
         if (shift.getStatus() != ShiftStatus.IN_PROGRESS) {
             throw ApiException.conflict("الوردية ليست شغالة.");
         }
@@ -394,11 +412,7 @@ public class ShiftService {
         // Zero is an explicit operational wage: complete the shift without zero-value
         // journal/ledger rows and without recovering advances from a zero earning.
         if (shift.getDriverWage().signum() > 0) {
-            // Initialize defaults before taking Driver/Workforce locks. If defaults are missing,
-            // initialization may lock the tenant row; doing that after the Driver lock would
-            // invert the account-initialization -> Driver lock order used by payments/advances.
-            defaultAccounts.initializeForTenant(tenantId);
-            // Serialize wage recognition against payments for the same worker.
+            // The financial mutex is already held before the Driver/Workforce row locks.
             Driver lockedDriver = drivers.findByIdAndTenantIdForUpdate(shift.getDriverId(), tenantId)
                     .orElseThrow(() -> ApiException.notFound("السائق المرتبط بالوردية غير موجود."));
             workforceMembers.findByIdAndTenantIdForUpdate(lockedDriver.getWorkforceMemberId(), tenantId)
