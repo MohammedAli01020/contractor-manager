@@ -1,6 +1,6 @@
 # ADR — Configurable Workforce Financial Items
 
-- **Status:** Proposed — awaiting explicit product approval
+- **Status:** Partially implemented on working branch; remaining application and posting decisions require explicit product approval
 - **Date:** 2026-11-09
 - **Working branch:** `feature/workforce-ledger-unification`
 - **Scope:** Tenant-configurable compensation components and workforce-related financial items
@@ -12,7 +12,7 @@ A contractor SaaS must support different compensation policies without requiring
 
 The existing code already has compensation components attached to individual compensation agreements, a Driver-keyed worker ledger with several controlled movement types, and an expense record carrying a free-form `category_code`. These are useful foundations, but they are not a reusable tenant-owned Workforce financial-item catalog. In particular, the expense `category_code` is stored as text on each expense; the inspected entity/schema do not establish a dedicated tenant category-definition table.
 
-This ADR proposes the product/domain model. It does not claim that the engine is implemented.
+This ADR defines the product/domain model. On the working branch, the tenant-owned definition catalog (V60) and optional compensation-component link (V61) are implemented with backend CRUD and integration coverage. The per-person application lifecycle, approvals, financial posting, and statement projection are not implemented; the ADR does not authorize those steps or production rollout.
 
 ## 2. Decision proposed
 
@@ -146,9 +146,11 @@ Do not present all movement totals as one undifferentiated "deductions" or "expe
 
 ## 11. Delivery sequence
 
-1. Approve the domain taxonomy and invariants in this ADR.
-2. Inventory current ledger movement types, compensation agreement structures, expense categories, account mappings, and all tenant usage. Identify overlap without conflating expense categories with Workforce items.
-3. Produce exact schema/API contracts and a migration/compatibility plan; review the current Workforce-ledger writer transition separately.
+1. Review and explicitly approve the domain taxonomy and invariants in this ADR.
+2. Inventory current ledger movement types, compensation agreement structures, expense categories, account mappings, and tenant usage. Identify overlap without conflating expense categories with Workforce items.
+3. Produce exact schema/API contracts and tests for the application lifecycle before implementation.
+4. Separately design and approve the canonical Workforce ledger writer transition before any posting endpoint or financial mutation.
+5. Reconcile historical data, backups, rollback, and production rollout before any legacy-table or trigger removal.d a migration/compatibility plan; review the current Workforce-ledger writer transition separately.
 4. Implement item definitions and validation without changing the active financial writer.
 5. Implement calculation/application and approval workflows with unit, MySQL integration, tenant-isolation, idempotency, and concurrency tests.
 6. Integrate approved applications with the canonical Workforce ledger and double-entry posting in one transaction, only after the writer/locking design is approved.
