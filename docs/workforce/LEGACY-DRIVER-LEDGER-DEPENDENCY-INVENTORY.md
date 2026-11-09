@@ -251,3 +251,17 @@ Important constraints:
 - Before moving any writer, review the exact Spring transaction boundaries and SQL lock acquisition order in MySQL 8. Repository method call order alone is not sufficient if lazy flushes or database triggers acquire additional rows.
 
 No runtime code or schema was changed by this documentation update. The next implementation should be the coordinated lock-protocol change plus its MySQL concurrency tests, not an isolated native writer.
+
+## Canonical member lock implementation and CI result (2026-11-09)
+
+- Implemented the compatibility-phase member lock in DriverLedgerService: payment and both advance types now acquire the tenant-scoped Driver row first, then the linked WorkforceMember row, before reading the ledger balance and posting.
+- Implemented the same Driver -> WorkforceMember order in ShiftService.finish and ShiftService.reinstate; reinstate acquires the member lock before Equipment.
+- Implemented the same Shift -> Driver -> WorkforceMember order in ShiftCorrectionService.correct.
+- The implementation is on this branch in commits:
+  - d6dcd8e0eb27fd344b0c755f7a38d9901ac4d531 — DriverLedgerService payment/advance member lock.
+  - a05e80b41402fa3c564734e41114b80b9eb70768 — ShiftService finish/reinstate member lock.
+  - e4d38f6130edd9f9306c14e3f597d750b9d8cbed — ShiftCorrectionService member lock.
+- GitHub Actions run [42616572085](https://github.com/MohammedAli01020/contractor-manager/actions/runs/42616572085), for head commit e4d38f6130edd9f9306c14e3f597d750b9d8cbed, completed successfully. The Backend Maven Tests job passed.
+- This CI result validates compilation and the existing backend test suite after the lock additions. It does not yet prove the new cross-workflow lock order is deadlock-free under simultaneous finish/payment/advance/identity-update traffic; dedicated opposing-order MySQL concurrency tests remain the next gate.
+- Current command lock shapes now implemented in the compatibility phase: start = Driver -> WorkforceMember -> Equipment; finish/correction = Shift -> Driver -> WorkforceMember; payment/advance = Driver -> WorkforceMember; reinstate = Shift -> Driver -> WorkforceMember -> Equipment. Identity update and any other command that can touch these resources still require explicit verification against this order.
+- The Driver ledger remains the sole application writer, the Workforce ledger remains the V56 mirror, and all legacy dependencies listed above remain active. No trigger, route, table, or historical provenance column was removed.
