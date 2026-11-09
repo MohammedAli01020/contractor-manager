@@ -274,7 +274,7 @@ class DriverLedgerIdempotencyIntegrationTest extends AbstractIntegrationTest {
                 tenantId, memberId, LocalDate.of(2026, 11, 1), new BigDecimal("1.00"),
                 new BigDecimal("1.00"), "Invalid partial provenance", "native-workforce-partial-provenance",
                 partialProvenanceJournalId, actorId, driverId))
-                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+                .isInstanceOf(org.springframework.jdbc.UncategorizedSQLException.class);
     }
 
     @Test
