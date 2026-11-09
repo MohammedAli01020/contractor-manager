@@ -328,7 +328,7 @@ class _ShiftCorrectionScreenState extends State<ShiftCorrectionScreen> {
                   Text('البيانات الحالية',
                       style: Theme.of(context).textTheme.titleMedium),
                   const SizedBox(height: 8),
-                  _currentLine('السائق', widget.shift.driverName),
+                  _currentLine('السائق', widget.shift.personName),
                   _currentLine('الموقع', widget.shift.siteName),
                   _currentLine('المعدة',
                       '${widget.shift.equipmentCode} ${widget.shift.equipmentName}'),
