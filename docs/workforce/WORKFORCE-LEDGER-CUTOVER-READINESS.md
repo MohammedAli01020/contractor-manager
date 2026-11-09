@@ -2,7 +2,7 @@
 
 **Date:** 2026-11-09  
 **Branch:** `feature/workforce-ledger-unification`  
-**Status:** Source review completed; no writer cutover performed.
+**Status:** Financial mutex adoption is implemented across all four financial command entry points; legacy Driver ledger remains the sole write authority.
 
 ## Decision
 
@@ -25,14 +25,14 @@ Do not introduce application dual-write. Do not disable the V56 trigger or drop 
 
 ## Critical dependencies and risks
 
-### 1. The lock identity is still Driver-first
+### 1. Financial commands now share a tenant-scoped mutex
 
-- Shift finish locks the Shift, then Driver, then WorkforceMember before wage posting and recoverable-balance calculation.
-- Driver payment and advance commands initialize accounts, then lock Driver, then WorkforceMember; aggregate reads occur after the lock under READ_COMMITTED.
-- Correction locks the Shift, initializes accounts, then locks Driver and WorkforceMember.
-- The Driver row currently serializes all balance-changing operations for a person across shift earnings, payments, and advances.
+- Shift finish and completed-shift correction resolve the WorkforceMember ID using scalar-only queries, initialize tenant accounts, then acquire `workforce_financial_locks` before locking the Shift and compatibility rows.
+- Driver payment and both advance types resolve the WorkforceMember ID using scalar-only queries, initialize tenant accounts, then acquire the same mutex before locking Driver and WorkforceMember.
+- Each command revalidates the canonical member association after acquiring its row locks. This prevents a stale entity loaded before waiting on the mutex from driving a financial write.
+- Beneath the mutex, the compatibility lock order remains Driver → WorkforceMember (and Equipment/Shift resources as required). Non-financial profile synchronization retains Driver → WorkforceMember and does not write balances.
 
-A cutover must define one consistent lock protocol based on tenant/account initialization, canonical WorkforceMember, then any other resources in a documented stable order. All earning, payment, advance, recovery, and correction commands must use it. Never retain a Driver lock as the only financial mutex once Driver is no longer canonical.
+The shared mutex now serializes the existing legacy financial writer across shift earning/recovery, payment, advances, and correction reversal/replacement. Do not remove the mutex or change the underlying compatibility lock order until the legacy Driver dependencies are retired and the remaining lock graph is re-audited.
 
 ### 2. Idempotency is part of the financial contract
 
@@ -66,7 +66,7 @@ V58 allows the legacy provenance pair to be NULL for future Workforce-native row
 
 ## Required cutover sequence
 
-1. **Canonical financial identity and locking:** introduce a tenant-scoped Workforce financial command boundary. During the compatibility period, acquire the dedicated `workforce_financial_locks` row before any Driver, WorkforceMember, Shift, or Equipment row lock. Keep the established Driver → WorkforceMember → Equipment order beneath that mutex until legacy dependencies are retired.
+1. **Canonical financial identity and locking:** implemented for current financial commands. Acquire the tenant-scoped `workforce_financial_locks` row before any Driver, WorkforceMember, Shift, or Equipment row lock. Keep the established compatibility order beneath that mutex until legacy dependencies are retired.
 2. **Canonical idempotency:** move new request fingerprints and reservations to a Workforce-scoped namespace while preserving safe retries for legacy keys. Add concurrency tests proving two simultaneous requests cannot overdraw earned balance, double-recover advances, or double-post an earning.
 3. **Move every writer in one controlled cutover:** shift earning, recovery, payment, both advance types, correction reversal, and correction replacement must append directly to Workforce ledger. Do not run legacy and Workforce application writers in parallel.
 4. **Move all readers:** balances, statements, available earned pay, recoverable balances, correction guards, reports, and mobile screens must read canonical Workforce ledger. Legacy Driver endpoints may temporarily adapt to member IDs but must not read stale legacy balances after cutover.
@@ -88,18 +88,17 @@ V58 allows the legacy provenance pair to be NULL for future Workforce-native row
 - Trigger failure rolls back the legacy insert and journal transaction during the compatibility phase.
 - Canonical-native ledger insert with NULL legacy provenance succeeds after the eventual trigger removal, and append-only guards still reject update/delete.
 
-## Explicit non-actions in this review
+## Explicit non-actions in this phase
 
-- No service writer was changed.
-- No financial authority was switched.
-- No dual-write was introduced.
-- No Flyway migration or trigger removal was added.
+- No financial authority was switched: `driver_ledger_entries` remains the sole application write source.
+- No application dual-write was introduced; V56 remains the only legacy-to-Workforce mirror.
+- No V56 trigger removal was added.
 - No legacy table or column was deleted.
 - No main-branch change, PR merge, or deployment was performed.
 
 ## Immediate next implementation unit
 
-Add focused integration tests proving the dedicated financial mutex serializes competing transactions, is tenant-scoped, and rolls back safely while the legacy writer remains authoritative. Then wire every financial entry point to acquire it in one coordinated release, initially delegating to the same single legacy writer. Only after the complete race matrix and reader inventory are satisfied should a separate reviewed commit switch the writer to Workforce.
+Complete the remaining pairwise race coverage and a dedicated lock-protocol audit. Then proceed to canonical idempotency design and the read-path inventory as separate reviewed units. Workforce-native writes remain blocked until those gates and the full reconciliation plan are satisfied.
 
 ## Lock-protocol decision addendum (2026-11-09)
 
@@ -134,7 +133,24 @@ A lock is only a mutex when every competing path takes it before any conflicting
 - V63 creates `workforce_financial_locks` with one tenant-scoped unique row per canonical member and a composite foreign key to `workforce_members`.
 - V63 backfills one mutex row for every member already present at migration time.
 - `WorkforceIdentityService` now creates the mutex in the same transaction as a newly created canonical member, including members created from the legacy Driver onboarding path.
-- `WorkforceFinancialLockService` and its pessimistic-write repository query expose the lock primitive for the future coordinated command cutover.
-- Integration coverage asserts mutex creation for new canonical identities/onboarding and backfill for legacy identities migrated from Driver records.
-- This is foundation only: no financial writer currently acquires the mutex, no writer or reader has switched, and the V56 mirror remains active. Do not treat the mutex as active protection until all financial entry points adopt it together.
-- Backend CI run `42673488891` for commit `8cadfb2` completed with conclusion `failure`, but the GitHub Actions API returned zero jobs for that run, so no failed step or test log could be identified. Treat CI as unverified, not as a code-test failure or a pass. Re-run a complete backend workflow and inspect its job logs before adopting the mutex in financial writers.
+- `WorkforceFinancialLockService` and its pessimistic-write repository query provide the tenant-scoped mutex.
+- Integration coverage asserts mutex creation for new canonical identities/onboarding, migration backfill, and tenant isolation.
+- The mutex is now acquired by all four balance-affecting entry points: `ShiftService.finish`, `ShiftCorrectionService.correct`, `DriverLedgerService.pay`, and `DriverLedgerService.advance` (covering both advance types).
+- All four entry points resolve the candidate member through scalar-only repository queries before waiting on the mutex, then load and lock the mutable entity after acquiring the mutex and revalidate the member association.
+- Tenant default-account initialization occurs before mutex acquisition to avoid introducing a lock-order inversion with account initialization.
+- The old `driver_ledger_entries` writer remains authoritative. V56 still mirrors every legacy insert into Workforce ledger; no native Workforce writer or application dual-write is active.
+- No legacy table, column, or trigger has been removed.
+- Backend CI run `42683772225` for commit `de133f770295d43a67a578ad1276352808267316` completed successfully. The earlier run `42683563538` was cancelled after the newer commit was queued; it is not the result used for acceptance.
+
+### Existing concurrency coverage to retain and extend
+
+The current integration suite already exercises several important races, including:
+
+- Shift finish vs payment, recoverable advance, and against-earned advance.
+- Completed-shift correction vs payment, recoverable advance, and against-earned advance.
+- Two payments competing for the same earned balance.
+- Mixed Workforce/legacy payment routes with the same idempotency key.
+- Concurrent correction retries with the same correction key.
+- Profile synchronization vs payment, ensuring the compatibility lock order does not deadlock.
+
+These tests are useful coverage, but they do not yet prove every pair in the full financial-command matrix (notably all advance/payment combinations and recovery/advance interactions). Keep the required matrix above as a gate; do not infer complete pairwise coverage from the current green CI alone.
