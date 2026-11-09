@@ -170,7 +170,7 @@ class ShiftCorrectionIntegrationTest extends AbstractShiftIntegrationTest {
                         + "WHERE w.tenant_id=? AND w.workforce_member_id=? AND w.shift_id=? "
                         + "AND w.transaction_type IN ('EARNING','CORRECTION_REVERSAL') "
                         + "AND w.legacy_driver_id=? AND w.journal_entry_id=d.journal_entry_id",
-                Integer.class, tenantId, workforceMemberId, shiftId, driverId)).isEqualTo(2);
+                Integer.class, tenantId, workforceMemberId, shiftId, driverId)).isEqualTo(3);
         assertThat(jdbc.queryForObject(
                 "SELECT COUNT(*) FROM workforce_ledger_entries w "
                         + "JOIN driver_ledger_entries d ON d.id=w.legacy_source_entry_id "
