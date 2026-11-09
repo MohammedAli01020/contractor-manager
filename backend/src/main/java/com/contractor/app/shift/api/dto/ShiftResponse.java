@@ -18,6 +18,7 @@ public class ShiftResponse {
     private final Long driverId;
     private final Long workforceMemberId;
     private final String driverName;
+    private final String workforceMemberName;
     private final Long equipmentId;
     private final String equipmentCode;
     private final String equipmentName;
@@ -46,7 +47,7 @@ public class ShiftResponse {
     private final LocalDateTime createdAt;
     private final LocalDateTime updatedAt;
 
-    public ShiftResponse(Shift s, String siteName, String driverName, String equipmentCode, String equipmentName) {
+    public ShiftResponse(Shift s, String siteName, String workforceMemberName, String equipmentCode, String equipmentName) {
         this.id = s.getId();
         this.shiftDate = s.getShiftDate();
         this.shiftType = s.getShiftType().name();
@@ -57,7 +58,8 @@ public class ShiftResponse {
         this.siteName = siteName;
         this.driverId = s.getDriverId();
         this.workforceMemberId = s.getWorkforceMemberId();
-        this.driverName = driverName;
+        this.driverName = workforceMemberName; // Backward-compatible response alias.
+        this.workforceMemberName = workforceMemberName;
         this.equipmentId = s.getEquipmentId();
         this.equipmentCode = equipmentCode;
         this.equipmentName = equipmentName;
@@ -132,6 +134,10 @@ public class ShiftResponse {
 
     public String getDriverName() {
         return driverName;
+    }
+
+    public String getWorkforceMemberName() {
+        return workforceMemberName;
     }
 
     public Long getEquipmentId() {
