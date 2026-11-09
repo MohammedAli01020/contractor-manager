@@ -29,6 +29,7 @@ import com.contractor.app.shift.infra.ShiftCorrectionRepository;
 import com.contractor.app.shift.infra.ShiftRepository;
 import com.contractor.app.workforce.domain.WorkforceLedgerEntry;
 import com.contractor.app.workforce.infra.WorkforceLedgerEntryRepository;
+import com.contractor.app.workforce.infra.WorkforceMemberRepository;
 import com.contractor.app.site.domain.Site;
 import com.contractor.app.site.infra.SiteRepository;
 import java.math.BigDecimal;
@@ -56,6 +57,7 @@ public class ShiftCorrectionService {
     private final ShiftRepository shifts;
     private final ShiftCorrectionRepository corrections;
     private final DriverRepository drivers;
+    private final WorkforceMemberRepository workforceMembers;
     private final DriverLedgerEntryRepository ledger;
     private final WorkforceLedgerEntryRepository workforceLedger;
     private final JournalEntryRepository journals;
@@ -70,8 +72,9 @@ public class ShiftCorrectionService {
     private final ZoneId businessZone;
 
     public ShiftCorrectionService(ShiftRepository shifts, ShiftCorrectionRepository corrections,
-            DriverRepository drivers, DriverLedgerEntryRepository ledger,
-            WorkforceLedgerEntryRepository workforceLedger, JournalEntryRepository journals,
+            DriverRepository drivers, WorkforceMemberRepository workforceMembers,
+            DriverLedgerEntryRepository ledger, WorkforceLedgerEntryRepository workforceLedger,
+            JournalEntryRepository journals,
             JournalLineRepository journalLines, JournalPostingService posting,
             DefaultChartOfAccountsService defaultAccounts, SiteRepository sites,
             EquipmentRepository equipment, ShiftService shiftService, AuditService audit,
@@ -80,6 +83,7 @@ public class ShiftCorrectionService {
         this.shifts = shifts;
         this.corrections = corrections;
         this.drivers = drivers;
+        this.workforceMembers = workforceMembers;
         this.ledger = ledger;
         this.workforceLedger = workforceLedger;
         this.journals = journals;
@@ -194,6 +198,9 @@ public class ShiftCorrectionService {
         defaultAccounts.initializeForTenant(tenantId);
         Driver lockedDriver = drivers.findByIdAndTenantIdForUpdate(shift.getDriverId(), tenantId)
                 .orElseThrow(() -> ApiException.notFound("السائق المرتبط بالوردية غير موجود."));
+        workforceMembers.findByIdAndTenantIdForUpdate(lockedDriver.getWorkforceMemberId(), tenantId)
+                .orElseThrow(() -> ApiException.conflict(
+                        "هوية العامل غير موجودة في القوى العاملة. أوقف العملية وراجع ربط البيانات."));
         if (!Objects.equals(lockedDriver.getWorkforceMemberId(), shift.getWorkforceMemberId())) {
             throw ApiException.conflict("هوية العامل المرتبطة بالسائق لا تطابق لقطة الوردية؛ يلزم فحص ربط القوى العاملة قبل التصحيح.");
         }
