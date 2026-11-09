@@ -60,3 +60,5 @@ This is a verified dependency inventory, not a claim that every repository refer
 - The test asserts the movement is visible through the canonical Workforce repository, contributes to the Workforce balance, and has no corresponding Driver ledger row.
 - This is a schema/read-path capability test only. It does not switch shift completion or any production command to native writes.
 - The integration test has been added but has not been executed in this environment.
+
+- The same integration test also attempts a row with only `legacy_driver_id` populated and expects a data-integrity failure, exercising the V58 paired-provenance CHECK constraint.
