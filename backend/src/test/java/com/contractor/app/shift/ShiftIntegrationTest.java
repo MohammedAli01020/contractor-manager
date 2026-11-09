@@ -1678,4 +1678,99 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
                 BigDecimal.class, tenantId, memberId)).isEqualByComparingTo("50.00");
     }
 
+
+    @Test
+    void concurrentCompletedShiftCorrectionAndPaymentSerializeWithoutDeadlock() throws Exception {
+        seedCashBalance(new BigDecimal("1000.00"));
+        JsonNode completed = finishShift(token,
+                startShift(token, shiftBody(siteId, driverId, equipmentId,
+                        today().minusDays(1), "MORNING")));
+        long shiftId = completed.path("id").asLong();
+        BigDecimal originalWage = completed.path("driverWage").decimalValue();
+        long cashId = chartAccounts.findByTenantIdAndAccountCodeIgnoreCase(tenantId, "1000")
+                .orElseThrow(() -> new IllegalStateException("Missing cash account")).getId();
+
+        Map<String, Object> correction = new HashMap<>();
+        correction.put("idempotencyKey", "correction-payment-race-" + java.util.UUID.randomUUID());
+        correction.put("reason", "Concurrent correction and payment serialization test");
+        correction.put("expectedVersion", completed.path("version").asLong());
+        correction.put("shiftDate", completed.path("shiftDate").asText());
+        correction.put("shiftType", completed.path("shiftType").asText());
+        correction.put("siteId", siteId);
+        correction.put("equipmentId", equipmentId);
+        correction.put("driverWage", new BigDecimal("210.00"));
+        correction.put("price", completed.path("price").decimalValue());
+        correction.put("equipmentOperatingCost", completed.path("equipmentOperatingCost").decimalValue());
+        correction.put("notes", completed.path("notes").isNull() ? null : completed.path("notes").asText());
+
+        Map<String, Object> payment = new HashMap<>();
+        payment.put("clientRequestKey", "correction-payment-race-pay-" + java.util.UUID.randomUUID());
+        payment.put("paymentDate", today());
+        payment.put("amount", new BigDecimal("100.00"));
+        payment.put("paymentAccountId", cashId);
+        payment.put("description", "Payment racing completed shift correction");
+
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        int correctionStatus;
+        int paymentStatus;
+        try {
+            Future<Integer> correct = executor.submit(() -> {
+                ready.countDown();
+                if (!start.await(10, TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("Timed out waiting to start correction.");
+                }
+                return postJson("/api/v1/shifts/" + shiftId + "/corrections", correction, token)
+                        .andReturn().getResponse().getStatus();
+            });
+            Future<Integer> pay = executor.submit(() -> {
+                ready.countDown();
+                if (!start.await(10, TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("Timed out waiting to start payment.");
+                }
+                return postJson("/api/v1/drivers/" + driverId + "/ledger/payments", payment, token)
+                        .andReturn().getResponse().getStatus();
+            });
+            assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+            correctionStatus = correct.get(30, TimeUnit.SECONDS);
+            paymentStatus = pay.get(30, TimeUnit.SECONDS);
+        } finally {
+            start.countDown();
+            executor.shutdownNow();
+            executor.awaitTermination(10, TimeUnit.SECONDS);
+        }
+
+        assertThat(correctionStatus).isIn(200, 409);
+        assertThat(paymentStatus).isEqualTo(201);
+        BigDecimal expectedBalance = (correctionStatus == 200
+                ? new BigDecimal("210.00") : originalWage).subtract(new BigDecimal("100.00"));
+        BigDecimal payableBalance = jdbcTemplate.queryForObject(
+                "SELECT COALESCE(SUM(balance_effect),0) FROM driver_ledger_entries "
+                        + "WHERE tenant_id=? AND driver_id=?",
+                BigDecimal.class, tenantId, driverId);
+        assertThat(payableBalance).isEqualByComparingTo(expectedBalance);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM driver_ledger_entries WHERE tenant_id=? AND driver_id=? "
+                        + "AND transaction_type='PAYMENT' AND client_request_key=?",
+                Integer.class, tenantId, driverId, payment.get("clientRequestKey"))).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM shift_corrections WHERE tenant_id=? AND shift_id=? AND status='APPLIED'",
+                Integer.class, tenantId, shiftId)).isEqualTo(correctionStatus == 200 ? 1 : 0);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM driver_ledger_entries WHERE tenant_id=? AND driver_id=? "
+                        + "AND shift_id=? AND transaction_type='CORRECTION_REVERSAL'",
+                Integer.class, tenantId, driverId, shiftId)).isEqualTo(correctionStatus == 200 ? 1 : 0);
+
+        long memberId = jdbcTemplate.queryForObject(
+                "SELECT workforce_member_id FROM drivers WHERE tenant_id=? AND id=?",
+                Long.class, tenantId, driverId);
+        BigDecimal workforceBalance = jdbcTemplate.queryForObject(
+                "SELECT COALESCE(SUM(balance_effect),0) FROM workforce_ledger_entries "
+                        + "WHERE tenant_id=? AND workforce_member_id=?",
+                BigDecimal.class, tenantId, memberId);
+        assertThat(workforceBalance).isEqualByComparingTo(payableBalance);
+    }
+
 }
