@@ -119,6 +119,17 @@ class DriverLedgerIdempotencyIntegrationTest extends AbstractIntegrationTest {
                 .isEqualByComparingTo("400.00");
         assertThat(workforceLedger.sumRecoverableAdvanceBalance(tenantId, memberId))
                 .isEqualByComparingTo("75.00");
+
+        DriverLedgerEntry recoverableAdvance = ledger.findByTenantIdAndClientRequestKey(
+                tenantId, "workforce-ledger-mirror-recoverable-advance").orElseThrow(AssertionError::new);
+        WorkforceLedgerEntry mirroredAdvance = workforceLedger.findByTenantIdAndLegacySourceEntryId(
+                tenantId, recoverableAdvance.getId()).orElseThrow(AssertionError::new);
+        assertThat(mirroredAdvance.getWorkforceMemberId()).isEqualTo(memberId);
+        assertThat(mirroredAdvance.getJournalEntryId()).isEqualTo(recoverableAdvance.getJournalEntryId());
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM journal_lines WHERE tenant_id = ? AND journal_entry_id = ? "
+                        + "AND workforce_member_id = ?",
+                Integer.class, tenantId, recoverableAdvance.getJournalEntryId(), memberId)).isEqualTo(1);
     }
 
     @Test
