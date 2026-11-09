@@ -416,6 +416,7 @@ class _WorkforceAssignmentsScreenState extends State<WorkforceAssignmentsScreen>
         builder: (_) => WorkforceLedgerScreen(
           memberId: widget.memberId,
           memberName: widget.memberName,
+          canManage: widget.canManage,
         ),
       ),
     );
