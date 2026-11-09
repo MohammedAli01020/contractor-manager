@@ -98,6 +98,20 @@ public class WorkforceAssignmentService {
             throw ApiException.conflict("كود الدور مستخدم بالفعل داخل الشركة.");
         }
         WorkforceRole role = new WorkforceRole(tenantId, code, name);
+        role.setShiftEligible(Boolean.TRUE.equals(request.getShiftEligible()));
+        return WorkforceRoleResponse.from(roles.saveAndFlush(role));
+    }
+
+    @Transactional
+    public WorkforceRoleResponse updateShiftEligibility(Long tenantId, Long roleId,
+            com.contractor.app.workforce.api.dto.WorkforceRoleEligibilityRequest request) {
+        WorkforceRole role = roles.findByIdAndTenantId(roleId, tenantId)
+                .orElseThrow(() -> ApiException.notFound("الدور الوظيفي غير موجود."));
+        role.requireVersion(request.getVersion());
+        if (!role.isActive() && Boolean.TRUE.equals(request.getShiftEligible())) {
+            throw ApiException.conflict("لا يمكن تفعيل أهلية الوردية لدور غير نشط.");
+        }
+        role.setShiftEligible(Boolean.TRUE.equals(request.getShiftEligible()));
         return WorkforceRoleResponse.from(roles.saveAndFlush(role));
     }
 
@@ -194,14 +208,12 @@ public class WorkforceAssignmentService {
      * Zero legacy rates are compatibility placeholders, never contractual wages.
      */
     private void ensureOperationalDriver(WorkforceMember member, WorkforceRole role, Driver operational) {
-        WorkerType workerType;
-        if ("DRIVER".equals(role.getCode()) || "EQUIPMENT_OPERATOR".equals(role.getCode())) {
-            workerType = WorkerType.DRIVER;
-        } else if ("WORKER".equals(role.getCode())) {
-            workerType = WorkerType.WORKER;
-        } else {
+        if (!role.isShiftEligible()) {
             return;
         }
+        WorkerType workerType = "DRIVER".equals(role.getCode())
+                || "EQUIPMENT_OPERATOR".equals(role.getCode())
+                ? WorkerType.DRIVER : WorkerType.WORKER;
 
         // Workforce is the canonical identity and active-state source. A linked
         // legacy projection may exist but be inactive or stale (for example after
