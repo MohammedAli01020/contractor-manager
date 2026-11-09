@@ -1,9 +1,11 @@
 package com.contractor.app.workforce;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.contractor.app.AbstractIntegrationTest;
+import com.contractor.app.workforce.domain.WorkforceFinancialLockService;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.HashMap;
 import java.util.Map;
@@ -16,6 +18,9 @@ class WorkforceMemberCrudIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private WorkforceFinancialLockService financialLocks;
 
     @Test
     void adminCanCreateAndUpdateCanonicalPersonWithoutCreatingDriverRecord() throws Exception {
@@ -55,6 +60,33 @@ class WorkforceMemberCrudIntegrationTest extends AbstractIntegrationTest {
                         + "and entity_id = ? and field_name = 'nationalId' "
                         + "and old_value = '[REDACTED]' and new_value = '[REDACTED]'",
                 Integer.class, memberId)).isEqualTo(1);
+    }
+
+    @Test
+    void financialMutexCanOnlyBeLockedWithinItsOwningTenant() throws Exception {
+        String tokenA = registerTenant("Financial Mutex Tenant A", uniqueName("mutexa"))
+                .path("accessToken").asText();
+        String tokenB = registerTenant("Financial Mutex Tenant B", uniqueName("mutexb"))
+                .path("accessToken").asText();
+
+        JsonNode memberA = body(postJson("/api/v1/workforce/members",
+                identity("Mutex Tenant A Person", null, null), tokenA)
+                .andExpect(status().isCreated()));
+        JsonNode memberB = body(postJson("/api/v1/workforce/members",
+                identity("Mutex Tenant B Person", null, null), tokenB)
+                .andExpect(status().isCreated()));
+
+        long memberAId = memberA.path("id").asLong();
+        long tenantAId = jdbc.queryForObject(
+                "select tenant_id from workforce_members where id = ?", Long.class, memberAId);
+        long tenantBId = jdbc.queryForObject(
+                "select tenant_id from workforce_members where id = ?", Long.class,
+                memberB.path("id").asLong());
+
+        assertThat(financialLocks.lockForFinancialUpdate(tenantAId, memberAId).getWorkforceMemberId())
+                .isEqualTo(memberAId);
+        assertThatThrownBy(() -> financialLocks.lockForFinancialUpdate(tenantBId, memberAId))
+                .isInstanceOf(com.contractor.app.common.error.ApiException.class);
     }
 
     @Test
