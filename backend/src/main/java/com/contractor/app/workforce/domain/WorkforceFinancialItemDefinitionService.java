@@ -30,6 +30,13 @@ public class WorkforceFinancialItemDefinitionService {
                 .collect(Collectors.toList());
     }
 
+    @Transactional(readOnly = true)
+    public WorkforceFinancialItemDefinitionResponse get(Long tenantId, Long itemId) {
+        WorkforceFinancialItemDefinition item = items.findByIdAndTenantId(itemId, tenantId)
+                .orElseThrow(() -> ApiException.notFound("البند المالي غير موجود."));
+        return WorkforceFinancialItemDefinitionResponse.from(item);
+    }
+
     @Transactional
     public WorkforceFinancialItemDefinitionResponse create(
             Long tenantId, WorkforceFinancialItemDefinitionRequest request) {
