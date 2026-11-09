@@ -11,6 +11,7 @@ import com.contractor.app.workforce.api.dto.WorkforceMemberResponse;
 import com.contractor.app.workforce.api.dto.WorkforceOnboardRequest;
 import com.contractor.app.workforce.api.dto.WorkforceOnboardResponse;
 import com.contractor.app.workforce.api.dto.WorkforceRoleRequest;
+import com.contractor.app.workforce.api.dto.WorkforceRoleEligibilityRequest;
 import com.contractor.app.workforce.api.dto.WorkforceRoleResponse;
 import com.contractor.app.workforce.domain.WorkforceAssignmentService;
 import com.contractor.app.workforce.domain.WorkforceIdentityService;
@@ -114,6 +115,13 @@ public class WorkforceController {
     @ResponseStatus(HttpStatus.CREATED)
     public WorkforceRoleResponse createRole(@Valid @RequestBody WorkforceRoleRequest request) {
         return service.createRole(CurrentUser.tenantId(), request);
+    }
+
+    @PreAuthorize("hasRole('ADMIN')")
+    @PutMapping("/roles/{roleId}/shift-eligibility")
+    public WorkforceRoleResponse updateShiftEligibility(@PathVariable Long roleId,
+            @Valid @RequestBody WorkforceRoleEligibilityRequest request) {
+        return service.updateShiftEligibility(CurrentUser.tenantId(), roleId, request);
     }
 
     @PreAuthorize("hasRole('ADMIN')")
