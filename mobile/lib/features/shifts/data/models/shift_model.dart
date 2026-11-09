@@ -6,6 +6,7 @@ class ShiftModel {
     required this.status,
     required this.siteName,
     required this.driverName,
+    this.workforceMemberName,
     required this.equipmentCode,
     required this.equipmentName,
     required this.price,
@@ -38,6 +39,9 @@ class ShiftModel {
       status: _stringValue(json['status'], '—'),
       siteName: _stringValue(json['siteName'], 'غير محدد'),
       driverName: _stringValue(json['driverName'], 'غير محدد'),
+      workforceMemberName: json['workforceMemberName'] == null
+          ? null
+          : _stringValue(json['workforceMemberName'], ''),
       equipmentCode: _stringValue(json['equipmentCode'], ''),
       equipmentName: _stringValue(json['equipmentName'], 'غير محددة'),
       price: _numberValue(json['price']),
@@ -69,6 +73,11 @@ class ShiftModel {
   final String status;
   final String siteName;
   final String driverName;
+  final String? workforceMemberName;
+  String get personName =>
+      workforceMemberName == null || workforceMemberName!.isEmpty
+          ? driverName
+          : workforceMemberName!;
   final String equipmentCode;
   final String equipmentName;
   final double price;
