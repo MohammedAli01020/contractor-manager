@@ -391,3 +391,21 @@ Do not copy only `SUM(balance_effect)` into an opening row as the migration. The
 6. What is the controlled settlement workflow for correcting a shift after a later payment/advance/recovery has consumed its payable? Current behavior correctly blocks the correction; it must not be weakened during migration.
 
 **Decision:** the next design deliverable is a reviewed Workforce Ledger schema/API and journal-dimension proposal, plus a read-only data reconciliation query pack. No migration, dual-write, data backfill, API implementation, or deletion is authorized by this inventory.
+
+## 14. Workforce Ledger design proposal and WF06 evidence — 2026-11-09
+
+The review proposal is documented in [WF12C-WORKFORCE-LEDGER-DESIGN-PROPOSAL.md](WF12C-WORKFORCE-LEDGER-DESIGN-PROPOSAL.md). It defines the target Workforce-native ledger, transaction semantics, journal dimensions, API/client migration, cutover, and legacy deletion boundary. It is a proposal only; it does not authorize schema changes, backfill, dual-write, API cutover, deletion, production migration, main changes, or PR merge.
+
+### 14.1 WF06 tenant 8 read-only reconciliation evidence
+
+Against the isolated `contractor_manager_wf06_test` database:
+
+- 17 ledger rows were present: 15 `EARNING` and 2 `CORRECTION_REVERSAL`; net payable effect was 66,460.
+- All 17 rows joined to a Driver and its linked Workforce member. Driver ID 4 mapped to Workforce member ID 7, confirming that migration must use the relationship, never numeric ID equality.
+- The six inspected journal entries (1, 2, 3, 15, 16, 17) each had two lines and zero debit/credit difference.
+- The two inspected correction chains had matching original, reversal, and replacement ledger/journal references. Reversal journal entries pointed to their respective original journal entries through `reversal_of_entry_id`.
+- Historical journal lines carried `driver_id`; no Workforce journal dimension was present.
+- This tenant sample contained no payment, advance, recoverable advance, advance recovery, or adjustment rows. This is not an all-tenant conclusion.
+- These checks cover the named tenant and records only; they do not prove all journals or all tenants are reconciled.
+
+**Next task:** complete the repository-wide dependency inventory and all-tenant read-only data inventory, resolve the open decisions in the proposal, and then present exact DDL/API contracts for approval.
