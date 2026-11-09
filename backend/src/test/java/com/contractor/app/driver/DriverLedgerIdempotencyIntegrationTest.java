@@ -255,6 +255,26 @@ class DriverLedgerIdempotencyIntegrationTest extends AbstractIntegrationTest {
         assertThat(nativeEntry.getLegacyDriverId()).isNull();
         assertThat(workforceLedger.sumBalance(tenantId, memberId)).isEqualByComparingTo("25.00");
         assertThat(ledger.findByTenantIdAndClientRequestKey(tenantId, key)).isEmpty();
+
+        Long partialProvenanceJournalId = postingService.post(tenantId, actorId,
+                new JournalPostingRequest("native-workforce-partial-provenance-journal",
+                        "WORKFORCE_LEDGER_TEST", memberId, LocalDate.of(2026, 11, 1),
+                        "Invalid partial provenance test", null,
+                        Arrays.asList(
+                                new JournalLineRequest(expenseId, "Expense",
+                                        new BigDecimal("1.00"), BigDecimal.ZERO, null, memberId, null),
+                                new JournalLineRequest(payableId, "Payable",
+                                        BigDecimal.ZERO, new BigDecimal("1.00"), null, memberId, null))))
+                .getId();
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "INSERT INTO workforce_ledger_entries (tenant_id, workforce_member_id, transaction_type, "
+                        + "transaction_date, amount, balance_effect, description, client_request_key, shift_id, "
+                        + "journal_entry_id, created_by_user_id, created_at, legacy_source_entry_id, legacy_driver_id) "
+                        + "VALUES (?, ?, 'ADJUSTMENT', ?, ?, ?, ?, ?, NULL, ?, ?, UTC_TIMESTAMP(6), NULL, ?)",
+                tenantId, memberId, LocalDate.of(2026, 11, 1), new BigDecimal("1.00"),
+                new BigDecimal("1.00"), "Invalid partial provenance", "native-workforce-partial-provenance",
+                partialProvenanceJournalId, driverId))
+                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
     }
 
     @Test
