@@ -130,6 +130,17 @@ class DriverLedgerIdempotencyIntegrationTest extends AbstractIntegrationTest {
                 "SELECT COUNT(*) FROM journal_lines WHERE tenant_id = ? AND journal_entry_id = ? "
                         + "AND workforce_member_id = ?",
                 Integer.class, tenantId, recoverableAdvance.getJournalEntryId(), memberId)).isEqualTo(1);
+
+        JsonNode workforceStatement = body(getJson(
+                "/api/v1/workforce/members/" + memberId + "/ledger", token)
+                .andExpect(status().isOk()));
+        assertThat(workforceStatement).hasSize(3);
+        assertThat(workforceStatement.get(0).path("workforceMemberId").asLong()).isEqualTo(memberId);
+        assertThat(workforceStatement.get(2).path("transactionType").asText())
+                .isEqualTo("RECOVERABLE_ADVANCE");
+        assertThat(workforceStatement.get(2).path("balanceAfter").decimalValue())
+                .isEqualByComparingTo("400.00");
+        assertThat(workforceStatement.get(2).has("driverId")).isFalse();
     }
 
     @Test
