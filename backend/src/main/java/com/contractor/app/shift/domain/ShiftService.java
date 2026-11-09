@@ -185,7 +185,7 @@ public class ShiftService {
         assertNotFuture(date);
         // Global lock order: legacy Driver -> canonical WorkforceMember -> Equipment.
         // Driver remains a compatibility/operational projection during the migration.
-        Driver lockedDriver = drivers.findByIdAndTenantIdForUpdate(request.getDriverId(), tenantId)
+        Driver lockedDriver = drivers.findByIdAndTenantIdForUpdate(requestedDriverId, tenantId)
                 .orElseThrow(() -> ApiException.notFound("السائق أو العامل غير موجود."));
         WorkforceMember lockedMember = workforceMembers
                 .findByIdAndTenantIdForUpdate(lockedDriver.getWorkforceMemberId(), tenantId)
@@ -194,16 +194,16 @@ public class ShiftService {
         equipment.findByIdAndTenantIdForUpdate(request.getEquipmentId(), tenantId)
                 .orElseThrow(() -> ApiException.notFound("المعدة غير موجودة."));
 
-        Driver driver = requireDriver(tenantId, request.getDriverId(), null);
+        Driver driver = requireDriver(tenantId, requestedDriverId, null);
         Equipment item = requireEquipment(tenantId, request.getEquipmentId(), null);
         // Do non-locking validation reads only after the resource locks are held. This avoids
         // establishing a MySQL REPEATABLE READ snapshot before waiting for a competing start.
         requireSite(tenantId, request.getSiteId(), null);
-        assertDriverNotRunning(tenantId, request.getDriverId());
+        assertDriverNotRunning(tenantId, requestedDriverId);
         assertWorkforceMemberNotRunning(tenantId, driver.getWorkforceMemberId());
         assertEquipmentNotRunning(tenantId, request.getEquipmentId());
 
-        Shift shift = new Shift(tenantId, date, request.getShiftType(), request.getSiteId(), request.getDriverId(),
+        Shift shift = new Shift(tenantId, date, request.getShiftType(), request.getSiteId(), requestedDriverId,
                 request.getEquipmentId());
         shift.setWorkforceMemberId(driver.getWorkforceMemberId());
         shift.setStartedAt(LocalDateTime.now(ZoneOffset.UTC));
@@ -236,7 +236,7 @@ public class ShiftService {
                 && (!java.util.Objects.equals(request.getShiftDate(), shift.getShiftDate())
                     || !java.util.Objects.equals(request.getShiftType(), shift.getShiftType())
                     || !java.util.Objects.equals(request.getSiteId(), shift.getSiteId())
-                    || !java.util.Objects.equals(request.getDriverId(), shift.getDriverId())
+                    || !java.util.Objects.equals(requestedDriverId, shift.getDriverId())
                     || !java.util.Objects.equals(request.getEquipmentId(), shift.getEquipmentId())
                     || (request.getDriverWage() != null
                         && request.getDriverWage().compareTo(shift.getDriverWage()) != 0)
@@ -250,14 +250,14 @@ public class ShiftService {
         assertNotFuture(request.getShiftDate());
         lockAndValidateActiveShiftUpdate(tenantId, shift, request, requestedDriverId);
         requireSite(tenantId, request.getSiteId(), shift.getSiteId());
-        Driver driver = requireDriver(tenantId, request.getDriverId(), shift.getDriverId());
+        Driver driver = requireDriver(tenantId, requestedDriverId, shift.getDriverId());
         WorkforceMember member = workforceMembers.findByIdAndTenantId(
                 driver.getWorkforceMemberId(), tenantId)
                 .orElseThrow(() -> ApiException.conflict("هوية العامل غير موجودة في القوى العاملة."));
         Equipment item = requireEquipment(tenantId, request.getEquipmentId(), shift.getEquipmentId());
 
         BigDecimal previousWage = shift.getDriverWage();
-        boolean driverChanged = !request.getDriverId().equals(shift.getDriverId());
+        boolean driverChanged = !requestedDriverId.equals(shift.getDriverId());
         boolean typeChanged = request.getShiftType() != shift.getShiftType();
         boolean equipmentChanged = !request.getEquipmentId().equals(shift.getEquipmentId());
 
@@ -281,7 +281,7 @@ public class ShiftService {
                 .track("shiftDate", shift.getShiftDate(), request.getShiftDate())
                 .track("shiftType", shift.getShiftType(), request.getShiftType())
                 .track("siteId", shift.getSiteId(), request.getSiteId())
-                .track("driverId", shift.getDriverId(), request.getDriverId())
+                .track("driverId", shift.getDriverId(), requestedDriverId)
                 .track("equipmentId", shift.getEquipmentId(), request.getEquipmentId())
                 .track("price", shift.getPrice(), price)
                 .track("driverWage", previousWage, wage)
@@ -291,7 +291,7 @@ public class ShiftService {
         shift.setShiftDate(request.getShiftDate());
         shift.setShiftType(request.getShiftType());
         shift.setSiteId(request.getSiteId());
-        shift.setDriverId(request.getDriverId());
+        shift.setDriverId(requestedDriverId);
         shift.setWorkforceMemberId(driver.getWorkforceMemberId());
         shift.setEquipmentId(request.getEquipmentId());
         shift.setPrice(price);
