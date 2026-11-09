@@ -245,6 +245,7 @@ public class ShiftCorrectionService {
             oldEarning = ledger.findByTenantIdAndJournalEntryId(tenantId, original.getId())
                     .orElseThrow(() -> ApiException.conflict("حركة استحقاق السائق الحالية غير موجودة."));
             if (!"EARNING".equals(oldEarning.getTransactionType())
+                    || !Objects.equals(oldEarning.getDriverId(), shift.getDriverId())
                     || !Objects.equals(oldEarning.getShiftId(), shiftId)
                     || !Objects.equals(oldEarning.getJournalEntryId(), original.getId())
                     || oldEarning.getAmount().compareTo(oldWage) != 0
@@ -262,10 +263,14 @@ public class ShiftCorrectionService {
                     || originalLines.get(0).getDebit().compareTo(oldWage) != 0
                     || originalLines.get(0).getCredit().signum() != 0
                     || !Objects.equals(originalLines.get(0).getDriverId(), shift.getDriverId())
+                    || (originalLines.get(0).getWorkforceMemberId() != null
+                            && !Objects.equals(originalLines.get(0).getWorkforceMemberId(), shift.getWorkforceMemberId()))
                     || !Objects.equals(originalLines.get(1).getAccountId(), driverPayable.getId())
                     || originalLines.get(1).getDebit().signum() != 0
                     || originalLines.get(1).getCredit().compareTo(oldWage) != 0
-                    || !Objects.equals(originalLines.get(1).getDriverId(), shift.getDriverId())) {
+                    || !Objects.equals(originalLines.get(1).getDriverId(), shift.getDriverId())
+                    || (originalLines.get(1).getWorkforceMemberId() != null
+                            && !Objects.equals(originalLines.get(1).getWorkforceMemberId(), shift.getWorkforceMemberId()))) {
                 throw ApiException.conflict("سطور قيد أجر الوردية الأصلي لا تطابق الترحيل القياسي؛ يلزم فحص محاسبي.");
             }
         }
