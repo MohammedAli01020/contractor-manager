@@ -77,7 +77,7 @@ class _BulkFinishShiftsScreenState extends State<BulkFinishShiftsScreen> {
         builder: (dialogContext) => AlertDialog(
           title: Text('تأكيد إنهاء الوردية #${shift.id}'),
           content: Text(
-            'السائق: ${shift.driverName}\n'
+            'السائق: ${shift.personName}\n'
             'المعدة: ${_equipmentLabel(shift)}\n'
             'الموقع: ${shift.siteName}\n'
             'التاريخ: ${shift.shiftDate}\n'
@@ -252,7 +252,7 @@ class _BulkFinishShiftsScreenState extends State<BulkFinishShiftsScreen> {
                                   subtitle: Padding(
                                     padding: const EdgeInsets.only(top: 6),
                                     child: Text(
-                                      'السائق: ${shift.driverName}\n'
+                                      'السائق: ${shift.personName}\n'
                                       'المعدة: ${_equipmentLabel(shift)}\n'
                                       'الموقع: ${shift.siteName}\n'
                                       'التاريخ: ${shift.shiftDate}\n'
