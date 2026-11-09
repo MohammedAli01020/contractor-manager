@@ -147,13 +147,13 @@ public class DriverLedgerService {
                 RequestFingerprint.of("DRIVER_ADVANCE", driverId, request.getAdvanceDate(), amount, description, type,
                         request.getPaymentAccountId()));
         // Match the shared order: account initialization, financial mutex, then Driver.
-        Driver candidate = drivers.findByIdAndTenantId(driverId, tenantId)
+        Long candidateMemberId = drivers.findWorkforceMemberIdByIdAndTenantId(driverId, tenantId)
                 .orElseThrow(() -> ApiException.notFound("العامل غير موجود."));
         defaultAccounts.initializeForTenant(tenantId);
-        financialLocks.lockForFinancialUpdate(tenantId, candidate.getWorkforceMemberId());
+        financialLocks.lockForFinancialUpdate(tenantId, candidateMemberId);
         Driver lockedDriver = drivers.findByIdAndTenantIdForUpdate(driverId,tenantId)
                 .orElseThrow(()->ApiException.notFound("العامل غير موجود."));
-        if (!candidate.getWorkforceMemberId().equals(lockedDriver.getWorkforceMemberId())) {
+        if (!candidateMemberId.equals(lockedDriver.getWorkforceMemberId())) {
             throw ApiException.conflict("تم تغيير ربط العامل بالقوى العاملة أثناء العملية. أعد المحاولة.");
         }
         workforceMembers.findByIdAndTenantIdForUpdate(lockedDriver.getWorkforceMemberId(), tenantId)
