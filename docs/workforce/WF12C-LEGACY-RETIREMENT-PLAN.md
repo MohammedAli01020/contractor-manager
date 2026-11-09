@@ -469,3 +469,80 @@ This pass did not yet close references in all DTOs, response mappers, repositori
 7. **Schema retirement:** only after all runtime references and data dependencies are gone, remove `shifts.driver_id`, Driver FKs/indexes/triggers, Driver APIs/entities/repositories, then `driver_ledger_entries` and finally `drivers` in dependency-safe migrations. Historical journal `driver_id` retention is a separate accounting/audit decision and may outlive the operational Driver table if retained as a non-FK legacy dimension or moved to a durable mapping record.
 
 No code, schema, or data changes were made by this inventory.
+
+## 16. Extended API, client, audit, and test inventory (2026-11-09)
+
+This second pass inspected branch-pinned API DTOs, live endpoints, additional Flutter screens, and integration tests. It also confirmed the Workforce identity adapter still synchronizes Driver rows. It remains a source inventory, not a claim that every repository reference has been enumerated.
+
+### 16.1 Additional response/query contracts
+
+| File/surface | Confirmed legacy shape | Required transition |
+|---|---|---|
+| `ShiftResponse` | Exposes both `driverId` and `workforceMemberId`, plus `driverName` and `driverWage` | Make Workforce ID the primary identity; retain old response field only during explicit API deprecation. Consider neutral display naming only if product language requires it |
+| `ShiftRepository` | Has both Driver-keyed and Workforce-keyed active-shift existence methods; also a Driver-keyed first-running-shift query | Remove Driver-keyed query methods after all callers and database guards have moved |
+| `LiveController` | Exposes `/workforce-candidates` and legacy `/drivers` | Keep one Workforce-native candidate/live endpoint; remove legacy route after usage evidence |
+| `LiveEquipmentResponse` | Embeds `driverName` as the person currently operating equipment | Decide whether API field becomes `workforceMemberName` or generic `operatorName`; do not couple equipment live state to Driver entity |
+| Flutter `shifts_screen.dart` | Reads `shift.driverId` for running-driver sets and displays `driverName` / `driverWage` in details | Use Workforce member identity for active sets and neutral workforce display model |
+| Flutter `bulk_finish_shifts_screen.dart` | Displays `driverName` while bulk finishing | Use workforce member display name; verify no hidden Driver-only API dependency in the bulk finish action |
+| Flutter `driver_edit_dialog.dart` | Creates/updates via `/drivers`; contains `workerType`, `active`, and legacy driver-rate fields | Replace with unified Workforce member editor plus role/assignment and compensation agreement flows |
+
+### 16.2 Identity synchronization adapter — direct retirement blocker
+
+The inspected `WorkforceIdentityService` explicitly:
+- injects `DriverRepository`;
+- locks Driver before Workforce member to preserve a global lock order;
+- synchronizes Workforce edits back to linked Driver fields;
+- creates Workforce identity from Driver;
+- synchronizes identity changes from Driver into Workforce.
+
+This confirms that the current model is still bidirectional synchronization, not a completed canonical Workforce cutover. The final transition must reverse ownership: Workforce is the only identity write model, and any temporary operational projection must be derived from it, not synchronized as a second editable identity.
+
+### 16.3 Audit/history dependencies
+
+The inspected `AuditIntegrationTest` verifies `entityType=DRIVER` for driver rate changes and Driver search. The Workforce identity service already records canonical identity changes as `WORKFORCE_MEMBER`.
+
+Required handling:
+- new identity/profile audit events use `WORKFORCE_MEMBER`;
+- old `DRIVER` audit events remain readable and searchable for historical records;
+- provide a safe historical lookup/mapping from old Driver ID to Workforce member ID where the link is known;
+- do not rewrite historical audit event IDs or pretend their original entity type was Workforce.
+
+### 16.4 Integration test and fixture dependencies
+
+The following tests were inspected and contain Driver-oriented setup/assertions:
+
+| Test | Current dependency | Required replacement coverage |
+|---|---|---|
+| `AbstractShiftIntegrationTest` | Creates people through `POST /drivers`; shift helper sends `driverId`; availability helper updates Driver | Create Workforce member + assignment/capability; send Workforce ID |
+| `ShiftIntegrationTest` | Reads `drivers.workforce_member_id`; asserts `driver_ledger_entries`; asserts Driver wage source; tests mismatch between Driver and Workforce IDs; uses Driver active unique key | Assert Workforce ledger, Workforce journal dimension, canonical member identity, and Workforce active unique key |
+| `ShiftTenantIsolationIntegrationTest` | Driver-based shift filters, `/live/drivers`, and cross-tenant Driver IDs | Workforce-keyed filters and candidate endpoint with cross-tenant isolation |
+| `ActiveShiftConcurrencyIntegrationTest` | Tests Driver availability/active-state triggers and Driver row races; also tests concurrent Workforce duplicate starts | Retain Workforce concurrency tests; replace Driver state-change races with Workforce assignment/capability state races |
+| `AuditIntegrationTest` | Creates Driver and searches `entityType=DRIVER` | Test new Workforce audit events and historical Driver audit readability |
+| `MasterDataIntegrationTest` | Driver CRUD, type/rate validation, search and optimistic version tests | Test unified Workforce identity CRUD separately from role/assignment and compensation agreement validation |
+| `RoleAuthorizationIntegrationTest` | Driver endpoints and `driverId` shift authorization | Test Workforce endpoints, tenant/role authorization and assignment scope |
+
+The concurrency tests must continue proving database-level uniqueness and race safety after the Driver guard is removed. Do not delete the old tests before equivalent Workforce tests exist and pass.
+
+### 16.5 Migration and database dependency notes
+
+- The current V55 migration adds the Workforce active-shift unique key but its own comment explicitly says to keep the legacy Driver guard during the compatibility period.
+- Existing code-search results also identify V4 (initial `shifts.driver_id`), V6 (active Driver unique index), V7 (resource state-change triggers referencing active Driver shifts), and V8 (resource trigger/index adjustment) as historical migration touchpoints.
+- Those migrations are immutable Flyway history. Retirement must be implemented as new forward-only migrations after a dependency inventory of current schema objects; never edit already-applied migration files.
+- V54's branch-pinned file path was not confirmed in this pass; its behavior should be verified against the repository migration list before any migration design is finalized.
+
+### 16.6 Updated exit gates
+
+Before dropping `drivers`:
+1. No active production code path requires `DriverRepository` for identity, locking, compensation, posting, live status, or corrections.
+2. Shift request, response, filters, defaults, and Flutter state use Workforce member IDs.
+3. All driver-facing screens have a Workforce replacement and no longer call `/drivers` or `/live/drivers`.
+4. All new journal postings validate/use Workforce dimension; historical Driver dimensions remain auditable.
+5. Workforce ledger handles earnings, payments, advances, recoveries, correction reversals/replacements, idempotency, concurrency, and tenant isolation.
+6. Audit supports new Workforce identity events and historical Driver event lookup.
+7. Reports, exports, scheduled tasks, integrations, and support/admin tools have been searched and migrated.
+8. Backend, Flutter, migration, tenant-isolation, financial, correction, and concurrency suites pass on the target branch.
+9. All-tenant data reconciliation and backup/restore rehearsal are signed off.
+
+Only then may a separately approved migration remove Driver-specific operational tables and constraints. The historical accounting dimension in `journal_lines` is not automatically dropped with the operational Driver table.
+
+No code, schema, or data changes were made by this inventory.
