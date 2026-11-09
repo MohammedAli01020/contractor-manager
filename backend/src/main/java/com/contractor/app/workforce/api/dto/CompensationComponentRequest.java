@@ -9,12 +9,12 @@ import javax.validation.constraints.NotNull;
 import javax.validation.constraints.Size;
 
 public class CompensationComponentRequest {
-    @NotBlank @Size(max = 60)
+    @Size(max = 60)
     private String componentCode;
-    @NotBlank @Size(max = 120)
+    @Size(max = 120)
     private String displayName;
-    @NotNull
     private CompensationBasis basis;
+    private Long financialItemDefinitionId;
     @NotNull @DecimalMin("0.00")
     private BigDecimal rate;
     @Size(max = 30)
@@ -22,6 +22,8 @@ public class CompensationComponentRequest {
     private CompensationShiftType shiftType;
     private Integer sortOrder;
 
+    public Long getFinancialItemDefinitionId() { return financialItemDefinitionId; }
+    public void setFinancialItemDefinitionId(Long value) { financialItemDefinitionId = value; }
     public String getComponentCode() { return componentCode; }
     public void setComponentCode(String value) { componentCode = value; }
     public String getDisplayName() { return displayName; }
