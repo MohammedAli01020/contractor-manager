@@ -139,11 +139,12 @@ This is not a reason to add an isolated Workforce lock to one command. Before na
 - This is still a compatibility-stage change: legacy remains the writer, V56 remains enabled, and no ledger cutover or table retirement occurs.
 - Integration assertions were added for positive corrections, repeated correction chains, zero-wage transitions, and preservation of historical correction rows. They have not yet been executed in this environment.
 
-## V59 canonical correction references
+## V59 canonical correction references — migration review correction
 
-- Source review found that `ShiftCorrection` and `ShiftCorrectionService` already map and populate three canonical Workforce ledger reference fields, while the migration history stopped at V58 and did not create those columns. That was a schema/entity mismatch for this branch.
-- V59 adds nullable old/reversed/replacement Workforce ledger IDs to `shift_corrections`, tenant-scoped composite foreign keys to `workforce_ledger_entries`, and the required unique `(id, tenant_id)` referenced key.
-- The existing legacy correction ID columns remain intact and retain their legacy meaning. V59 does not reinterpret them and does not alter V29/V34/V35 validation triggers.
-- Historical APPLIED correction rows are intentionally left with NULL canonical references because V34 prohibits updating an applied audit record. The existing legacy references still resolve to mirrored Workforce rows through `legacy_source_entry_id`; newly created corrections persist both legacy compatibility IDs and canonical Workforce IDs.
-- V59 is additive schema alignment only. It does not move correction writes off the legacy ledger or authorize mirror retirement. Migration execution and MySQL 8 validation have not been run in this environment.
-
+- The authoritative migration is `V59__add_workforce_references_to_shift_corrections.sql`. It already existed on this branch before the duplicate file was accidentally introduced.
+- V59 creates the three nullable Workforce reference columns, a tenant-scoped unique key on `(tenant_id, id)`, and composite foreign keys from the correction references to Workforce ledger rows.
+- V59 also installs INSERT and APPLYING-to-APPLIED guards. They validate the canonical original, reversal, and replacement rows against legacy source IDs, Driver-to-Workforce mapping, shift, journal, type, amount, and balance effect.
+- The duplicate file `V59__add_workforce_ledger_references_to_shift_corrections.sql` was removed immediately after discovery. There must be exactly one migration for version 59. No replacement V60 is needed for the same schema.
+- Historical APPLIED corrections are not backfilled: V44 protects their immutability. Their legacy references remain intact, and their new Workforce reference columns remain NULL.
+- The existing integration tests already assert canonical references for positive corrections, repeated correction chains, zero-wage transitions, and preservation of historical rows. They have not been executed in this environment.
+- This remains a compatibility-stage design: legacy remains the writer, V56 remains enabled, and no ledger cutover or table retirement occurs.
