@@ -21,6 +21,7 @@ import com.contractor.app.driver.api.dto.DriverLedgerPaymentRequest;
 import com.contractor.app.driver.api.dto.DriverLedgerAdvanceRequest;
 import com.contractor.app.driver.infra.DriverLedgerEntryRepository;
 import com.contractor.app.driver.infra.DriverRepository;
+import com.contractor.app.workforce.infra.WorkforceMemberRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
@@ -36,6 +37,7 @@ import org.springframework.transaction.annotation.Isolation;
 public class DriverLedgerService {
     private static final BigDecimal ZERO = new BigDecimal("0.00");
     private final DriverRepository drivers;
+    private final WorkforceMemberRepository workforceMembers;
     private final DriverLedgerEntryRepository ledger;
     private final ChartAccountRepository accounts;
     private final JournalEntryRepository journalsRepo;
@@ -44,11 +46,13 @@ public class DriverLedgerService {
     private final JournalPostingService journals;
     private final DefaultChartOfAccountsService defaultAccounts;
 
-    public DriverLedgerService(DriverRepository drivers, DriverLedgerEntryRepository ledger,
-            ChartAccountRepository accounts, JournalEntryRepository journalsRepo, JournalLineRepository journalLines,
+    public DriverLedgerService(DriverRepository drivers, WorkforceMemberRepository workforceMembers,
+            DriverLedgerEntryRepository ledger, ChartAccountRepository accounts,
+            JournalEntryRepository journalsRepo, JournalLineRepository journalLines,
             FinancialIdempotencyService idempotency, JournalPostingService journals,
             DefaultChartOfAccountsService defaultAccounts) {
-        this.drivers=drivers; this.ledger=ledger; this.accounts=accounts; this.journalsRepo=journalsRepo;
+        this.drivers=drivers; this.workforceMembers=workforceMembers; this.ledger=ledger;
+        this.accounts=accounts; this.journalsRepo=journalsRepo;
         this.journalLines=journalLines; this.idempotency=idempotency; this.journals=journals;
         this.defaultAccounts=defaultAccounts;
     }
@@ -86,6 +90,12 @@ public class DriverLedgerService {
         defaultAccounts.initializeForTenant(tenantId);
         Driver lockedDriver = drivers.findByIdAndTenantIdForUpdate(driverId,tenantId)
                 .orElseThrow(()->ApiException.notFound("العامل غير موجود."));
+        workforceMembers.findByIdAndTenantIdForUpdate(lockedDriver.getWorkforceMemberId(), tenantId)
+                .orElseThrow(() -> ApiException.conflict(
+                        "هوية العامل غير موجودة في القوى العاملة. أوقف العملية وراجع ربط البيانات."));
+        workforceMembers.findByIdAndTenantIdForUpdate(lockedDriver.getWorkforceMemberId(), tenantId)
+                .orElseThrow(() -> ApiException.conflict(
+                        "هوية العامل غير موجودة في القوى العاملة. أوقف العملية وراجع ربط البيانات."));
         Optional<DriverLedgerEntry> prior=ledger.findByTenantIdAndClientRequestKey(tenantId,key);
         if(prior.isPresent()) {
             DriverLedgerEntry p=prior.get();
