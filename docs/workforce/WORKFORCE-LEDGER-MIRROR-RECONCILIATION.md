@@ -102,8 +102,7 @@ WHERE w.id IS NULL
    OR NOT (w.shift_id <=> e.shift_id)
    OR w.journal_entry_id <> e.journal_entry_id
    OR w.created_by_user_id <> e.created_by_user_id
-   OR w.created_at <> e.created_at
-   OR w.id <> e.id;
+   OR w.created_at <> e.created_at;
 ```
 
 Expected result: no rows. This compares exact financial and provenance fields; do not use rounded display values.
