@@ -211,6 +211,15 @@ class DriverLedgerIdempotencyIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(status().isNotFound());
         getJson("/api/v1/workforce/members/" + memberId + "/ledger/balance", otherTenantToken)
                 .andExpect(status().isNotFound());
+
+        Map<String, Object> foreignPayment = new HashMap<>();
+        foreignPayment.put("clientRequestKey", "foreign-workforce-payment");
+        foreignPayment.put("paymentDate", LocalDate.of(2026, 11, 1));
+        foreignPayment.put("amount", new BigDecimal("1.00"));
+        foreignPayment.put("paymentAccountId", cashId);
+        foreignPayment.put("description", "Must not cross tenant boundary");
+        postJson("/api/v1/workforce/members/" + memberId + "/ledger/payments",
+                foreignPayment, otherTenantToken).andExpect(status().isNotFound());
     }
 
     @Test
