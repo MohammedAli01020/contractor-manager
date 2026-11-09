@@ -3,6 +3,7 @@ package com.contractor.app.shift.api.dto;
 import com.contractor.app.shift.domain.ShiftType;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import javax.validation.constraints.AssertTrue;
 import javax.validation.constraints.DecimalMin;
 import javax.validation.constraints.Digits;
 import javax.validation.constraints.NotNull;
@@ -20,7 +21,10 @@ public class ShiftRequest {
     @NotNull(message = "الموقع مطلوب")
     private Long siteId;
 
-    @NotNull(message = "السائق أو العامل مطلوب")
+    /** Canonical person reference. driverId remains temporarily supported for old mobile clients. */
+    private Long workforceMemberId;
+
+    /** Legacy operational projection reference; new clients should send workforceMemberId. */
     private Long driverId;
 
     @NotNull(message = "المعدة مطلوبة")
@@ -64,6 +68,19 @@ public class ShiftRequest {
 
     public void setSiteId(Long siteId) {
         this.siteId = siteId;
+    }
+
+    public Long getWorkforceMemberId() {
+        return workforceMemberId;
+    }
+
+    public void setWorkforceMemberId(Long workforceMemberId) {
+        this.workforceMemberId = workforceMemberId;
+    }
+
+    @AssertTrue(message = "يجب تحديد العامل باستخدام workforceMemberId أو driverId")
+    public boolean isPersonReferenceValid() {
+        return workforceMemberId != null || driverId != null;
     }
 
     public Long getDriverId() {
