@@ -4,7 +4,9 @@ import com.contractor.app.accounting.infra.ChartAccountRepository;
 import com.contractor.app.accounting.infra.JournalEntryRepository;
 import com.contractor.app.accounting.infra.JournalLineRepository;
 import com.contractor.app.common.error.ApiException;
+import com.contractor.app.driver.domain.Driver;
 import com.contractor.app.driver.infra.DriverRepository;
+import com.contractor.app.workforce.infra.WorkforceMemberRepository;
 import com.contractor.app.equipment.infra.EquipmentRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -37,17 +39,20 @@ public class JournalPostingService {
     private final JournalEntryRepository entries;
     private final JournalLineRepository lines;
     private final DriverRepository drivers;
+    private final WorkforceMemberRepository workforceMembers;
     private final EquipmentRepository equipment;
     private final TransactionTemplate transactionTemplate;
 
     @Autowired
     public JournalPostingService(ChartAccountRepository accounts, JournalEntryRepository entries,
                                  JournalLineRepository lines, DriverRepository drivers,
-                                 EquipmentRepository equipment, PlatformTransactionManager transactionManager) {
+                                 WorkforceMemberRepository workforceMembers, EquipmentRepository equipment,
+                                 PlatformTransactionManager transactionManager) {
         this.accounts = accounts;
         this.entries = entries;
         this.lines = lines;
         this.drivers = drivers;
+        this.workforceMembers = workforceMembers;
         this.equipment = equipment;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
@@ -60,6 +65,7 @@ public class JournalPostingService {
         this.entries = entries;
         this.lines = lines;
         this.drivers = drivers;
+        this.workforceMembers = null;
         this.equipment = equipment;
         this.transactionTemplate = null;
     }
@@ -161,8 +167,21 @@ public class JournalPostingService {
             if (!account.isActive()) {
                 throw ApiException.badRequest("لا يمكن الترحيل على حساب محاسبي معطّل.");
             }
-            if (line.driverId != null && !drivers.findByIdAndTenantId(line.driverId, tenantId).isPresent()) {
-                throw ApiException.notFound("السائق المرتبط بالقيد غير موجود.");
+            Driver linkedDriver = null;
+            if (line.driverId != null) {
+                linkedDriver = drivers.findByIdAndTenantId(line.driverId, tenantId)
+                        .orElseThrow(() -> ApiException.notFound("السائق المرتبط بالقيد غير موجود."));
+            }
+            if (line.workforceMemberId == null && linkedDriver != null) {
+                line.workforceMemberId = linkedDriver.getWorkforceMemberId();
+            } else if (line.workforceMemberId != null && linkedDriver != null
+                    && !line.workforceMemberId.equals(linkedDriver.getWorkforceMemberId())) {
+                throw ApiException.badRequest("العامل المحدد لا يطابق السائق المرتبط بالقيد.");
+            }
+            if (line.workforceMemberId != null
+                    && (workforceMembers == null
+                    || !workforceMembers.findByIdAndTenantId(line.workforceMemberId, tenantId).isPresent())) {
+                throw ApiException.notFound("العامل المرتبط بالقيد غير موجود.");
             }
             if (line.equipmentId != null
                     && !equipment.findByIdAndTenantId(line.equipmentId, tenantId).isPresent()) {
@@ -194,7 +213,8 @@ public class JournalPostingService {
         for (int i = 0; i < normalized.lines.size(); i++) {
             NormalizedLine line = normalized.lines.get(i);
             postedLines.add(new JournalLine(tenantId, saved.getId(), i + 1, line.accountId,
-                    line.description, line.debit, line.credit, line.driverId, line.equipmentId));
+                    line.description, line.debit, line.credit, line.driverId, line.workforceMemberId,
+                    line.equipmentId));
         }
         lines.saveAll(postedLines);
         return saved;
@@ -234,7 +254,7 @@ public class JournalPostingService {
             }
             String lineDescription = optional(line.getDescription(), 300);
             normalizedLines.add(new NormalizedLine(line.getAccountId(), lineDescription, debit, credit,
-                    line.getDriverId(), line.getEquipmentId()));
+                    line.getDriverId(), line.getWorkforceMemberId(), line.getEquipmentId()));
             totalDebit = totalDebit.add(debit);
             totalCredit = totalCredit.add(credit);
         }
@@ -311,6 +331,7 @@ public class JournalPostingService {
                     || a.getDebit().compareTo(b.debit) != 0
                     || a.getCredit().compareTo(b.credit) != 0
                     || !Objects.equals(a.getDriverId(), b.driverId)
+                    || !Objects.equals(a.getWorkforceMemberId(), b.workforceMemberId)
                     || !Objects.equals(a.getEquipmentId(), b.equipmentId)) {
                 return false;
             }
@@ -331,6 +352,7 @@ public class JournalPostingService {
                     || oldLine.getDebit().compareTo(newLine.credit) != 0
                     || oldLine.getCredit().compareTo(newLine.debit) != 0
                     || !Objects.equals(oldLine.getDriverId(), newLine.driverId)
+                    || !Objects.equals(oldLine.getWorkforceMemberId(), newLine.workforceMemberId)
                     || !Objects.equals(oldLine.getEquipmentId(), newLine.equipmentId)) {
                 throw ApiException.badRequest("قيم القيد العكسي لا تطابق القيد الأصلي.");
             }
@@ -365,15 +387,17 @@ public class JournalPostingService {
         private final BigDecimal debit;
         private final BigDecimal credit;
         private final Long driverId;
+        private Long workforceMemberId;
         private final Long equipmentId;
 
         private NormalizedLine(Long accountId, String description, BigDecimal debit, BigDecimal credit,
-                               Long driverId, Long equipmentId) {
+                               Long driverId, Long workforceMemberId, Long equipmentId) {
             this.accountId = accountId;
             this.description = description;
             this.debit = debit;
             this.credit = credit;
             this.driverId = driverId;
+            this.workforceMemberId = workforceMemberId;
             this.equipmentId = equipmentId;
         }
     }
