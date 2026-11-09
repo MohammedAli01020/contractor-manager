@@ -1037,7 +1037,7 @@ class _ShiftCardState extends State<_ShiftCard> {
             const SizedBox(height: 8),
             _InfoLine(icon: Icons.calendar_today_outlined, text: shift.shiftDate),
             _InfoLine(icon: Icons.location_on_outlined, text: shift.siteName),
-            _InfoLine(icon: Icons.person_outline, text: shift.driverName),
+            _InfoLine(icon: Icons.person_outline, text: shift.personName),
             _InfoLine(icon: Icons.construction_outlined, text: equipment),
             const Divider(height: 24),
             Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
@@ -1247,7 +1247,7 @@ class _ShiftDetailsScreenState extends State<_ShiftDetailsScreen> {
                   _InfoLine(icon: Icons.calendar_today_outlined, text: shift.shiftDate),
                   _InfoLine(icon: Icons.wb_twilight_outlined, text: shift.shiftTypeLabel),
                   _InfoLine(icon: Icons.location_on_outlined, text: shift.siteName),
-                  _InfoLine(icon: Icons.person_outline, text: shift.driverName),
+                  _InfoLine(icon: Icons.person_outline, text: shift.personName),
                   _InfoLine(icon: Icons.construction_outlined, text: equipment),
                   const Divider(height: 24),
                   _DetailMoneyLine(label: 'قيمة الوردية', value: shift.price),
