@@ -331,8 +331,9 @@ public class JournalPostingService {
                     || a.getDebit().compareTo(b.debit) != 0
                     || a.getCredit().compareTo(b.credit) != 0
                     || !Objects.equals(a.getDriverId(), b.driverId)
-                    // Historical immutable lines predate workforce_member_id and remain NULL.
-                    || (a.getWorkforceMemberId() != null
+                    // A legacy retry may omit the canonical dimension; an explicitly
+                    // supplied Workforce ID must still match the originally posted line.
+                    || (b.workforceMemberId != null
                     && !Objects.equals(a.getWorkforceMemberId(), b.workforceMemberId))
                     || !Objects.equals(a.getEquipmentId(), b.equipmentId)) {
                 return false;
