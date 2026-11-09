@@ -80,6 +80,23 @@ class ShiftCorrectionIntegrationTest extends AbstractShiftIntegrationTest {
         Long replacementJournalId = jdbc.queryForObject(
                 "SELECT driver_wage_journal_entry_id FROM shifts WHERE id = ?", Long.class, shiftId);
         assertThat(replacementJournalId).isNotEqualTo(originalJournalId);
+        Long workforceMemberId = jdbc.queryForObject(
+                "SELECT workforce_member_id FROM shifts WHERE tenant_id=? AND id=?",
+                Long.class, tenantId, shiftId);
+        Long reversalJournalId = jdbc.queryForObject(
+                "SELECT wage_reversal_journal_entry_id FROM shift_corrections "
+                        + "WHERE tenant_id=? AND shift_id=?",
+                Long.class, tenantId, shiftId);
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM journal_lines WHERE tenant_id=? "
+                        + "AND journal_entry_id IN (?, ?, ?) AND workforce_member_id=?",
+                Integer.class, tenantId, originalJournalId, reversalJournalId,
+                replacementJournalId, workforceMemberId)).isEqualTo(6);
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM journal_lines WHERE tenant_id=? "
+                        + "AND journal_entry_id IN (?, ?, ?) AND driver_id=?",
+                Integer.class, tenantId, originalJournalId, reversalJournalId,
+                replacementJournalId, driverId)).isEqualTo(6);
         assertThat(jdbc.queryForObject(
                 "SELECT COUNT(*) FROM journal_entries WHERE tenant_id=? AND reversal_of_entry_id=?",
                 Integer.class, tenantId, originalJournalId)).isEqualTo(1);
