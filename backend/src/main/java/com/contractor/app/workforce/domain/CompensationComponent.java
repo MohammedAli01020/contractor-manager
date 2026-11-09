@@ -16,6 +16,9 @@ public class CompensationComponent extends BaseTenantEntity {
     @Column(name = "compensation_agreement_id", nullable = false, updatable = false)
     private Long compensationAgreementId;
 
+    @Column(name = "financial_item_definition_id", updatable = false)
+    private Long financialItemDefinitionId;
+
     @Column(name = "component_code", nullable = false, length = 60)
     private String componentCode;
 
@@ -45,6 +48,13 @@ public class CompensationComponent extends BaseTenantEntity {
     public CompensationComponent(Long tenantId, Long agreementId, String code, String displayName,
                                  CompensationBasis basis, BigDecimal rate, String unitCode,
                                  CompensationShiftType shiftType, int sortOrder) {
+        this(tenantId, agreementId, null, code, displayName, basis, rate, unitCode, shiftType, sortOrder);
+    }
+
+    public CompensationComponent(Long tenantId, Long agreementId, Long financialItemDefinitionId,
+                                 String code, String displayName, CompensationBasis basis,
+                                 BigDecimal rate, String unitCode, CompensationShiftType shiftType,
+                                 int sortOrder) {
         super(tenantId);
         if (agreementId == null || code == null || code.trim().isEmpty()
                 || displayName == null || displayName.trim().isEmpty()
@@ -68,6 +78,7 @@ public class CompensationComponent extends BaseTenantEntity {
             throw new IllegalArgumentException("FIXED requires MONTH, WEEK or DAY period unit");
         }
         this.compensationAgreementId = agreementId;
+        this.financialItemDefinitionId = financialItemDefinitionId;
         this.componentCode = code.trim().toUpperCase(Locale.ROOT);
         this.displayName = displayName.trim();
         this.basis = basis;
@@ -78,6 +89,7 @@ public class CompensationComponent extends BaseTenantEntity {
     }
 
     public Long getCompensationAgreementId() { return compensationAgreementId; }
+    public Long getFinancialItemDefinitionId() { return financialItemDefinitionId; }
     public String getComponentCode() { return componentCode; }
     public String getDisplayName() { return displayName; }
     public CompensationBasis getBasis() { return basis; }
