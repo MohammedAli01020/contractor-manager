@@ -211,6 +211,17 @@ class ShiftCorrectionIntegrationTest extends AbstractShiftIntegrationTest {
                         + "AND replacement_w.legacy_source_entry_id=c.replacement_earning_ledger_entry_id "
                         + "WHERE c.tenant_id=? AND c.shift_id=? AND c.status='APPLIED'",
                 Integer.class, tenantId, shiftId)).isEqualTo(2);
+
+        // The second correction must continue from the first correction's replacement,
+        // using Workforce IDs (not the legacy Driver ledger IDs).
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM shift_corrections first_c "
+                        + "JOIN shift_corrections second_c ON second_c.tenant_id=first_c.tenant_id "
+                        + "AND second_c.shift_id=first_c.shift_id AND second_c.id>first_c.id "
+                        + "WHERE first_c.tenant_id=? AND first_c.shift_id=? "
+                        + "AND first_c.replacement_earning_workforce_ledger_entry_id="
+                        + "second_c.old_earning_workforce_ledger_entry_id",
+                Integer.class, tenantId, shiftId)).isEqualTo(1);
         assertThat(ledger.sumBalance(tenantId, driverId)).isEqualByComparingTo("210.00");
         assertThat(jdbc.queryForObject(
                 "SELECT COUNT(*) FROM driver_ledger_entries WHERE tenant_id=? AND shift_id=? "
@@ -242,6 +253,18 @@ class ShiftCorrectionIntegrationTest extends AbstractShiftIntegrationTest {
                 .hasMessageContaining("SHIFT_CORRECTION_AUDIT_IMMUTABLE");
         assertThatThrownBy(() -> jdbc.update(
                 "DELETE FROM shift_corrections WHERE id=? AND tenant_id=?", appliedCorrectionId, tenantId))
+                .isInstanceOf(UncategorizedSQLException.class)
+                .hasMessageContaining("SHIFT_CORRECTION_AUDIT_IMMUTABLE");
+        Long attemptedReplacementRef = jdbc.queryForObject(
+                "SELECT replacement_earning_workforce_ledger_entry_id FROM shift_corrections "
+                        + "WHERE tenant_id=? AND id=?", Long.class, tenantId, appliedCorrectionId);
+        Long anotherValidWorkforceRef = jdbc.queryForObject(
+                "SELECT id FROM workforce_ledger_entries WHERE tenant_id=? AND workforce_member_id=? "
+                        + "AND shift_id=? AND id<>? ORDER BY id DESC LIMIT 1",
+                Long.class, tenantId, workforceMemberId, shiftId, attemptedReplacementRef);
+        assertThatThrownBy(() -> jdbc.update(
+                "UPDATE shift_corrections SET replacement_earning_workforce_ledger_entry_id=? "
+                        + "WHERE id=? AND tenant_id=?", anotherValidWorkforceRef, appliedCorrectionId, tenantId))
                 .isInstanceOf(UncategorizedSQLException.class)
                 .hasMessageContaining("SHIFT_CORRECTION_AUDIT_IMMUTABLE");
 
