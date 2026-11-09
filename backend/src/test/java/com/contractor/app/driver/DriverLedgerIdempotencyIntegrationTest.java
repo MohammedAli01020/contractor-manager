@@ -395,6 +395,136 @@ class DriverLedgerIdempotencyIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void concurrentMixedRouteAgainstEarnedAdvancesWithDifferentKeysCannotOverdrawOneWorkforceMember() throws Exception {
+        Long driverId = createDriver("mixed-route-earned-advance-race");
+        earn(driverId, "mixed-route-earned-advance-race-earned");
+        Long memberId = jdbcTemplate.queryForObject(
+                "SELECT workforce_member_id FROM drivers WHERE id = ? AND tenant_id = ?",
+                Long.class, driverId, tenantId);
+
+        Map<String, Object> workforceAdvance = new HashMap<>();
+        workforceAdvance.put("clientRequestKey", "mixed-route-workforce-earned-advance-key");
+        workforceAdvance.put("advanceDate", LocalDate.of(2026, 11, 4));
+        workforceAdvance.put("amount", new BigDecimal("300.00"));
+        workforceAdvance.put("paymentAccountId", cashId);
+        workforceAdvance.put("description", "Concurrent Workforce earned advance");
+        workforceAdvance.put("advanceType", "AGAINST_EARNED");
+        Map<String, Object> legacyAdvance = new HashMap<>(workforceAdvance);
+        legacyAdvance.put("clientRequestKey", "mixed-route-driver-earned-advance-key");
+        legacyAdvance.put("description", "Concurrent legacy Driver earned advance");
+
+        String workforceRoute = "/api/v1/workforce/members/" + memberId + "/ledger/advances";
+        String driverRoute = "/api/v1/drivers/" + driverId + "/ledger/advances";
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<Integer> workforce = executor.submit(() -> {
+                ready.countDown();
+                start.await();
+                return postJson(workforceRoute, workforceAdvance, token)
+                        .andReturn().getResponse().getStatus();
+            });
+            Future<Integer> legacy = executor.submit(() -> {
+                ready.countDown();
+                start.await();
+                return postJson(driverRoute, legacyAdvance, token)
+                        .andReturn().getResponse().getStatus();
+            });
+            ready.await();
+            start.countDown();
+            assertThat(Arrays.asList(workforce.get(), legacy.get()))
+                    .containsExactlyInAnyOrder(201, 400);
+        } finally {
+            start.countDown();
+            executor.shutdownNow();
+        }
+
+        assertThat(ledger.findByTenantIdAndDriverIdOrderByTransactionDateAscIdAsc(tenantId, driverId))
+                .filteredOn(entry -> "ADVANCE".equals(entry.getTransactionType()))
+                .singleElement()
+                .satisfies(entry -> assertThat(entry.getAmount()).isEqualByComparingTo("300.00"));
+        assertThat(workforceLedger.findByTenantIdAndWorkforceMemberIdOrderByTransactionDateAscIdAsc(
+                tenantId, memberId))
+                .filteredOn(entry -> "ADVANCE".equals(entry.getTransactionType()))
+                .singleElement()
+                .satisfies(entry -> {
+                    assertThat(entry.getAmount()).isEqualByComparingTo("300.00");
+                    assertThat(entry.getLegacyDriverId()).isEqualTo(driverId);
+                    assertThat(entry.getLegacySourceEntryId()).isNotNull();
+                });
+        assertThat(ledger.sumBalance(tenantId, driverId)).isEqualByComparingTo("200.00");
+        assertThat(workforceLedger.sumBalance(tenantId, memberId)).isEqualByComparingTo("200.00");
+        assertThat(journals.findByTenantIdAndPostingKey(tenantId,
+                "driver-advance:mixed-route-workforce-earned-advance-key").isPresent()
+                ^ journals.findByTenantIdAndPostingKey(tenantId,
+                "driver-advance:mixed-route-driver-earned-advance-key").isPresent()).isTrue();
+    }
+
+    @Test
+    void concurrentMixedRouteRecoverableAdvancesDoNotReduceEarnedBalance() throws Exception {
+        Long driverId = createDriver("mixed-route-recoverable-advance-race");
+        earn(driverId, "mixed-route-recoverable-advance-race-earned");
+        Long memberId = jdbcTemplate.queryForObject(
+                "SELECT workforce_member_id FROM drivers WHERE id = ? AND tenant_id = ?",
+                Long.class, driverId, tenantId);
+
+        Map<String, Object> workforceAdvance = new HashMap<>();
+        workforceAdvance.put("clientRequestKey", "mixed-route-workforce-recoverable-key");
+        workforceAdvance.put("advanceDate", LocalDate.of(2026, 11, 4));
+        workforceAdvance.put("amount", new BigDecimal("300.00"));
+        workforceAdvance.put("paymentAccountId", cashId);
+        workforceAdvance.put("description", "Concurrent Workforce recoverable advance");
+        workforceAdvance.put("advanceType", "RECOVERABLE");
+        Map<String, Object> legacyAdvance = new HashMap<>(workforceAdvance);
+        legacyAdvance.put("clientRequestKey", "mixed-route-driver-recoverable-key");
+        legacyAdvance.put("description", "Concurrent legacy Driver recoverable advance");
+
+        String workforceRoute = "/api/v1/workforce/members/" + memberId + "/ledger/advances";
+        String driverRoute = "/api/v1/drivers/" + driverId + "/ledger/advances";
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<Integer> workforce = executor.submit(() -> {
+                ready.countDown();
+                start.await();
+                return postJson(workforceRoute, workforceAdvance, token)
+                        .andReturn().getResponse().getStatus();
+            });
+            Future<Integer> legacy = executor.submit(() -> {
+                ready.countDown();
+                start.await();
+                return postJson(driverRoute, legacyAdvance, token)
+                        .andReturn().getResponse().getStatus();
+            });
+            ready.await();
+            start.countDown();
+            assertThat(Arrays.asList(workforce.get(), legacy.get()))
+                    .containsExactlyInAnyOrder(201, 201);
+        } finally {
+            start.countDown();
+            executor.shutdownNow();
+        }
+
+        assertThat(ledger.findByTenantIdAndDriverIdOrderByTransactionDateAscIdAsc(tenantId, driverId))
+                .filteredOn(entry -> "RECOVERABLE_ADVANCE".equals(entry.getTransactionType()))
+                .hasSize(2);
+        assertThat(workforceLedger.findByTenantIdAndWorkforceMemberIdOrderByTransactionDateAscIdAsc(
+                tenantId, memberId))
+                .filteredOn(entry -> "RECOVERABLE_ADVANCE".equals(entry.getTransactionType()))
+                .hasSize(2);
+        assertThat(ledger.sumBalance(tenantId, driverId)).isEqualByComparingTo("500.00");
+        assertThat(workforceLedger.sumBalance(tenantId, memberId)).isEqualByComparingTo("500.00");
+        assertThat(workforceLedger.sumRecoverableAdvanceBalance(tenantId, memberId))
+                .isEqualByComparingTo("600.00");
+        assertThat(journals.findByTenantIdAndPostingKey(
+                tenantId, "driver-advance:mixed-route-workforce-recoverable-key")).isPresent();
+        assertThat(journals.findByTenantIdAndPostingKey(
+                tenantId, "driver-advance:mixed-route-driver-recoverable-key")).isPresent();
+    }
+
+    @Test
     void workforceLedgerStatementCannotReadAnotherTenantsMember() throws Exception {
         Long driverId = createDriver("tenant-isolation-ledger");
         Long memberId = jdbcTemplate.queryForObject(
