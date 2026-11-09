@@ -44,3 +44,12 @@ Do not drop `driver_ledger_entries` or switch the V56 mirror off. The Workforce 
 ## Scope and validation caveat
 
 This is a verified dependency inventory, not a claim that every repository reference has been exhaustively classified. Migration history and reconciliation SQL intentionally reference the legacy table. The current branch has not been built or integration-tested in this environment; no migration or production database was executed or changed.
+
+## Native-write schema preparation (V58)
+
+- V58 makes `legacy_source_entry_id` and `legacy_driver_id` nullable as a pair.
+- Existing mirrored rows retain both provenance values; a future native Workforce movement may set both to NULL.
+- A CHECK constraint rejects partially populated provenance (only one of the two values set).
+- The V56 legacy INSERT trigger remains enabled and unchanged. Current application writers still use the Driver ledger.
+- The nullable unique provenance index continues to prevent duplicate legacy source links while allowing multiple native rows with NULL provenance under MySQL semantics.
+- This is schema preparation only, not a writer cutover. No Workforce-native financial command has been enabled by V58.
