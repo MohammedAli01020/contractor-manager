@@ -215,6 +215,23 @@ class ShiftCorrectionIntegrationTest extends AbstractShiftIntegrationTest {
                 "DELETE FROM shift_corrections WHERE id=? AND tenant_id=?", appliedCorrectionId, tenantId))
                 .isInstanceOf(UncategorizedSQLException.class)
                 .hasMessageContaining("SHIFT_CORRECTION_AUDIT_IMMUTABLE");
+
+        // Workforce ledger rows are immutable audit evidence too. A correction must
+        // append reversal/replacement rows rather than rewriting the mirror.
+        Long workforceLedgerEntryId = jdbc.queryForObject(
+                "SELECT id FROM workforce_ledger_entries WHERE tenant_id=? "
+                        + "AND workforce_member_id=? AND shift_id=? ORDER BY id ASC LIMIT 1",
+                Long.class, tenantId, workforceMemberId, shiftId);
+        assertThatThrownBy(() -> jdbc.update(
+                "UPDATE workforce_ledger_entries SET description='tampered workforce ledger' "
+                        + "WHERE id=? AND tenant_id=?", workforceLedgerEntryId, tenantId))
+                .isInstanceOf(UncategorizedSQLException.class)
+                .hasMessageContaining("WORKFORCE_LEDGER_IS_APPEND_ONLY");
+        assertThatThrownBy(() -> jdbc.update(
+                "DELETE FROM workforce_ledger_entries WHERE id=? AND tenant_id=?",
+                workforceLedgerEntryId, tenantId))
+                .isInstanceOf(UncategorizedSQLException.class)
+                .hasMessageContaining("WORKFORCE_LEDGER_IS_APPEND_ONLY");
     }
 
     @Test
