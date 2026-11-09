@@ -181,6 +181,7 @@ class DriverLedgerIdempotencyIntegrationTest extends AbstractIntegrationTest {
         advance.put("advanceType", "RECOVERABLE");
         JsonNode createdAdvance = body(postJson(route + "/advances", advance, token)
                 .andExpect(status().isCreated()));
+        postJson(route + "/advances", advance, token).andExpect(status().isCreated());
         assertThat(createdAdvance.path("workforceMemberId").asLong()).isEqualTo(memberId);
         assertThat(createdAdvance.has("driverId")).isFalse();
 
