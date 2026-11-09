@@ -409,3 +409,63 @@ Against the isolated `contractor_manager_wf06_test` database:
 - These checks cover the named tenant and records only; they do not prove all journals or all tenants are reconciled.
 
 **Next task:** complete the repository-wide dependency inventory and all-tenant read-only data inventory, resolve the open decisions in the proposal, and then present exact DDL/API contracts for approval.
+
+## 15. Repository dependency inventory — source review on WF12C branch (2026-11-09)
+
+This is a source-level inventory of the named files fetched from `feature/wf12c-shift-workforce-identity`. It expands the earlier focused audit but is not yet a mathematically exhaustive repository-wide reference scan. Search results from GitHub code search can be indexed against the default branch, so the branch-pinned file reads below are the evidence for these findings.
+
+### 15.1 Financial write path — hard blockers to deleting Driver
+
+| Area | Confirmed source | Current Driver dependency | Required Workforce replacement |
+|---|---|---|---|
+| Shift start/update | `ShiftService` | Accepts `driverId`, locks `Driver`, resolves compensation from Driver, writes `shifts.driver_id`; it also locks Workforce and checks Workforce active conflicts | Accept `workforceMemberId`; lock canonical member; resolve compensation from member/assignment; keep only a temporary projection if an operational capability is required |
+| Shift finish | `ShiftService` | Locks Driver as serialization owner; posts wage journal lines with Driver dimension; inserts `DriverLedgerEntry(EARNING)`; calculates/recoverable advance balance by Driver and inserts `ADVANCE_RECOVERY` | Lock Workforce member as the sole financial serialization owner; post Workforce dimension; write Workforce ledger earning/recovery |
+| Shift correction | `ShiftCorrectionService` | Locks Driver; reads ledger by Driver; tests later PAYMENT/ADVANCE/ADVANCE_RECOVERY by Driver; validates original journal lines' Driver dimension; writes reversal/replacement Driver ledger rows and Driver-dimension journal lines | Preserve exact correction chain and consumption blockers using Workforce member IDs and Workforce ledger references |
+| Payments and advances | `DriverLedgerService` | Statement, payment, earned advance, recoverable advance, payable balance and recovery balance all keyed by Driver; payment/advance lock Driver; journal posting uses Driver dimension | Workforce-keyed ledger service, statements, payments and advances; lock Workforce member consistently |
+| Journal validation | `JournalPostingService` | Injects `DriverRepository`, validates each non-null `driverId`, persists Driver dimension, compares it during posting immutability checks | Validate and persist `workforceMemberId` with tenant-safe FK; preserve old Driver dimension on historical posted lines |
+
+**Implication:** removing only the Driver controller or UI is insufficient. Shift completion, correction, payment, advance, recovery, and journal posting all still depend on Driver as a runtime financial identity/lock owner.
+
+### 15.2 API and mobile dependencies
+
+| Surface | Confirmed source | Current contract | Replacement/removal condition |
+|---|---|---|---|
+| Shift API | `ShiftController`, `ShiftRequest`, `ShiftService` | `driverId` query/body/filter/default contract | Workforce member ID for all new clients and routes; compatibility adapter only during a bounded deprecation window |
+| Driver ledger API | `DriverLedgerController` | `/api/v1/drivers/{driverId}/ledger`, `/advances`, `/payments` | Workforce-member routes delegate to one Workforce ledger service; remove old routes after client/usage evidence |
+| Workforce candidate API | `LiveStatusService.workforceCandidates` | Candidates are derived from Workforce roles/assignments, but response `id` is still Driver ID because `shifts.driver_id` remains required | Return canonical Workforce member ID; separate capability/assignment metadata from person identity |
+| Legacy live-driver API | `LiveStatusService.drivers` | Reads active Driver records and active shift rows keyed by Driver | Replace with Workforce directory/live status; remove when no client consumes it |
+| Flutter shift editor | `shift_editor_screen.dart`, `shifts_api.dart`, `shift_model.dart` | Loads Workforce candidates but stores selected `_driverId`, uses candidate `id`, sends `driverId`, and falls back to `/live/drivers` for historical selection | Store/select `workforceMemberId`; remove fallback after all legacy assignments are reconciled |
+| Flutter Drivers screen | `drivers_screen.dart` | Reads/writes `/drivers`, computes active state from shift `driverId`, edits/deactivates Driver records | Replace with unified Workforce directory and role/assignment operations; then remove Driver screen/API |
+
+### 15.3 Canonical identity is not yet the operational source everywhere
+
+The branch-pinned `Shift` entity has both:
+- `driver_id` as a required column;
+- `workforce_member_id` as the canonical identity column, documented in code as such.
+
+`WorkforceIdentityService` still injects `DriverRepository`, creates Workforce identities from Driver records, synchronizes edits in both directions, and locks Driver before Workforce. `DriverService` still creates/updates Driver records and resolves their Workforce member. These are direct retirement blockers, not merely naming cleanup.
+
+`LiveStatusService.workforceCandidates` already filters canonical Workforce assignments and roles, but it first loads active Driver rows and emits Driver IDs. This is a useful migration seam, not completion of the identity transition.
+
+### 15.4 Accounting dimension dependency
+
+`JournalLine` maps `driver_id`; `JournalPostingService` validates it using `DriverRepository` and includes it in immutable journal-line comparisons. The inspected source does not yet have a Workforce journal dimension. Historical journal rows must remain untouched; new postings need a Workforce dimension before the Driver dimension can stop being populated for new entries.
+
+### 15.5 Source files reviewed in this pass
+
+- Backend: `ShiftService.java`, `ShiftCorrectionService.java`, `DriverLedgerService.java`, `DriverService.java`, `DriverController.java`, `DriverLedgerController.java`, `LiveStatusService.java`, `Shift.java`, `ShiftController.java`, `ShiftRequest.java`, `JournalPostingService.java`, `JournalLine.java`, `WorkforceIdentityService.java`, `DriverLedgerEntry.java`, `DriverLedgerEntryRepository.java`, `DriverRepository.java`.
+- Flutter: `shift_editor_screen.dart`, `shift_model.dart`, `shifts_api.dart`, `drivers_screen.dart`.
+
+This pass did not yet close references in all DTOs, response mappers, repositories, reports, exports, audit entity types, tests/fixtures, scheduled jobs, external integrations, every migration, or every SQL query. Those remain explicit inventory work before any DDL is approved.
+
+### 15.6 Ordered retirement work packages
+
+1. **Identity/API contract:** make Workforce member ID the only person key in shift commands, queries, candidate responses, and client state.
+2. **Operational projection decision:** decide whether a Driver capability/assignment projection remains at all. If not, move availability/status and any driver-only attributes to Workforce assignment/capability before removing the projection.
+3. **Financial ledger:** implement Workforce-native earnings, payments, advances, recoveries, correction chain, idempotency and lock ownership.
+4. **Accounting:** add Workforce journal dimension for new postings; preserve historical Driver dimensions.
+5. **Clients and reports:** migrate Flutter, web/admin, reports, exports, and integrations; observe old-route usage before removal.
+6. **Data migration:** reconcile every tenant and every legacy row; never equate Driver ID with Workforce member ID.
+7. **Schema retirement:** only after all runtime references and data dependencies are gone, remove `shifts.driver_id`, Driver FKs/indexes/triggers, Driver APIs/entities/repositories, then `driver_ledger_entries` and finally `drivers` in dependency-safe migrations. Historical journal `driver_id` retention is a separate accounting/audit decision and may outlive the operational Driver table if retained as a non-FK legacy dimension or moved to a durable mapping record.
+
+No code, schema, or data changes were made by this inventory.
