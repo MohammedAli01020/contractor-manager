@@ -392,6 +392,7 @@ public class ShiftCorrectionService {
                         "الحركة المالية غير موجودة في دفتر القوى العاملة؛ تم إيقاف التصحيح لحماية السجل."));
         if (!Objects.equals(mirrored.getTenantId(), tenantId)
                 || !Objects.equals(mirrored.getWorkforceMemberId(), workforceMemberId)
+                || !Objects.equals(mirrored.getLegacyDriverId(), legacyEntry.getDriverId())
                 || !Objects.equals(mirrored.getShiftId(), legacyEntry.getShiftId())
                 || !Objects.equals(mirrored.getJournalEntryId(), legacyEntry.getJournalEntryId())
                 || !Objects.equals(mirrored.getTransactionType(), legacyEntry.getTransactionType())

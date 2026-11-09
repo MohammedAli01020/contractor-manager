@@ -146,6 +146,22 @@ class ShiftCorrectionIntegrationTest extends AbstractShiftIntegrationTest {
                         + "AND transaction_type='CORRECTION_REVERSAL' AND balance_effect=-150.00",
                 Integer.class, tenantId, workforceMemberId, shiftId, reversalJournalId)).isEqualTo(1);
         assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM shift_corrections c "
+                        + "JOIN workforce_ledger_entries old_w ON old_w.tenant_id=c.tenant_id "
+                        + "AND old_w.id=c.old_earning_workforce_ledger_entry_id "
+                        + "AND old_w.legacy_source_entry_id=c.old_earning_ledger_entry_id "
+                        + "AND old_w.transaction_type='EARNING' "
+                        + "JOIN workforce_ledger_entries reversed_w ON reversed_w.tenant_id=c.tenant_id "
+                        + "AND reversed_w.id=c.reversed_earning_workforce_ledger_entry_id "
+                        + "AND reversed_w.legacy_source_entry_id=c.reversed_earning_ledger_entry_id "
+                        + "AND reversed_w.transaction_type='CORRECTION_REVERSAL' "
+                        + "JOIN workforce_ledger_entries replacement_w ON replacement_w.tenant_id=c.tenant_id "
+                        + "AND replacement_w.id=c.replacement_earning_workforce_ledger_entry_id "
+                        + "AND replacement_w.legacy_source_entry_id=c.replacement_earning_ledger_entry_id "
+                        + "AND replacement_w.transaction_type='EARNING' "
+                        + "WHERE c.tenant_id=? AND c.shift_id=? AND c.status='APPLIED'",
+                Integer.class, tenantId, shiftId)).isEqualTo(1);
+        assertThat(jdbc.queryForObject(
                 "SELECT COALESCE(SUM(balance_effect),0) FROM workforce_ledger_entries "
                         + "WHERE tenant_id=? AND workforce_member_id=?",
                 BigDecimal.class, tenantId, workforceMemberId)).isEqualByComparingTo("180.00");
@@ -181,6 +197,19 @@ class ShiftCorrectionIntegrationTest extends AbstractShiftIntegrationTest {
                 Integer.class, tenantId)).isEqualTo(2);
         assertThat(jdbc.queryForObject(
                 "SELECT COUNT(*) FROM shift_corrections WHERE tenant_id=? AND shift_id=? AND status='APPLIED'",
+                Integer.class, tenantId, shiftId)).isEqualTo(2);
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM shift_corrections c "
+                        + "JOIN workforce_ledger_entries old_w ON old_w.tenant_id=c.tenant_id "
+                        + "AND old_w.id=c.old_earning_workforce_ledger_entry_id "
+                        + "AND old_w.legacy_source_entry_id=c.old_earning_ledger_entry_id "
+                        + "JOIN workforce_ledger_entries reversed_w ON reversed_w.tenant_id=c.tenant_id "
+                        + "AND reversed_w.id=c.reversed_earning_workforce_ledger_entry_id "
+                        + "AND reversed_w.legacy_source_entry_id=c.reversed_earning_ledger_entry_id "
+                        + "JOIN workforce_ledger_entries replacement_w ON replacement_w.tenant_id=c.tenant_id "
+                        + "AND replacement_w.id=c.replacement_earning_workforce_ledger_entry_id "
+                        + "AND replacement_w.legacy_source_entry_id=c.replacement_earning_ledger_entry_id "
+                        + "WHERE c.tenant_id=? AND c.shift_id=? AND c.status='APPLIED'",
                 Integer.class, tenantId, shiftId)).isEqualTo(2);
         assertThat(ledger.sumBalance(tenantId, driverId)).isEqualByComparingTo("210.00");
         assertThat(jdbc.queryForObject(
@@ -295,6 +324,18 @@ class ShiftCorrectionIntegrationTest extends AbstractShiftIntegrationTest {
         assertThat(jdbc.queryForObject(
                 "SELECT COUNT(*) FROM driver_ledger_entries WHERE tenant_id=? AND shift_id=? "
                         + "AND transaction_type='CORRECTION_REVERSAL'",
+                Integer.class, tenantId, shiftId)).isEqualTo(1);
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM shift_corrections c "
+                        + "JOIN workforce_ledger_entries old_w ON old_w.tenant_id=c.tenant_id "
+                        + "AND old_w.id=c.old_earning_workforce_ledger_entry_id "
+                        + "AND old_w.legacy_source_entry_id=c.old_earning_ledger_entry_id "
+                        + "JOIN workforce_ledger_entries reversed_w ON reversed_w.tenant_id=c.tenant_id "
+                        + "AND reversed_w.id=c.reversed_earning_workforce_ledger_entry_id "
+                        + "AND reversed_w.legacy_source_entry_id=c.reversed_earning_ledger_entry_id "
+                        + "WHERE c.tenant_id=? AND c.shift_id=? "
+                        + "AND c.replacement_earning_ledger_entry_id IS NULL "
+                        + "AND c.replacement_earning_workforce_ledger_entry_id IS NULL",
                 Integer.class, tenantId, shiftId)).isEqualTo(1);
         assertThat(ledger.sumBalance(tenantId, driverId)).isEqualByComparingTo("0.00");
 
