@@ -186,10 +186,10 @@ public class LiveStatusService {
             WorkforceRole role = rolesById.get(assignment.getWorkforceRoleId());
             if (member == null || !member.isActive() || role == null || !role.isActive()) continue;
 
-            String code = role.getCode();
-            if (!"DRIVER".equals(code) && !"EQUIPMENT_OPERATOR".equals(code) && !"WORKER".equals(code)) {
+            if (!role.isShiftEligible()) {
                 continue;
             }
+            String code = role.getCode();
             String current = eligibleTypeByMember.get(member.getId());
             // One picker row per person. Prefer the operator classification when
             // a person has multiple operational roles; all roles remain in Workforce.
@@ -222,7 +222,8 @@ public class LiveStatusService {
             String live = current != null ? WORKING
                     : driver.getAvailability() == DriverAvailability.UNAVAILABLE ? "UNAVAILABLE" : "AVAILABLE";
             if (onlyFree && !"AVAILABLE".equals(live)) continue;
-            String workerType = "WORKER".equals(roleCode) ? "WORKER" : "DRIVER";
+            String workerType = ("DRIVER".equals(roleCode) || "EQUIPMENT_OPERATOR".equals(roleCode))
+                    ? "DRIVER" : "WORKER";
             result.add(new LiveDriverResponse(driver.getId(), driver.getWorkforceMemberId(), driver.getName(), workerType,
                     driver.getAvailability().name(), driver.getUnavailableReason(), live,
                     current == null ? null : current.getId(),
