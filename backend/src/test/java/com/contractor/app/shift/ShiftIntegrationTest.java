@@ -1680,6 +1680,92 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
 
 
     @Test
+    void concurrentDriverProfileUpdateAndPaymentSerializeWithoutDeadlock() throws Exception {
+        seedCashBalance(new BigDecimal("1000.00"));
+        finishShift(token,
+                startShift(token, shiftBody(siteId, driverId, equipmentId, today().minusDays(1), "MORNING")));
+        JsonNode driver = body(getJson("/api/v1/drivers/" + driverId, token)
+                .andExpect(status().isOk()));
+        long memberId = jdbcTemplate.queryForObject(
+                "SELECT workforce_member_id FROM drivers WHERE tenant_id=? AND id=?",
+                Long.class, tenantId, driverId);
+        long cashId = chartAccounts.findByTenantIdAndAccountCodeIgnoreCase(tenantId, "1000")
+                .orElseThrow(() -> new IllegalStateException("Missing cash account")).getId();
+
+        Map<String, Object> driverUpdate = new HashMap<>();
+        driverUpdate.put("name", "Concurrent Driver Projection Update");
+        driverUpdate.put("phone", "01055559876");
+        driverUpdate.put("nationalId", null);
+        driverUpdate.put("workerType", driver.path("workerType").asText());
+        driverUpdate.put("morningRate", driver.path("morningRate").decimalValue());
+        driverUpdate.put("eveningRate", driver.path("eveningRate").decimalValue());
+        driverUpdate.put("nightRate", driver.path("nightRate").decimalValue());
+        driverUpdate.put("version", driver.path("version").asLong());
+
+        Map<String, Object> payment = new HashMap<>();
+        payment.put("clientRequestKey", "driver-profile-payment-race-" + java.util.UUID.randomUUID());
+        payment.put("paymentDate", today());
+        payment.put("amount", new BigDecimal("100.00"));
+        payment.put("paymentAccountId", cashId);
+        payment.put("description", "Payment racing Driver profile update");
+
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        int updateStatus;
+        int paymentStatus;
+        try {
+            Future<Integer> update = executor.submit(() -> {
+                ready.countDown();
+                start.await();
+                return putJson("/api/v1/drivers/" + driverId, driverUpdate, token)
+                        .andReturn().getResponse().getStatus();
+            });
+            Future<Integer> pay = executor.submit(() -> {
+                ready.countDown();
+                start.await();
+                return postJson("/api/v1/drivers/" + driverId + "/ledger/payments", payment, token)
+                        .andReturn().getResponse().getStatus();
+            });
+            assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+            updateStatus = update.get(30, TimeUnit.SECONDS);
+            paymentStatus = pay.get(30, TimeUnit.SECONDS);
+        } finally {
+            start.countDown();
+            executor.shutdownNow();
+            executor.awaitTermination(10, TimeUnit.SECONDS);
+        }
+
+        assertThat(updateStatus).isEqualTo(200);
+        assertThat(paymentStatus).isEqualTo(201);
+        Map<String, Object> linkedIdentity = jdbcTemplate.queryForMap(
+                "SELECT d.name, d.phone, wm.full_name, wm.phone "
+                        + "FROM drivers d JOIN workforce_members wm "
+                        + "ON wm.id=d.workforce_member_id AND wm.tenant_id=d.tenant_id "
+                        + "WHERE d.tenant_id=? AND d.id=?",
+                tenantId, driverId);
+        assertThat(linkedIdentity.get("name")).isEqualTo("Concurrent Driver Projection Update");
+        assertThat(linkedIdentity.get("full_name")).isEqualTo("Concurrent Driver Projection Update");
+        assertThat(linkedIdentity.get("phone")).isEqualTo("01055559876");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM driver_ledger_entries WHERE tenant_id=? AND driver_id=? "
+                        + "AND transaction_type='PAYMENT' AND client_request_key=?",
+                Integer.class, tenantId, driverId, payment.get("clientRequestKey"))).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM workforce_ledger_entries WHERE tenant_id=? AND workforce_member_id=?",
+                Integer.class, tenantId, memberId))
+                .isEqualTo(jdbcTemplate.queryForObject(
+                        "SELECT COUNT(*) FROM driver_ledger_entries WHERE tenant_id=? AND driver_id=?",
+                        Integer.class, tenantId, driverId));
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COALESCE(SUM(balance_effect),0) FROM workforce_ledger_entries "
+                        + "WHERE tenant_id=? AND workforce_member_id=?",
+                BigDecimal.class, tenantId, memberId)).isEqualByComparingTo("50.00");
+    }
+
+
+    @Test
     void concurrentCompletedShiftCorrectionAndPaymentSerializeWithoutDeadlock() throws Exception {
         seedCashBalance(new BigDecimal("1000.00"));
         JsonNode completed = finishShift(token,
