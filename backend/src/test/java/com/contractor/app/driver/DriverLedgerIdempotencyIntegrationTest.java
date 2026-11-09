@@ -587,6 +587,74 @@ class DriverLedgerIdempotencyIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void concurrentWorkforceAndLegacyDriverRecoverableAdvanceRoutesWithSameKeyCreateOneMovement()
+            throws Exception {
+        Long driverId = createDriver("mixed-route-recoverable-same-key-race");
+        Long memberId = jdbcTemplate.queryForObject(
+                "SELECT workforce_member_id FROM drivers WHERE id = ? AND tenant_id = ?",
+                Long.class, driverId, tenantId);
+
+        Map<String, Object> advance = new HashMap<>();
+        advance.put("clientRequestKey", "mixed-route-recoverable-same-key-race-key");
+        advance.put("advanceDate", LocalDate.of(2026, 11, 5));
+        advance.put("amount", new BigDecimal("75.00"));
+        advance.put("paymentAccountId", cashId);
+        advance.put("description", "Concurrent mixed-route recoverable advance retry");
+        advance.put("advanceType", "RECOVERABLE");
+
+        String workforceRoute = "/api/v1/workforce/members/" + memberId + "/ledger/advances";
+        String driverRoute = "/api/v1/drivers/" + driverId + "/ledger/advances";
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<Integer> workforce = executor.submit(() -> {
+                ready.countDown();
+                start.await();
+                return postJson(workforceRoute, advance, token).andReturn().getResponse().getStatus();
+            });
+            Future<Integer> legacy = executor.submit(() -> {
+                ready.countDown();
+                start.await();
+                return postJson(driverRoute, advance, token).andReturn().getResponse().getStatus();
+            });
+            ready.await();
+            start.countDown();
+            assertThat(Arrays.asList(workforce.get(), legacy.get()))
+                    .containsExactlyInAnyOrder(201, 201);
+        } finally {
+            start.countDown();
+            executor.shutdownNow();
+        }
+
+        assertThat(ledger.findByTenantIdAndDriverIdOrderByTransactionDateAscIdAsc(tenantId, driverId))
+                .filteredOn(entry -> "RECOVERABLE_ADVANCE".equals(entry.getTransactionType()))
+                .singleElement()
+                .satisfies(entry -> {
+                    assertThat(entry.getClientRequestKey())
+                            .isEqualTo("mixed-route-recoverable-same-key-race-key");
+                    assertThat(entry.getAmount()).isEqualByComparingTo("75.00");
+                });
+        assertThat(workforceLedger.findByTenantIdAndWorkforceMemberIdOrderByTransactionDateAscIdAsc(
+                tenantId, memberId))
+                .filteredOn(entry -> "RECOVERABLE_ADVANCE".equals(entry.getTransactionType()))
+                .singleElement()
+                .satisfies(entry -> {
+                    assertThat(entry.getClientRequestKey())
+                            .isEqualTo("mixed-route-recoverable-same-key-race-key");
+                    assertThat(entry.getWorkforceMemberId()).isEqualTo(memberId);
+                    assertThat(entry.getLegacyDriverId()).isEqualTo(driverId);
+                    assertThat(entry.getLegacySourceEntryId()).isNotNull();
+                    assertThat(entry.getAmount()).isEqualByComparingTo("75.00");
+                });
+        assertThat(workforceLedger.sumRecoverableAdvanceBalance(tenantId, memberId))
+                .isEqualByComparingTo("75.00");
+        assertThat(journals.findByTenantIdAndPostingKey(
+                tenantId, "driver-advance:mixed-route-recoverable-same-key-race-key"))
+                .isPresent();
+    }
+
+    @Test
     void workforceLedgerStatementCannotReadAnotherTenantsMember() throws Exception {
         Long driverId = createDriver("tenant-isolation-ledger");
         Long memberId = jdbcTemplate.queryForObject(
