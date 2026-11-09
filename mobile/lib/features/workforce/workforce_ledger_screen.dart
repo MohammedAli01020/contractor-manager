@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/di/injector.dart';
 
-/// Read-only statement backed by the canonical Workforce ledger endpoints.
+/// Workforce member statement and financial actions backed by canonical ledger endpoints.
 class WorkforceLedgerScreen extends StatefulWidget {
   const WorkforceLedgerScreen({
     Key? key,
@@ -303,7 +303,7 @@ class _WorkforceLedgerCommandDialogState
     final normalized = (value ?? '').trim().replaceAll(',', '.');
     final parsed = double.tryParse(normalized);
     if (parsed == null || parsed <= 0 ||
-        !RegExp(r'^\\d+(\\.\\d{1,2})?$').hasMatch(normalized)) {
+        !RegExp(r'^\d+(\.\d{1,2})?$').hasMatch(normalized)) {
       return 'أدخل مبلغًا موجبًا وبحد أقصى منزلتين عشريتين.';
     }
     return null;
