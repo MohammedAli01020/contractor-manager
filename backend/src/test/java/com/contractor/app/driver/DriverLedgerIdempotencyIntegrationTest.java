@@ -273,7 +273,7 @@ class DriverLedgerIdempotencyIntegrationTest extends AbstractIntegrationTest {
                         + "VALUES (?, ?, 'ADJUSTMENT', ?, ?, ?, ?, ?, NULL, ?, ?, UTC_TIMESTAMP(6), NULL, ?)",
                 tenantId, memberId, LocalDate.of(2026, 11, 1), new BigDecimal("1.00"),
                 new BigDecimal("1.00"), "Invalid partial provenance", "native-workforce-partial-provenance",
-                partialProvenanceJournalId, driverId))
+                partialProvenanceJournalId, actorId, driverId))
                 .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
     }
 
