@@ -94,6 +94,39 @@ class JournalPostingServiceTest {
     }
 
     @Test
+    void legacyDriverOnlyRetryReplaysJournalThatAlreadyHasWorkforceDimension() {
+        LocalDate accountingDate = LocalDate.of(2026, 10, 28);
+        JournalEntry existing = mock(JournalEntry.class);
+        when(existing.getId()).thenReturn(22L);
+        when(existing.getSourceType()).thenReturn("TEST");
+        when(existing.getSourceId()).thenReturn(1L);
+        when(existing.getAccountingDate()).thenReturn(accountingDate);
+        when(existing.getDescription()).thenReturn("Automated journal validation test");
+        when(existing.getReversalOfEntryId()).thenReturn(null);
+        when(entries.findByTenantIdAndPostingKey(1L, "test-posting-key"))
+                .thenReturn(Optional.of(existing));
+        JournalLine debit = new JournalLine(1L, 22L, 1, 10L, null,
+                new BigDecimal("100.00"), new BigDecimal("0.00"), 33L, 55L, null);
+        JournalLine credit = new JournalLine(1L, 22L, 2, 20L, null,
+                new BigDecimal("0.00"), new BigDecimal("100.00"), null, null);
+        when(lines.findByTenantIdAndJournalEntryIdOrderByLineNumberAsc(1L, 22L))
+                .thenReturn(Arrays.asList(debit, credit));
+
+        JournalPostingRequest legacyRetry = new JournalPostingRequest(
+                "test-posting-key", "TEST", 1L, accountingDate,
+                "Automated journal validation test", null, Arrays.asList(
+                    new JournalLineRequest(10L, null, new BigDecimal("100.00"),
+                            new BigDecimal("0.00"), 33L, null),
+                    line(20L, "0.00", "100.00")));
+
+        JournalEntry result = service.post(1L, 7L, legacyRetry);
+
+        org.junit.jupiter.api.Assertions.assertSame(existing, result);
+        verify(entries, never()).saveAndFlush(org.mockito.ArgumentMatchers.any(JournalEntry.class));
+        verify(lines, never()).saveAll(org.mockito.ArgumentMatchers.anyList());
+    }
+
+    @Test
     void rejectsReusingPostingKeyForDifferentPayload() {
         LocalDate accountingDate = LocalDate.of(2026, 10, 28);
         JournalEntry existing = mock(JournalEntry.class);
