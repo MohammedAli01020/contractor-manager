@@ -40,6 +40,10 @@ public class Shift extends BaseTenantEntity {
     @Column(name = "driver_id", nullable = false)
     private Long driverId;
 
+    /** Canonical Workforce identity; driverId remains the compatibility projection. */
+    @Column(name = "workforce_member_id", nullable = false)
+    private Long workforceMemberId;
+
     @Column(name = "equipment_id", nullable = false)
     private Long equipmentId;
 
@@ -171,6 +175,17 @@ public class Shift extends BaseTenantEntity {
 
     public void setDriverId(Long driverId) {
         this.driverId = driverId;
+    }
+
+    public Long getWorkforceMemberId() {
+        return workforceMemberId;
+    }
+
+    public void setWorkforceMemberId(Long workforceMemberId) {
+        if (workforceMemberId == null) {
+            throw new IllegalArgumentException("Shift requires a Workforce member identity");
+        }
+        this.workforceMemberId = workforceMemberId;
     }
 
     public Long getEquipmentId() {
