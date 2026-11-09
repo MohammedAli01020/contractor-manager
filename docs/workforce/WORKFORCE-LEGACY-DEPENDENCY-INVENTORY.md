@@ -187,3 +187,25 @@ Validation status at documentation time:
 - The branch head is `3f48b04f` (documentation-only follow-up). No schema deletion, ledger writer cutover, PR merge, `main` update, or deployment occurred.
 
 **Next implementation boundary:** remove Driver from the shift aggregate's internal lifecycle, not merely from the mobile payload. Start with an explicit audit of `finish`, `cancel`, `reinstate`, correction, bulk-finish, and live-status code paths and their repository methods. Keep V55's canonical active-member uniqueness and resource lock ordering intact. The `driver_id` FK remains until that audit proves all paths no longer require the projection.
+
+
+### Implementation progress — Workforce ledger read-path audit (2026-11-09)
+
+The current mobile and API read paths are split as follows:
+
+- The Flutter WorkforceLedgerScreen reads the canonical endpoints: GET /api/v1/workforce/members/{memberId}/ledger and GET /api/v1/workforce/members/{memberId}/ledger/balance.
+- WorkforceLedgerQueryService reads only workforce_ledger_entries, tenant-scoped by canonical workforce_member_id. It calculates the statement running balance and reports payable and recoverable-advance balances separately.
+- The Workforce ledger controller is therefore the current canonical mobile read surface. The inspected Flutter drivers directory screen does not render or call the legacy Driver ledger statement.
+- The legacy GET /api/v1/drivers/{driverId}/ledger endpoint remains in DriverLedgerController, and DriverLedgerService.statement still reads driver_ledger_entries. Retain this route only as a compatibility surface until old-client/API usage is measured and an explicit deprecation window is approved.
+- Workforce payment and advance commands are canonical at the HTTP boundary, but WorkforceLedgerCommandService still resolves workforce_member_id to a Driver projection and delegates to DriverLedgerService. The Driver ledger is still the actual write authority; the V56 trigger mirrors the insert into Workforce ledger.
+- The command response is read back from the Workforce mirror by tenant and client request key. This depends on the mirror trigger remaining active during the compatibility phase.
+
+**Cutover blockers confirmed by this audit:**
+
+1. The native Workforce ledger writer does not yet exist; the Workforce command service is an adapter to the legacy writer.
+2. Idempotency reservation/fingerprints remain in the Driver ledger namespace and include Driver identity. A canonical idempotency key design must be introduced before Driver retirement, with compatibility for retries that cross API routes.
+3. The legacy Driver statement endpoint still exists. Before removing Driver ledger tables, enumerate external/API clients and deprecate or redirect this route without breaking supported clients.
+4. Reconciliation must prove every legacy movement has exactly one mirror, with matching member, amount, balance effect, date, transaction type, journal and shift/correction references, plus separate recoverable balances.
+5. V56 cannot be removed until native Workforce writes are active, every read is canonical, all supported legacy commands are routed safely, and rollback/reconciliation have been rehearsed.
+
+No reader or writer authority was changed in this audit. No legacy route, table, column, trigger, or migration was removed.
