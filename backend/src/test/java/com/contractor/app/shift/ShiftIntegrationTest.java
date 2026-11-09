@@ -1774,3 +1774,109 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
     }
 
 }
+
+
+    @Test
+    void concurrentCompletedShiftCorrectionAndRecoverableAdvanceSerializeWithoutDeadlock() throws Exception {
+        seedCashBalance(new BigDecimal("1000.00"));
+        JsonNode completed = finishShift(token,
+                startShift(token, shiftBody(siteId, driverId, equipmentId,
+                        today().minusDays(1), "MORNING")));
+        long shiftId = completed.path("id").asLong();
+        long memberId = jdbcTemplate.queryForObject(
+                "SELECT workforce_member_id FROM drivers WHERE tenant_id=? AND id=?",
+                Long.class, tenantId, driverId);
+        long cashId = chartAccounts.findByTenantIdAndAccountCodeIgnoreCase(tenantId, "1000")
+                .orElseThrow(() -> new IllegalStateException("Missing cash account")).getId();
+
+        Map<String, Object> correction = new HashMap<>();
+        correction.put("idempotencyKey", "correction-recoverable-race-" + java.util.UUID.randomUUID());
+        correction.put("reason", "Correction racing independent recoverable advance");
+        correction.put("expectedVersion", completed.path("version").asLong());
+        correction.put("shiftDate", completed.path("shiftDate").asText());
+        correction.put("shiftType", completed.path("shiftType").asText());
+        correction.put("siteId", siteId);
+        correction.put("equipmentId", equipmentId);
+        correction.put("driverWage", new BigDecimal("210.00"));
+        correction.put("price", completed.path("price").decimalValue());
+        correction.put("equipmentOperatingCost", completed.path("equipmentOperatingCost").decimalValue());
+        correction.put("notes", completed.path("notes").isNull() ? null : completed.path("notes").asText());
+
+        Map<String, Object> advance = new HashMap<>();
+        advance.put("clientRequestKey", "correction-recoverable-race-advance-" + java.util.UUID.randomUUID());
+        advance.put("advanceDate", today());
+        advance.put("amount", new BigDecimal("75.00"));
+        advance.put("paymentAccountId", cashId);
+        advance.put("description", "Recoverable advance racing completed shift correction");
+        advance.put("advanceType", "RECOVERABLE");
+
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        int correctionStatus;
+        int advanceStatus;
+        try {
+            Future<Integer> correct = executor.submit(() -> {
+                ready.countDown();
+                if (!start.await(10, TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("Timed out waiting to start correction.");
+                }
+                return postJson("/api/v1/shifts/" + shiftId + "/corrections", correction, token)
+                        .andReturn().getResponse().getStatus();
+            });
+            Future<Integer> issueAdvance = executor.submit(() -> {
+                ready.countDown();
+                if (!start.await(10, TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("Timed out waiting to start recoverable advance.");
+                }
+                return postJson("/api/v1/drivers/" + driverId + "/ledger/advances", advance, token)
+                        .andReturn().getResponse().getStatus();
+            });
+            assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+            correctionStatus = correct.get(30, TimeUnit.SECONDS);
+            advanceStatus = issueAdvance.get(30, TimeUnit.SECONDS);
+        } finally {
+            start.countDown();
+            executor.shutdownNow();
+            executor.awaitTermination(10, TimeUnit.SECONDS);
+        }
+
+        assertThat(correctionStatus).isEqualTo(200);
+        assertThat(advanceStatus).isEqualTo(201);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM shift_corrections WHERE tenant_id=? AND shift_id=? AND status='APPLIED'",
+                Integer.class, tenantId, shiftId)).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM driver_ledger_entries WHERE tenant_id=? AND driver_id=? "
+                        + "AND transaction_type='RECOVERABLE_ADVANCE' AND client_request_key=?",
+                Integer.class, tenantId, driverId, advance.get("clientRequestKey"))).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM driver_ledger_entries WHERE tenant_id=? AND driver_id=? "
+                        + "AND shift_id=? AND transaction_type='ADVANCE_RECOVERY'",
+                Integer.class, tenantId, driverId, shiftId)).isZero();
+
+        BigDecimal payableBalance = jdbcTemplate.queryForObject(
+                "SELECT COALESCE(SUM(balance_effect),0) FROM driver_ledger_entries "
+                        + "WHERE tenant_id=? AND driver_id=?",
+                BigDecimal.class, tenantId, driverId);
+        BigDecimal recoverableOutstanding = jdbcTemplate.queryForObject(
+                "SELECT COALESCE(SUM(CASE WHEN transaction_type='RECOVERABLE_ADVANCE' THEN amount "
+                        + "WHEN transaction_type='ADVANCE_RECOVERY' THEN -amount ELSE 0 END),0) "
+                        + "FROM driver_ledger_entries WHERE tenant_id=? AND driver_id=?",
+                BigDecimal.class, tenantId, driverId);
+        assertThat(payableBalance).isEqualByComparingTo("210.00");
+        assertThat(recoverableOutstanding).isEqualByComparingTo("75.00");
+
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM workforce_ledger_entries WHERE tenant_id=? AND workforce_member_id=?",
+                Integer.class, tenantId, memberId))
+                .isEqualTo(jdbcTemplate.queryForObject(
+                        "SELECT COUNT(*) FROM driver_ledger_entries WHERE tenant_id=? AND driver_id=?",
+                        Integer.class, tenantId, driverId));
+        BigDecimal workforceBalance = jdbcTemplate.queryForObject(
+                "SELECT COALESCE(SUM(balance_effect),0) FROM workforce_ledger_entries "
+                        + "WHERE tenant_id=? AND workforce_member_id=?",
+                BigDecimal.class, tenantId, memberId);
+        assertThat(workforceBalance).isEqualByComparingTo(payableBalance);
+    }
