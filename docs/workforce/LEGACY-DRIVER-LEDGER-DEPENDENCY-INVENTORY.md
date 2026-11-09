@@ -70,3 +70,39 @@ This is a verified dependency inventory, not a claim that every repository refer
 - No entity change is required for V58: the mapping already permits both values to be null for a Workforce-native movement while keeping provenance immutable after insertion.
 - Keep both columns during the compatibility and reconciliation period. They are historical traceability fields, not canonical identity. Removing them is a separate schema decision and must wait until legacy references, reconciliation needs, and retention requirements have been reviewed.
 - The next functional cutover work remains shift completion/recovery and completed-shift corrections; do not change the ledger writer until their locking, idempotency, journal, and correction-chain behavior can be preserved in one transaction.
+
+## Transaction and lock-order findings (2026-11-09)
+
+The following details were verified directly in `ShiftService`, `ShiftCorrectionService`, and `DriverLedgerService`; they are cutover constraints, not implementation changes.
+
+### Shift completion
+
+- `finish` first locks the shift row. For a positive wage it then locks the tenant-scoped Driver row, initializes/loads the chart accounts, posts the wage journal, and inserts the EARNING movement.
+- Only after inserting the earning does it calculate the recoverable-advance balance, capped at the current wage, and—when positive—posts the recovery journal and ADVANCE_RECOVERY movement.
+- The wage journal, earning row, recovery journal, recovery row, shift completion status, and audit event share the method transaction. A native implementation must preserve this all-or-nothing boundary and the effective shift -> Driver/Workforce lock ordering.
+- Zero-wage completion deliberately creates neither an earning nor an automatic recovery. A native writer must not accidentally recover an advance against a zero earning.
+- The current recovery query is keyed by Driver ID and sums RECOVERABLE_ADVANCE minus ADVANCE_RECOVERY. Native cutover must use the Workforce member balance with identical semantics and must serialize against payments/advances on the same canonical member.
+
+### Completed-shift corrections
+
+- `correct` reserves/rechecks idempotency around a tenant-scoped shift-row lock, validates the existing posted wage journal and its two journal lines, then locks the Driver row before checking later payments/advances/recoveries.
+- The current safety policy rejects correction if the shift has an ADVANCE_RECOVERY, or if a payment, earned-balance advance, or recovery was created after the shift finished. This is an intentional restriction; do not silently broaden correction eligibility during ledger migration.
+- Original earning lookup, reversal append, and replacement earning append currently use `DriverLedgerEntryRepository`. Reversal/replacement journal postings and correction-link IDs are stored in the correction record. A native path must resolve and validate the entire correction chain by tenant + Workforce member + shift/journal/source references, preserve append-only movements, and retain the existing idempotency behavior.
+- Corrections do not currently reverse/recreate automatic advance recoveries. The rejection gate for shifts with recovery must remain until a separately designed settlement workflow handles that case.
+
+### Payments and advances concurrency
+
+- `DriverLedgerService.pay` and `advance` initialize default accounts before acquiring the Driver row lock, then read the ledger balance after the lock under READ_COMMITTED. This prevents a stale pre-lock balance snapshot and serializes competing movements for one Driver.
+- The Workforce command adapter currently resolves a Driver projection and delegates to those methods; the V56 trigger remains the only mirror writer.
+- Native payments/advances must acquire the canonical Workforce member lock and calculate both payable and recoverable-advance balances from Workforce rows after that lock. Preserve the existing request fingerprint inputs, idempotency reservation, journal account validation, and single transaction; do not implement simultaneous writes to both ledgers.
+
+### Safe next implementation sequence
+
+1. Design one canonical Workforce member lock protocol shared by shift completion, payment, advance, and correction; document a global lock order including Shift, WorkforceMember, and Equipment before changing code.
+2. Implement native payment/advance commands first or provide a shared native balance/command primitive, retaining the Driver endpoints only as compatibility adapters during transition.
+3. Move shift completion and recoverable-advance recovery to native Workforce rows in one transaction, with concurrency/idempotency tests for payment-vs-finish and advance-vs-finish.
+4. Move correction lookup and compensating movements to Workforce ledger, retaining the current rejection gates and verifying multi-correction chains.
+5. Only after full source/client/report inventory, MySQL migration tests, reconciliation, and explicit cutover approval, remove the mirror trigger. Drop the legacy table in a later separately approved change.
+
+No application code, migration, or database was changed as part of this review. These findings are source inspection only; builds and tests remain unrun.
+
