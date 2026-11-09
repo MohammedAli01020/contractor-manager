@@ -363,8 +363,8 @@ jobs:
           totals = {key: int(root.attrib.get(key, 0))
                     for key in ("tests", "failures", "errors", "skipped")}
           print(f"WorkforceAssignmentIntegrationTest: {totals}")
-          if totals["tests"] != 6:
-              sys.exit("WorkforceAssignmentIntegrationTest must execute exactly six tests.")
+          if totals["tests"] != 7:
+              sys.exit("WorkforceAssignmentIntegrationTest must execute exactly seven tests.")
           if totals["skipped"] != 0 or totals["failures"] != 0 or totals["errors"] != 0:
               sys.exit("Workforce role/assignment tests were skipped or reported failures/errors.")
           PY
