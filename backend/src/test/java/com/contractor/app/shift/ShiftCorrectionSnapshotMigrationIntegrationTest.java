@@ -136,6 +136,22 @@ class ShiftCorrectionSnapshotMigrationIntegrationTest {
                         + "AND INDEX_NAME='uq_workforce_ledger_tenant_id' AND NON_UNIQUE=0 "
                         + "AND COLUMN_NAME IN ('tenant_id','id')",
                 Integer.class)).isEqualTo(2);
+
+        // Assert the exact local-to-referenced column mapping for every composite FK:
+        // correction tenant_id -> ledger tenant_id, and each canonical ref -> ledger id.
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.KEY_COLUMN_USAGE "
+                        + "WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='shift_corrections' "
+                        + "AND REFERENCED_TABLE_NAME='workforce_ledger_entries' "
+                        + "AND CONSTRAINT_NAME IN ('fk_shift_correction_old_workforce_ledger', "
+                        + "'fk_shift_correction_reversed_workforce_ledger', "
+                        + "'fk_shift_correction_replacement_workforce_ledger') "
+                        + "AND ((COLUMN_NAME='tenant_id' AND REFERENCED_COLUMN_NAME='tenant_id') "
+                        + "OR (COLUMN_NAME IN ('old_earning_workforce_ledger_entry_id', "
+                        + "'reversed_earning_workforce_ledger_entry_id', "
+                        + "'replacement_earning_workforce_ledger_entry_id') "
+                        + "AND REFERENCED_COLUMN_NAME='id'))",
+                Integer.class)).isEqualTo(6);
     }
 
     private static long insertTenant(JdbcTemplate jdbc, String name) {
