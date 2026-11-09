@@ -1984,4 +1984,94 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
         assertThat(workforceBalance).isEqualByComparingTo(payableBalance);
     }
 
+
+    @Test
+    void concurrentShiftFinishAndAgainstEarnedAdvanceSerializeWithoutDeadlock() throws Exception {
+        seedCashBalance(new BigDecimal("1000.00"));
+        JsonNode started = startShift(token,
+                shiftBody(siteId, driverId, equipmentId, today().minusDays(1), "MORNING"));
+        long shiftId = started.path("id").asLong();
+        long memberId = jdbcTemplate.queryForObject(
+                "SELECT workforce_member_id FROM drivers WHERE tenant_id=? AND id=?",
+                Long.class, tenantId, driverId);
+        long cashId = chartAccounts.findByTenantIdAndAccountCodeIgnoreCase(tenantId, "1000")
+                .orElseThrow(() -> new IllegalStateException("Missing cash account")).getId();
+
+        Map<String, Object> advance = new HashMap<>();
+        advance.put("clientRequestKey", "finish-earned-race-" + java.util.UUID.randomUUID());
+        advance.put("advanceDate", today());
+        advance.put("amount", new BigDecimal("75.00"));
+        advance.put("paymentAccountId", cashId);
+        advance.put("description", "Earned-balance advance racing shift completion");
+        advance.put("advanceType", "AGAINST_EARNED");
+
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        int finishStatus;
+        int advanceStatus;
+        try {
+            Future<Integer> finish = executor.submit(() -> {
+                ready.countDown();
+                start.await();
+                return postJson("/api/v1/shifts/" + shiftId + "/finish",
+                        versionBody(started.path("version").asLong()), token)
+                        .andReturn().getResponse().getStatus();
+            });
+            Future<Integer> issueAdvance = executor.submit(() -> {
+                ready.countDown();
+                start.await();
+                return postJson("/api/v1/drivers/" + driverId + "/ledger/advances",
+                        advance, token).andReturn().getResponse().getStatus();
+            });
+            assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+            finishStatus = finish.get(30, TimeUnit.SECONDS);
+            advanceStatus = issueAdvance.get(30, TimeUnit.SECONDS);
+        } finally {
+            start.countDown();
+            executor.shutdownNow();
+            executor.awaitTermination(10, TimeUnit.SECONDS);
+        }
+
+        assertThat(finishStatus).isEqualTo(200);
+        assertThat(advanceStatus).isIn(201, 400);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM shifts WHERE tenant_id=? AND id=? AND status='COMPLETED'",
+                Integer.class, tenantId, shiftId)).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM driver_ledger_entries WHERE tenant_id=? AND driver_id=? "
+                        + "AND transaction_type='EARNING' AND shift_id=?",
+                Integer.class, tenantId, driverId, shiftId)).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM driver_ledger_entries WHERE tenant_id=? AND driver_id=? "
+                        + "AND transaction_type='ADVANCE' AND client_request_key=?,
+                Integer.class, tenantId, driverId, advance.get("clientRequestKey")))
+                .isEqualTo(advanceStatus == 201 ? 1 : 0);
+
+        BigDecimal payableBalance = jdbcTemplate.queryForObject(
+                "SELECT COALESCE(SUM(balance_effect),0) FROM driver_ledger_entries "
+                        + "WHERE tenant_id=? AND driver_id=?",
+                BigDecimal.class, tenantId, driverId);
+        assertThat(payableBalance).isEqualByComparingTo(
+                advanceStatus == 201 ? "75.00" : "150.00");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM driver_ledger_entries WHERE tenant_id=? AND driver_id=? "
+                        + "AND transaction_type='RECOVERABLE_ADVANCE'",
+                Integer.class, tenantId, driverId)).isZero();
+
+        Integer driverEntries = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM driver_ledger_entries WHERE tenant_id=? AND driver_id=?",
+                Integer.class, tenantId, driverId);
+        Integer workforceEntries = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM workforce_ledger_entries WHERE tenant_id=? AND workforce_member_id=?",
+                Integer.class, tenantId, memberId);
+        assertThat(workforceEntries).isEqualTo(driverEntries);
+        BigDecimal workforceBalance = jdbcTemplate.queryForObject(
+                "SELECT COALESCE(SUM(balance_effect),0) FROM workforce_ledger_entries "
+                        + "WHERE tenant_id=? AND workforce_member_id=?",
+                BigDecimal.class, tenantId, memberId);
+        assertThat(workforceBalance).isEqualByComparingTo(payableBalance);
+    }
+
 }
