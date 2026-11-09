@@ -21,6 +21,9 @@ public class WorkforceRole extends BaseTenantEntity {
     @Column(nullable = false)
     private boolean active = true;
 
+    @Column(name = "shift_eligible", nullable = false)
+    private boolean shiftEligible;
+
     protected WorkforceRole() {
     }
 
@@ -34,6 +37,8 @@ public class WorkforceRole extends BaseTenantEntity {
     public String getName() { return name; }
     public boolean isSystemDefined() { return systemDefined; }
     public boolean isActive() { return active; }
+    public boolean isShiftEligible() { return shiftEligible; }
     public void setSystemDefined(boolean systemDefined) { this.systemDefined = systemDefined; }
     public void setActive(boolean active) { this.active = active; }
+    public void setShiftEligible(boolean shiftEligible) { this.shiftEligible = shiftEligible; }
 }
