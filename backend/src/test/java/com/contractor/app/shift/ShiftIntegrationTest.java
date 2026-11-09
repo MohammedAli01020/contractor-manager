@@ -294,7 +294,7 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
                 .andExpect(status().isOk()));
 
         assertThat(response.path("items").isArray()).isTrue();
-        assertThat(response.path("items")).hasSize(1);
+        assertThat(response.path("items").size()).isEqualTo(1);
         assertThat(response.path("items").get(0).path("workforceMemberId").asLong())
                 .isEqualTo(memberId);
     }
