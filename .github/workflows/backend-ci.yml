@@ -28,6 +28,7 @@ on:
       - feature/wf12a-workforce-shift-eligibility
       - feature/wf12b-workforce-native-shift-identity
       - feature/wf12c-shift-workforce-identity
+      - feature/workforce-ledger-unification
     paths:
       - "backend/**"
       - "docs/phases/PHASE-WF-08A-CORRECTION-SNAPSHOT.md"
