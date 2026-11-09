@@ -467,6 +467,77 @@ class DriverLedgerIdempotencyIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void concurrentAgainstEarnedAndRecoverableAdvancesShareTheCanonicalFinancialMutex() throws Exception {
+        Long driverId = createDriver("earned-vs-recoverable-advance-race");
+        earn(driverId, "earned-vs-recoverable-advance-race-earned");
+        Long memberId = jdbcTemplate.queryForObject(
+                "SELECT workforce_member_id FROM drivers WHERE id = ? AND tenant_id = ?",
+                Long.class, driverId, tenantId);
+
+        Map<String, Object> earnedAdvance = new HashMap<>();
+        earnedAdvance.put("clientRequestKey", "earned-vs-recoverable-earned-key");
+        earnedAdvance.put("advanceDate", LocalDate.of(2026, 11, 7));
+        earnedAdvance.put("amount", new BigDecimal("300.00"));
+        earnedAdvance.put("paymentAccountId", cashId);
+        earnedAdvance.put("description", "Against-earned advance racing recoverable advance");
+        earnedAdvance.put("advanceType", "AGAINST_EARNED");
+
+        Map<String, Object> recoverableAdvance = new HashMap<>(earnedAdvance);
+        recoverableAdvance.put("clientRequestKey", "earned-vs-recoverable-recoverable-key");
+        recoverableAdvance.put("description", "Recoverable advance racing against-earned advance");
+        recoverableAdvance.put("advanceType", "RECOVERABLE");
+
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<Integer> earnedResult = executor.submit(() -> {
+                ready.countDown();
+                if (!start.await(10, java.util.concurrent.TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("Timed out waiting to start earned advance.");
+                }
+                return postJson("/api/v1/drivers/" + driverId + "/ledger/advances",
+                        earnedAdvance, token).andReturn().getResponse().getStatus();
+            });
+            Future<Integer> recoverableResult = executor.submit(() -> {
+                ready.countDown();
+                if (!start.await(10, java.util.concurrent.TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("Timed out waiting to start recoverable advance.");
+                }
+                return postJson("/api/v1/drivers/" + driverId + "/ledger/advances",
+                        recoverableAdvance, token).andReturn().getResponse().getStatus();
+            });
+            assertThat(ready.await(10, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+            assertThat(Arrays.asList(
+                    earnedResult.get(30, java.util.concurrent.TimeUnit.SECONDS),
+                    recoverableResult.get(30, java.util.concurrent.TimeUnit.SECONDS)))
+                    .containsExactly(201, 201);
+        } finally {
+            start.countDown();
+            executor.shutdownNow();
+        }
+
+        assertThat(ledger.sumBalance(tenantId, driverId)).isEqualByComparingTo("200.00");
+        assertThat(workforceLedger.sumBalance(tenantId, memberId)).isEqualByComparingTo("200.00");
+        assertThat(ledger.findByTenantIdAndDriverIdOrderByTransactionDateAscIdAsc(tenantId, driverId))
+                .filteredOn(entry -> "ADVANCE".equals(entry.getTransactionType())
+                        || "RECOVERABLE_ADVANCE".equals(entry.getTransactionType()))
+                .hasSize(2);
+        assertThat(workforceLedger.findByTenantIdAndWorkforceMemberIdOrderByTransactionDateAscIdAsc(
+                tenantId, memberId))
+                .filteredOn(entry -> "ADVANCE".equals(entry.getTransactionType())
+                        || "RECOVERABLE_ADVANCE".equals(entry.getTransactionType()))
+                .hasSize(2);
+        assertThat(workforceLedger.sumRecoverableAdvanceBalance(tenantId, memberId))
+                .isEqualByComparingTo("300.00");
+        assertThat(journals.findByTenantIdAndPostingKey(
+                tenantId, "driver-advance:earned-vs-recoverable-earned-key")).isPresent();
+        assertThat(journals.findByTenantIdAndPostingKey(
+                tenantId, "driver-advance:earned-vs-recoverable-recoverable-key")).isPresent();
+    }
+
+    @Test
     void recoverableAdvanceRetriesAcrossWorkforceAndDriverRoutesCreateOneMovement() throws Exception {
         Long firstDriver = createDriver("cross-route-advance-workforce-first");
         Long firstMember = jdbcTemplate.queryForObject(
