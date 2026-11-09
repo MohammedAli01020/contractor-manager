@@ -22,6 +22,7 @@ import com.contractor.app.driver.api.dto.DriverLedgerAdvanceRequest;
 import com.contractor.app.driver.infra.DriverLedgerEntryRepository;
 import com.contractor.app.driver.infra.DriverRepository;
 import com.contractor.app.workforce.infra.WorkforceMemberRepository;
+import com.contractor.app.workforce.domain.WorkforceFinancialLockService;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
@@ -45,16 +46,17 @@ public class DriverLedgerService {
     private final FinancialIdempotencyService idempotency;
     private final JournalPostingService journals;
     private final DefaultChartOfAccountsService defaultAccounts;
+    private final WorkforceFinancialLockService financialLocks;
 
     public DriverLedgerService(DriverRepository drivers, WorkforceMemberRepository workforceMembers,
             DriverLedgerEntryRepository ledger, ChartAccountRepository accounts,
             JournalEntryRepository journalsRepo, JournalLineRepository journalLines,
             FinancialIdempotencyService idempotency, JournalPostingService journals,
-            DefaultChartOfAccountsService defaultAccounts) {
+            DefaultChartOfAccountsService defaultAccounts, WorkforceFinancialLockService financialLocks) {
         this.drivers=drivers; this.workforceMembers=workforceMembers; this.ledger=ledger;
         this.accounts=accounts; this.journalsRepo=journalsRepo;
         this.journalLines=journalLines; this.idempotency=idempotency; this.journals=journals;
-        this.defaultAccounts=defaultAccounts;
+        this.defaultAccounts=defaultAccounts; this.financialLocks=financialLocks;
     }
 
     @Transactional(readOnly=true)
@@ -85,11 +87,17 @@ public class DriverLedgerService {
         idempotency.reserve(tenantId, "DRIVER_LEDGER", key,
                 RequestFingerprint.of("DRIVER_PAYMENT", driverId, request.getPaymentDate(), amount, description,
                         request.getPaymentAccountId()));
-        // Keep lazy chart initialization before the driver row lock. Shift completion follows
-        // the same tenant-then-driver lock order when defaults are missing.
+        // Initialize accounts before the financial mutex; every financial command follows
+        // this order so account setup cannot invert the mutex/tenant lock order.
+        Driver candidate = drivers.findByIdAndTenantId(driverId, tenantId)
+                .orElseThrow(() -> ApiException.notFound("العامل غير موجود."));
         defaultAccounts.initializeForTenant(tenantId);
+        financialLocks.lockForFinancialUpdate(tenantId, candidate.getWorkforceMemberId());
         Driver lockedDriver = drivers.findByIdAndTenantIdForUpdate(driverId,tenantId)
                 .orElseThrow(()->ApiException.notFound("العامل غير موجود."));
+        if (!candidate.getWorkforceMemberId().equals(lockedDriver.getWorkforceMemberId())) {
+            throw ApiException.conflict("تم تغيير ربط العامل بالقوى العاملة أثناء العملية. أعد المحاولة.");
+        }
         workforceMembers.findByIdAndTenantIdForUpdate(lockedDriver.getWorkforceMemberId(), tenantId)
                 .orElseThrow(() -> ApiException.conflict(
                         "هوية العامل غير موجودة في القوى العاملة. أوقف العملية وراجع ربط البيانات."));
@@ -138,10 +146,16 @@ public class DriverLedgerService {
         idempotency.reserve(tenantId, "DRIVER_LEDGER", key,
                 RequestFingerprint.of("DRIVER_ADVANCE", driverId, request.getAdvanceDate(), amount, description, type,
                         request.getPaymentAccountId()));
-        // Match the tenant-then-driver lock order used by shift wage posting.
+        // Match the shared order: account initialization, financial mutex, then Driver.
+        Driver candidate = drivers.findByIdAndTenantId(driverId, tenantId)
+                .orElseThrow(() -> ApiException.notFound("العامل غير موجود."));
         defaultAccounts.initializeForTenant(tenantId);
+        financialLocks.lockForFinancialUpdate(tenantId, candidate.getWorkforceMemberId());
         Driver lockedDriver = drivers.findByIdAndTenantIdForUpdate(driverId,tenantId)
                 .orElseThrow(()->ApiException.notFound("العامل غير موجود."));
+        if (!candidate.getWorkforceMemberId().equals(lockedDriver.getWorkforceMemberId())) {
+            throw ApiException.conflict("تم تغيير ربط العامل بالقوى العاملة أثناء العملية. أعد المحاولة.");
+        }
         workforceMembers.findByIdAndTenantIdForUpdate(lockedDriver.getWorkforceMemberId(), tenantId)
                 .orElseThrow(() -> ApiException.conflict(
                         "هوية العامل غير موجودة في القوى العاملة. أوقف العملية وراجع ربط البيانات."));
