@@ -2,7 +2,7 @@
 
 **Working branch:** `feature/workforce-ledger-unification`  
 **Base:** `feature/wf12c-shift-workforce-identity`  
-**Status:** Stage 1 implementation; compatibility period only. Not a completed cutover.
+**Status:** Stage 1 complete on branch; partial Stage 2 implementation. Compatibility period only; not a completed cutover.
 
 ## Objective
 
@@ -32,11 +32,11 @@ Make `workforce_members` the only operational identity for worker financial acti
 
 ### Stage 2 — Application cutover
 
-- Move shift earning and recoverable-advance recovery to Workforce member IDs.
-- Move payment, advance, statement, and balance operations to Workforce member IDs.
-- Move completed-shift correction reversal/replacement lookups to Workforce ledger entries while preserving the correction chain and existing downstream-consumption blockers.
+- Add the canonical Workforce dimension to new shift-earning and recoverable-advance-recovery journal lines while retaining `driver_id` provenance. The current shift services still write ledger movements to the legacy table; direct Workforce-ledger writes remain blocked until the full cutover.
+- Add the canonical Workforce dimension to worker payment and advance journal lines. Payment, advance, statement, and balance operations still use the legacy Driver ledger and must be migrated in a later cutover.
+- Completed-shift correction reversal and replacement journal lines now preserve the Workforce dimension. Correction ledger lookups and persisted correction links still target the legacy Driver ledger and are not yet cut over.
 - Add Workforce ledger API endpoints and migrate Flutter screens/clients without breaking the temporary legacy endpoints.
-- Move journal-line worker dimensions to `workforce_member_id`; retain historical Driver provenance where required for audit and reporting. `JournalPostingService` currently validates and persists only `driver_id`, and exact-reversal validation compares that dimension, so this is a prerequisite—not an optional cleanup—before Workforce-native postings can safely replace legacy postings.
+- Journal-line Workforce dimension foundation is implemented: V57 adds nullable `workforce_member_id` with tenant-safe FK/index; `JournalLine`, `JournalLineRequest`, and `JournalPostingService` validate and persist it. Driver-only requests resolve through the tenant-scoped Driver mapping. Idempotent retries and exact reversals retain compatibility with immutable pre-V57 journal lines whose new dimension is NULL. V57 deliberately does not rewrite historical posted lines.
 - Remove the legacy insert mirror only after no application path writes to the old ledger.
 
 ### Stage 3 — Reconciliation and retirement
@@ -47,6 +47,14 @@ Make `workforce_members` the only operational identity for worker financial acti
 - Only then create a separate migration to remove legacy constraints/triggers and drop `driver_ledger_entries`.
 - Do not combine the table drop with the initial backfill or application cutover.
 
+## Partial Stage 2 deliverables
+
+- Shift wage and recoverable-advance-recovery journals now carry both `driver_id` and `workforce_member_id`.
+- Correction reversal lines copy both dimensions from the original line; replacement wage journals use the shift's canonical Workforce member.
+- Worker payment and advance journals carry the linked Workforce member ID; cash/bank counterpart lines remain unassigned.
+- `ShiftCorrectionIntegrationTest` now asserts the original, reversal, and replacement wage journals preserve both dimensions.
+- These changes do not switch ledger reads/writes to `workforce_ledger_entries`; the legacy table and V56 mirror remain in force.
+
 ## Reconciliation deliverable
 
 - Added `docs/workforce/WORKFORCE-LEDGER-MIRROR-RECONCILIATION.md` with read-only checks for mapping completeness, row counts, exact field equality, per-member payable/recoverable balances, correction references, and trigger presence.
@@ -54,6 +62,6 @@ Make `workforce_members` the only operational identity for worker financial acti
 
 ## Validation status
 
-The migration, entity/repository, mirror integration test, and read-only reconciliation pack have been committed to this branch. A follow-up safety correction gives the mirror its own primary-key sequence and uses `legacy_source_entry_id` for source traceability. The integration test currently exercises mirrored `ADJUSTMENT`, `PAYMENT`, and `RECOVERABLE_ADVANCE` movements; it does not yet prove actual shift `EARNING` or correction reversal/replacement flows. CI has not yet reported a build or test result for the current branch head; do not treat the stage as validated until the backend test suite and MySQL 8 migration tests pass.
+The V56 mirror migration, Workforce entity/repository, reconciliation pack, V57 journal dimension, and partial Stage 2 journal tagging have been committed to this branch. The correction integration test has assertions for canonical dimensions on wage/correction journals, but no backend build, migration execution, or integration test has been run in this environment. CI has not reported a check run for the current branch head; do not treat the stage as validated until the backend test suite and MySQL 8 migration tests pass.
 
 No production database has been changed. No branch has been merged and `main` has not been modified.
