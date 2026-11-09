@@ -1,12 +1,12 @@
 # ADR — Zero-Downtime Legacy-to-Workforce Migration
 
-- **Status:** Proposed architecture; requires product-owner approval before implementation
+- **Status:** Superseded for the current pre-production build phase by `ADR-WF-GREENFIELD-RESET-AND-LEGACY-RETIREMENT.md`
 - **Date:** 2026-11-09
 - **Working branch:** `feature/workforce-ledger-unification`
 - **Scope:** Live migration of tenant-owned people, operational references, shifts, and financial records from legacy Driver/Worker structures to canonical Workforce structures
 - **Related:** `WORKFORCE-LEGACY-DEPENDENCY-INVENTORY.md`, `LEGACY-DRIVER-LEDGER-DEPENDENCY-INVENTORY.md`
 
-## 1. Decision summary
+## Supersession notice\n\nThe product owner has confirmed that current development/test data is disposable and the product is still in its build phase. The live-tenant migration platform described below is therefore not the chosen path for the current Workforce unification. Follow `ADR-WF-GREENFIELD-RESET-AND-LEGACY-RETIREMENT.md`: refactor code to the canonical Workforce model, then retire obsolete schema with forward Flyway migrations. This ADR remains as a historical reference only; it must not drive current implementation.\n\n## 1. Decision summary
 
 Use a tenant-scoped **Expand → Backfill → Synchronize → Reconcile → Cut over → Contract** process. Existing tenants must continue using the product while their data is prepared and validated.
 
