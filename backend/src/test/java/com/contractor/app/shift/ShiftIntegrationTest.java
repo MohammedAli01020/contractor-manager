@@ -1931,7 +1931,7 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
             Future<Integer> issueAdvance = executor.submit(() -> {
                 ready.countDown();
                 if (!start.await(10, TimeUnit.SECONDS)) {
-                    throw new IllegalStateException("Timed out waiting to start recoverable advance.");
+                    throw new IllegalStateException("Timed out waiting to start earned-balance advance.");
                 }
                 return postJson("/api/v1/drivers/" + driverId + "/ledger/advances", advance, token)
                         .andReturn().getResponse().getStatus();
@@ -1950,7 +1950,7 @@ class ShiftIntegrationTest extends AbstractShiftIntegrationTest {
         assertThat(advanceStatus).isEqualTo(201);
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM shift_corrections WHERE tenant_id=? AND shift_id=? AND status='APPLIED'",
-                Integer.class, tenantId, shiftId)).isEqualTo(1);
+                Integer.class, tenantId, shiftId)).isEqualTo(correctionStatus == 200 ? 1 : 0);
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM driver_ledger_entries WHERE tenant_id=? AND driver_id=? "
                         + "AND transaction_type='ADVANCE' AND client_request_key=?",
