@@ -141,6 +141,15 @@ class DriverLedgerIdempotencyIntegrationTest extends AbstractIntegrationTest {
         assertThat(workforceStatement.get(2).path("balanceAfter").decimalValue())
                 .isEqualByComparingTo("400.00");
         assertThat(workforceStatement.get(2).has("driverId")).isFalse();
+
+        JsonNode workforceBalance = body(getJson(
+                "/api/v1/workforce/members/" + memberId + "/ledger/balance", token)
+                .andExpect(status().isOk()));
+        assertThat(workforceBalance.path("workforceMemberId").asLong()).isEqualTo(memberId);
+        assertThat(workforceBalance.path("payableBalance").decimalValue())
+                .isEqualByComparingTo("400.00");
+        assertThat(workforceBalance.path("recoverableAdvanceBalance").decimalValue())
+                .isEqualByComparingTo("75.00");
     }
 
     @Test
@@ -154,6 +163,8 @@ class DriverLedgerIdempotencyIntegrationTest extends AbstractIntegrationTest {
         String otherTenantToken = otherTenant.path("accessToken").asText();
 
         getJson("/api/v1/workforce/members/" + memberId + "/ledger", otherTenantToken)
+                .andExpect(status().isNotFound());
+        getJson("/api/v1/workforce/members/" + memberId + "/ledger/balance", otherTenantToken)
                 .andExpect(status().isNotFound());
     }
 
