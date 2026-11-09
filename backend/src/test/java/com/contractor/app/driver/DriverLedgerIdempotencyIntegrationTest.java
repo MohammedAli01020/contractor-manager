@@ -460,9 +460,10 @@ class DriverLedgerIdempotencyIntegrationTest extends AbstractIntegrationTest {
                         || "ADVANCE".equals(entry.getTransactionType()))
                 .hasSize(1);
         assertThat(jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM journal_entries WHERE tenant_id = ? AND source_type IN "
-                        + "('DRIVER_PAYMENT', 'DRIVER_ADVANCE_EARNED') AND source_id = ?",
-                Integer.class, tenantId, driverId)).isEqualTo(1);
+                "SELECT COUNT(*) FROM journal_entries WHERE tenant_id = ? AND posting_key IN (?, ?)",
+                Integer.class, tenantId,
+                "driver-payment:payment-earned-advance-race-payment",
+                "driver-advance:payment-earned-advance-race-advance")).isEqualTo(1);
     }
 
     @Test
