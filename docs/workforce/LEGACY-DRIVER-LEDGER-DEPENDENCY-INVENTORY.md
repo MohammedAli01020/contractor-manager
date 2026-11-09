@@ -212,3 +212,42 @@ Added an integration test that submits the same payment first through the Workfo
 - GitHub Actions run [42615938860](https://github.com/MohammedAli01020/contractor-manager/actions/runs/42615938860) was started for this commit. Its result is pending at the time of this update; these new tests must not be described as passed until that run completes successfully.
 - These tests continue to validate the compatibility architecture only: Driver ledger remains the sole application writer and V56 remains the mirror.
 
+## Mixed-route advance concurrency CI result and canonical lock protocol (2026-11-09)
+
+- GitHub Actions run [42615938860](https://github.com/MohammedAli01020/contractor-manager/actions/runs/42615938860) completed with conclusion `success` on 2026-11-09. The backend test job completed successfully, including the mixed-route advance concurrency tests added in commit `6d1229d9869f75b8264989f61e9dd4fb5a8e6332`.
+- The tests cover two distinct invariants: concurrent AGAINST_EARNED advances cannot overdraw the payable balance, while concurrent RECOVERABLE advances increase the recoverable balance without reducing earned/payable balance. Both tests exercise Driver and Workforce HTTP command routes against the same legacy writer and V56 mirror.
+- This validates the compatibility-stage shared writer and its serialization behavior; it does not validate a Workforce-native writer or authorize trigger/table retirement.
+
+### Proposed cross-workflow lock hierarchy for the native cutover
+
+Use this relative order whenever a transaction needs more than one of these resource classes:
+
+1. Shift row (only for commands operating on an existing shift).
+2. Legacy Driver operational row (only while the compatibility projection remains part of the command).
+3. Canonical WorkforceMember row.
+4. Equipment row.
+
+Within each class, acquire multiple rows in ascending primary-key order. A command may acquire only the subset it needs, but must never acquire a later class and then request an earlier class. Non-locking validation reads should happen after the relevant locks when they could otherwise establish a stale MySQL REPEATABLE READ snapshot.
+
+Expected command shapes during the coordinated transition:
+
+| Command | Ordered locks |
+|---|---|
+| Start shift | Driver -> WorkforceMember -> Equipment |
+| Update active shift / reinstate active shift | Shift -> Drivers (sorted) -> WorkforceMembers (sorted) -> Equipment (sorted) |
+| Finish shift / correct completed shift | Shift -> Driver -> WorkforceMember |
+| Payment / either advance type, compatibility phase | Driver -> WorkforceMember |
+| Payment / either advance type, after native cutover | WorkforceMember |
+| Identity update for a linked member | Driver -> WorkforceMember |
+
+Important constraints:
+
+- The hierarchy is a target protocol, not a claim that every current method already follows it. Current payment/advance and finish paths still need the WorkforceMember lock to be added in a coordinated implementation; active-shift reinstate currently needs the WorkforceMember lock before Equipment.
+- Keep default chart initialization before acquiring the resource locks where it may create/read chart rows. Do not introduce a chart/resource lock cycle.
+- Preserve READ_COMMITTED for monetary balance checks so the aggregate is read after the canonical member lock is acquired.
+- A future native payment/advance writer must lock WorkforceMember even if it no longer locks Driver. During the transition, commands that touch both must keep Driver before WorkforceMember.
+- Do not add the WorkforceMember lock to one isolated endpoint. Update all competing command paths together and add opposing-order MySQL concurrency tests covering start-vs-finish, update/reinstate-vs-finish, payment-vs-finish, earned-advance-vs-finish, recoverable-advance-vs-finish, and identity-update-vs-financial-command.
+- These tests must assert both no deadlock/timeout and the final journal, ledger, shift, and resource-reservation invariants. Retry/idempotency behavior and tenant scoping remain mandatory.
+- Before moving any writer, review the exact Spring transaction boundaries and SQL lock acquisition order in MySQL 8. Repository method call order alone is not sufficient if lazy flushes or database triggers acquire additional rows.
+
+No runtime code or schema was changed by this documentation update. The next implementation should be the coordinated lock-protocol change plus its MySQL concurrency tests, not an isolated native writer.
