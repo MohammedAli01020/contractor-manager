@@ -164,7 +164,7 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
 
   Future<void> _loadDefaults() async {
     final requestId = ++_defaultsRequestId;
-    if (_driverId == null && _equipmentId == null) return;
+    if (_driverId == null && _workforceMemberId == null && _equipmentId == null) return;
     try {
       final data = await _api.fetchDefaults(
         driverId: _driverId,
@@ -180,7 +180,7 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
         _hourlyCompensation = data['compensationBasis'] == 'HOUR';
         _quantityCompensation = data['compensationBasis'] == 'QUANTITY';
         _compensationUnitCode = (data['compensationUnitCode'] ?? '').toString();
-        if (_driverId != null) {
+        if (_driverId != null || _workforceMemberId != null) {
           final suggestedWage = (_hourlyCompensation || _quantityCompensation)
               ? data['compensationRate']
               : data['driverWage'];
