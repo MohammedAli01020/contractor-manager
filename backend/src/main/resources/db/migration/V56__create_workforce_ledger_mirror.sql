@@ -102,10 +102,13 @@ SELECT
     e.id,
     e.driver_id
 FROM driver_ledger_entries e
-JOIN drivers d
+LEFT JOIN drivers d
   ON d.id = e.driver_id
  AND d.tenant_id = e.tenant_id
 ORDER BY e.id;
+
+-- A missing Driver-to-Workforce mapping must fail the migration via the
+-- NOT NULL workforce_member_id constraint; never silently omit legacy rows.
 
 -- From this point, new legacy writes are mirrored transactionally. The legacy
 -- table remains the sole application write authority until a later cutover.
