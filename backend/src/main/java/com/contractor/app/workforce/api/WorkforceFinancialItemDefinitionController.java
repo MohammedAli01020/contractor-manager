@@ -36,6 +36,11 @@ public class WorkforceFinancialItemDefinitionController {
         return service.list(CurrentUser.tenantId(), active);
     }
 
+    @GetMapping("/{itemId}")
+    public WorkforceFinancialItemDefinitionResponse get(@PathVariable Long itemId) {
+        return service.get(CurrentUser.tenantId(), itemId);
+    }
+
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
     @ResponseStatus(HttpStatus.CREATED)
