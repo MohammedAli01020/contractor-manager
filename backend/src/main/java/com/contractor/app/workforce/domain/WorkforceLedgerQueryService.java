@@ -2,6 +2,7 @@ package com.contractor.app.workforce.domain;
 
 import com.contractor.app.common.error.ApiException;
 import com.contractor.app.workforce.api.dto.WorkforceLedgerEntryResponse;
+import com.contractor.app.workforce.api.dto.WorkforceLedgerBalanceResponse;
 import com.contractor.app.workforce.infra.WorkforceLedgerEntryRepository;
 import com.contractor.app.workforce.infra.WorkforceMemberRepository;
 import java.math.BigDecimal;
@@ -22,6 +23,15 @@ public class WorkforceLedgerQueryService {
                                        WorkforceLedgerEntryRepository ledger) {
         this.members = members;
         this.ledger = ledger;
+    }
+
+    @Transactional(readOnly = true)
+    public WorkforceLedgerBalanceResponse balance(Long tenantId, Long memberId) {
+        members.findByIdAndTenantId(memberId, tenantId)
+                .orElseThrow(() -> ApiException.notFound("العامل غير موجود."));
+        return new WorkforceLedgerBalanceResponse(memberId,
+                ledger.sumBalance(tenantId, memberId),
+                ledger.sumRecoverableAdvanceBalance(tenantId, memberId));
     }
 
     @Transactional(readOnly = true)
