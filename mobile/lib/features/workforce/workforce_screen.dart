@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/di/injector.dart';
 import 'workforce_member_form_dialog.dart';
+import 'workforce_ledger_screen.dart';
 
 /// Mobile administration for canonical workforce identities and their pay agreements.
 class WorkforceScreen extends StatefulWidget {
@@ -409,6 +410,17 @@ class _WorkforceAssignmentsScreenState extends State<WorkforceAssignmentsScreen>
     }
   }
 
+  Future<void> _openLedger() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => WorkforceLedgerScreen(
+          memberId: widget.memberId,
+          memberName: widget.memberName,
+        ),
+      ),
+    );
+  }
+
   Future<void> _openAgreements() async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
@@ -427,6 +439,11 @@ class _WorkforceAssignmentsScreenState extends State<WorkforceAssignmentsScreen>
       appBar: AppBar(
         title: Text(widget.memberName),
         actions: <Widget>[
+          IconButton(
+            tooltip: 'كشف الحساب',
+            onPressed: _openLedger,
+            icon: const Icon(Icons.receipt_long_outlined),
+          ),
           IconButton(
             tooltip: 'اتفاقيات الأجر',
             onPressed: _openAgreements,
