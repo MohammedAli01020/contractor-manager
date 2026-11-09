@@ -29,6 +29,7 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.UncategorizedSQLException;
 import org.springframework.jdbc.core.JdbcTemplate;
 
@@ -98,7 +99,7 @@ class ShiftCorrectionIntegrationTest extends AbstractShiftIntegrationTest {
                 "UPDATE shift_corrections SET replacement_earning_workforce_ledger_entry_id=? "
                         + "WHERE tenant_id=? AND id=? AND status='APPLYING'",
                 foreignWorkforceLedgerId, tenantId, correctionId))
-                .isInstanceOf(UncategorizedSQLException.class)
+                .isInstanceOf(DataIntegrityViolationException.class)
                 .hasMessageContaining("fk_shift_correction_replacement_workforce_ledger");
 
         assertThat(jdbc.queryForObject(
