@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../core/di/injector.dart';
 import 'workforce_member_form_dialog.dart';
 import 'workforce_ledger_screen.dart';
+import 'workforce_role_management_screen.dart';
 
 /// Mobile administration for canonical workforce identities and their pay agreements.
 class WorkforceScreen extends StatefulWidget {
@@ -159,6 +160,18 @@ class _WorkforceScreenState extends State<WorkforceScreen> {
       appBar: AppBar(
         title: const Text('القوى العاملة'),
         actions: <Widget>[
+          if (widget.canManage)
+            IconButton(
+              tooltip: 'إعداد أدوار الورديات',
+              icon: const Icon(Icons.badge_outlined),
+              onPressed: _loading
+                  ? null
+                  : () => Navigator.of(context).push<void>(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const WorkforceRoleManagementScreen(),
+                        ),
+                      ),
+            ),
           IconButton(tooltip: 'تحديث', onPressed: _load, icon: const Icon(Icons.refresh)),
         ],
       ),
