@@ -136,6 +136,16 @@ class ShiftCorrectionIntegrationTest extends AbstractShiftIntegrationTest {
                         + "AND workforce_member_id=? AND shift_id=?",
                 Integer.class, tenantId, workforceMemberId, shiftId)).isEqualTo(3);
         assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM workforce_ledger_entries WHERE tenant_id=? "
+                        + "AND workforce_member_id=? AND shift_id=? AND journal_entry_id=? "
+                        + "AND transaction_type='EARNING' AND balance_effect=150.00",
+                Integer.class, tenantId, workforceMemberId, shiftId, originalJournalId)).isEqualTo(1);
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM workforce_ledger_entries WHERE tenant_id=? "
+                        + "AND workforce_member_id=? AND shift_id=? AND journal_entry_id=? "
+                        + "AND transaction_type='CORRECTION_REVERSAL' AND balance_effect=-150.00",
+                Integer.class, tenantId, workforceMemberId, shiftId, reversalJournalId)).isEqualTo(1);
+        assertThat(jdbc.queryForObject(
                 "SELECT COALESCE(SUM(balance_effect),0) FROM workforce_ledger_entries "
                         + "WHERE tenant_id=? AND workforce_member_id=?",
                 BigDecimal.class, tenantId, workforceMemberId)).isEqualByComparingTo("180.00");

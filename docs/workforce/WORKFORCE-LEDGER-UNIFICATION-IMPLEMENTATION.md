@@ -60,6 +60,7 @@ Make `workforce_members` the only operational identity for worker financial acti
 - Fixed the advance-posting path to retain the tenant-scoped locked Driver record before adding its Workforce dimension to the journal line.
 - `ShiftCorrectionIntegrationTest` now asserts the original, reversal, and replacement wage journals preserve both dimensions.
 - `ShiftCorrectionIntegrationTest` now verifies that the V56 mirror contains the original earning, correction reversal, and replacement earning with exact legacy-source and journal links; it also checks the canonical member balance after one and two successive corrections.
+- The correction service now locks and verifies the current Driver-to-Workforce mapping against the shift snapshot before creating compensating entries. It validates the original earning's Driver identity and rejects non-null journal Workforce dimensions that disagree with the shift, while preserving compatibility for historical NULL dimensions.
 - `ShiftIntegrationTest` now verifies that a recoverable advance and its later automatic `ADVANCE_RECOVERY` both appear in the Workforce mirror with the correct member, amount, balance effect, legacy source, and journal linkage; the remaining recoverable balance is asserted independently.
 - These changes do not switch ledger reads/writes to `workforce_ledger_entries`; the legacy table and V56 mirror remain in force.
 
