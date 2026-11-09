@@ -295,7 +295,6 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
         'shiftDate': _date,
         'shiftType': _type,
         'siteId': _siteId,
-        'driverId': _driverId,
         if (_workforceMemberId != null) 'workforceMemberId': _workforceMemberId,
         'equipmentId': _equipmentId,
         'price': _price.text.trim().isEmpty ? null : double.parse(_price.text.trim()),
