@@ -168,6 +168,7 @@ class _ShiftEditorScreenState extends State<ShiftEditorScreen> {
     try {
       final data = await _api.fetchDefaults(
         driverId: _driverId,
+        workforceMemberId: _workforceMemberId,
         equipmentId: _equipmentId,
         siteId: _siteId,
         shiftDate: _date,
