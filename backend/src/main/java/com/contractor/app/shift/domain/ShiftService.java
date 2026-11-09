@@ -180,6 +180,7 @@ public class ShiftService {
     /** بدء وردية: تُسجَّل "شغالة". */
     @Transactional
     public ShiftResponse start(Long tenantId, ShiftRequest request) {
+        Long requestedDriverId = resolveDriverId(tenantId, request);
         LocalDate date = request.getShiftDate() == null ? today() : request.getShiftDate();
         assertNotFuture(date);
         // Global lock order: legacy Driver -> canonical WorkforceMember -> Equipment.
@@ -225,6 +226,7 @@ public class ShiftService {
 
     @Transactional
     public ShiftResponse update(Long tenantId, Long id, ShiftRequest request) {
+        Long requestedDriverId = resolveDriverId(tenantId, request);
         Shift shift = findForUpdate(tenantId, id);
         if (shift.getStatus() == ShiftStatus.CANCELLED) {
             throw ApiException.conflict("لا يمكن تعديل وردية ملغاة. أعد تفعيلها أولًا.");
@@ -246,7 +248,7 @@ public class ShiftService {
             throw ApiException.badRequest("تاريخ الوردية مطلوب عند التعديل.");
         }
         assertNotFuture(request.getShiftDate());
-        lockAndValidateActiveShiftUpdate(tenantId, shift, request);
+        lockAndValidateActiveShiftUpdate(tenantId, shift, request, requestedDriverId);
         requireSite(tenantId, request.getSiteId(), shift.getSiteId());
         Driver driver = requireDriver(tenantId, request.getDriverId(), shift.getDriverId());
         WorkforceMember member = workforceMembers.findByIdAndTenantId(
@@ -574,7 +576,7 @@ public class ShiftService {
      * If an active shift changes its assigned resources, reserve affected rows in a stable order.
      * The generated-column unique indexes remain the final protection against races.
      */
-    private void lockAndValidateActiveShiftUpdate(Long tenantId, Shift shift, ShiftRequest request) {
+    private void lockAndValidateActiveShiftUpdate(Long tenantId, Shift shift, ShiftRequest request, Long requestedDriverId) {
         if (shift.getStatus() != ShiftStatus.IN_PROGRESS) {
             return;
         }
@@ -614,6 +616,27 @@ public class ShiftService {
                 tenantId, request.getEquipmentId(), ShiftStatus.IN_PROGRESS, shift.getId())) {
             throw ApiException.activeShiftConflict("المعدة مستخدمة في وردية نشطة بالفعل.");
         }
+    }
+
+    /**
+     * Resolve the canonical Workforce identity to its temporary operational Driver projection.
+     * Tenant scoping is enforced in both directions and conflicting dual identifiers are rejected.
+     */
+    private Long resolveDriverId(Long tenantId, ShiftRequest request) {
+        Long memberId = request.getWorkforceMemberId();
+        Long legacyDriverId = request.getDriverId();
+        if (memberId == null) {
+            if (legacyDriverId == null) {
+                throw ApiException.badRequest("يجب تحديد العامل.");
+            }
+            return legacyDriverId;
+        }
+        Driver driver = drivers.findByWorkforceMemberIdAndTenantId(memberId, tenantId)
+                .orElseThrow(() -> ApiException.notFound("العامل غير موجود أو لا يملك إسقاط تشغيل متوافقًا."));
+        if (legacyDriverId != null && !legacyDriverId.equals(driver.getId())) {
+            throw ApiException.conflict("معرّف العامل لا يتطابق مع معرّف سجل التشغيل.");
+        }
+        return driver.getId();
     }
 
     private LocalDate today() {
