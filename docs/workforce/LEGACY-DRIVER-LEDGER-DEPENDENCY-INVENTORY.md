@@ -283,3 +283,27 @@ No runtime code or schema was changed by this documentation update. The next imp
 - It also asserts exactly one payment ledger movement, correction/reversal rows only when correction is applied, and equality between the Driver ledger balance and the V56 Workforce mirror.
 - GitHub Actions run [42632185443](https://github.com/MohammedAli01020/contractor-manager/actions/runs/42632185443) completed with conclusion `success` on 2026-11-09. The complete `Backend Maven Tests` job passed, including the newly added concurrency test and the required migration/integration execution gates.
 - This is compatibility-phase validation only: Driver ledger remains the sole application writer and V56 remains the Workforce mirror. No legacy table, trigger, route, or provenance column was removed.
+
+
+### Completed-shift correction vs earned-advance concurrency — CI result (2026-11-09)
+
+- Added `concurrentCompletedShiftCorrectionAndAgainstEarnedAdvanceSerializeWithoutDeadlock` to `ShiftIntegrationTest`. It races a completed-shift wage correction against an `AGAINST_EARNED` advance on the same member and verifies the permitted serialization outcome, final payable balance, movement counts, and Driver/Workforce mirror parity.
+- The earlier run [42633770209](https://github.com/MohammedAli01020/contractor-manager/actions/runs/42633770209) was cancelled after the replacement run; it is not counted as a pass or failure.
+- The replacement CI run [42634232108](https://github.com/MohammedAli01020/contractor-manager/actions/runs/42634232108), for commit `a04c5ea38645a2e6108ac36759e2c9eb7d1fb2f9`, completed successfully. The complete `Backend Maven Tests` job passed.
+- The test validates the compatibility writer and mirror only. It does not enable native Workforce writes or authorize removal of V56.
+
+### Shift completion vs earned-advance concurrency — CI result (2026-11-09)
+
+- Added `concurrentShiftFinishAndAgainstEarnedAdvanceSerializeWithoutDeadlock` to `ShiftIntegrationTest`. It races completion of an active shift against an `AGAINST_EARNED` advance for the same member.
+- The assertions verify the valid serialized outcome: when finish wins, the earned balance is available to the advance; when the advance wins before any earning exists, the advance is rejected and finish posts the earning. It also verifies earning/advance row counts, absence of a recoverable-advance movement, and Workforce mirror balance parity.
+- The test's initial SQL assertion was corrected in commit `a04c5ea38645a2e6108ac36759e2c9eb7d1fb2f9`.
+- GitHub Actions run [42634232108](https://github.com/MohammedAli01020/contractor-manager/actions/runs/42634232108) completed successfully for that commit. The full `Backend Maven Tests` job passed.
+- Together with the previously successful correction-vs-payment, correction-vs-recoverable-advance, finish-vs-recoverable-advance, and identity-update-vs-payment tests, this extends compatibility-phase concurrency coverage. It is not evidence of a Workforce-native writer.
+
+### Advance lock-order correction — source verification (2026-11-09)
+
+- Re-reviewed `DriverLedgerService` after the earned-advance race tests.
+- `advance` now acquires the tenant-scoped Driver row and then the linked WorkforceMember row before reading payable/recoverable balances. This closes the missing canonical-member lock in the advance path.
+- `pay` retains the same Driver -> WorkforceMember order with one member lock; the duplicate lock call has been removed.
+- These lock changes are included in the successful CI-tested branch head `a04c5ea38645a2e6108ac36759e2c9eb7d1fb2f9`.
+- No table, trigger, endpoint, or provenance field was removed. Driver ledger remains the sole application writer and V56 remains the mirror.
