@@ -258,3 +258,18 @@ This is enough to establish that the current implementation is transitional and 
 ---
 
 **Decision summary:** Build forward on Workforce identity. Treat driver tables and IDs as temporary compatibility structures. First inventory, then design one Workforce Ledger, migrate and reconcile all financial/operational responsibilities, migrate clients, and only then consider deletion in a separate approved migration.
+
+
+## 11. Active-shift Workforce identity guard — 2026-11-09
+
+A focused implementation was added on the working branch after the initial review:
+
+- Added Flyway V55 with a generated active_workforce_member_id and tenant-scoped unique constraint uq_shifts_one_active_workforce_member. Completed/cancelled shifts remain unrestricted because the generated value is NULL outside IN_PROGRESS.
+- Shift start now locks in the documented order: legacy Driver projection, canonical WorkforceMember, then Equipment. It validates active-shift conflicts by both the Workforce identity and the legacy Driver during the compatibility period.
+- Active-shift resource changes lock affected Driver rows in stable order, then their WorkforceMember rows in stable order, then Equipment rows; the requested Workforce identity is checked for an existing active shift.
+- Database uniqueness violations for the new constraint map to the existing HTTP 409 ACTIVE_SHIFT_CONFLICT response.
+- Added real-MySQL race tests for two starts using the same Workforce member with different equipment, and two starts using the same equipment with different Workforce members.
+
+The existing uq_drivers_tenant_workforce_member constraint in V36 already prevents multiple Driver projections for one Workforce member within a tenant. V55 adds the canonical shift-level invariant rather than relying on that transitional uniqueness as the final guarantee.
+
+**Verification status:** source changes committed to this feature branch; CI/integration execution has not yet been run from this editing session. Do not treat the new concurrency tests or migration as verified until the branch CI passes against MySQL. V6's driver constraint and legacy Driver references remain intentionally in place. No table/column deletion, production migration, main-branch change, or PR merge was performed.
