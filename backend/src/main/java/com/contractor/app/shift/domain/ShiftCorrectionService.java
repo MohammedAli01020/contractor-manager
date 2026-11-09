@@ -16,6 +16,7 @@ import com.contractor.app.audit.domain.AuditService;
 import com.contractor.app.common.error.ApiException;
 import com.contractor.app.common.money.Money;
 import com.contractor.app.common.util.Texts;
+import com.contractor.app.driver.domain.Driver;
 import com.contractor.app.driver.domain.DriverLedgerEntry;
 import com.contractor.app.driver.infra.DriverLedgerEntryRepository;
 import com.contractor.app.driver.infra.DriverRepository;
@@ -186,8 +187,11 @@ public class ShiftCorrectionService {
 
         // Follow the same tenant -> driver lock order as shift finish and driver payments.
         defaultAccounts.initializeForTenant(tenantId);
-        drivers.findByIdAndTenantIdForUpdate(shift.getDriverId(), tenantId)
+        Driver lockedDriver = drivers.findByIdAndTenantIdForUpdate(shift.getDriverId(), tenantId)
                 .orElseThrow(() -> ApiException.notFound("السائق المرتبط بالوردية غير موجود."));
+        if (!Objects.equals(lockedDriver.getWorkforceMemberId(), shift.getWorkforceMemberId())) {
+            throw ApiException.conflict("هوية العامل المرتبطة بالسائق لا تطابق لقطة الوردية؛ يلزم فحص ربط القوى العاملة قبل التصحيح.");
+        }
 
         if (ledger.existsByTenantIdAndShiftIdAndTransactionType(
                 tenantId, shiftId, "ADVANCE_RECOVERY")) {
