@@ -546,3 +546,56 @@ Before dropping `drivers`:
 Only then may a separately approved migration remove Driver-specific operational tables and constraints. The historical accounting dimension in `journal_lines` is not automatically dropped with the operational Driver table.
 
 No code, schema, or data changes were made by this inventory.
+
+## 17. Domain model, availability, equipment lock, and legacy migration details (2026-11-09)
+
+### 17.1 Driver still combines multiple concepts that must be separated
+
+The inspected `Driver` entity contains:
+- link to canonical `workforce_member_id`;
+- `worker_type` (currently enum values include `DRIVER` and `WORKER`);
+- operational `availability`;
+- driver-specific rate fields and versioned tenant entity data.
+
+This confirms the legacy table is not just a duplicate person table: it currently mixes identity link, worker classification, operational availability, and legacy compensation rates. The Workforce replacement must allocate these concerns explicitly:
+- person identity/profile -> `workforce_members`;
+- job title/worker classification -> workforce role/job-title model (not a hard-coded two-value Driver enum);
+- active operational eligibility/availability -> assignment/capability or a dedicated operational status model with clear scope;
+- compensation -> compensation agreements and their snapshots, not legacy rate columns.
+
+### 17.2 Availability and equipment concurrency
+
+- `DriverRequest` accepts Driver availability and worker type; `DriverResponse` projects them from Driver.
+- `LiveDriverResponse` still carries Driver-oriented worker type and availability fields.
+- `EquipmentRepository` documents lock ordering as equipment after Driver locks.
+- `GlobalExceptionHandler` translates the old `ACTIVE_SHIFT_DRIVER_RUNNING` trigger and recognizes both the legacy active-Driver unique key and the Workforce active-member unique key.
+
+The Workforce transition must define and test one global lock order for member/assignment and equipment rows. It must move the database trigger and error translation to Workforce semantics without weakening the equipment active-shift invariant. Do not simply remove the Driver lock before all shift start/finish/update, availability transitions, and equipment race tests are rewritten.
+
+### 17.3 Legacy rate semantics
+
+`ShiftDefaultsResponse` still exposes `driverWage`; Driver CRUD DTOs and Driver entity retain morning/evening/night rates. These are transitional rate inputs and must not become a second compensation authority. Confirm all tenants' rate usage and historical snapshot semantics before removing them; new rates should resolve from compensation agreements and period/shift configuration according to the approved compensation model.
+
+### 17.4 Initial schema and historical migration constraints
+
+- V3 creates `drivers` with tenant FK, tenant/id unique key, name index, worker type, and legacy morning/evening/night rates.
+- V5 adds availability and unavailable reason and modifies historical shift uniqueness.
+- V6/V7/V8 remain active-shift guard/trigger history identified in the previous section.
+- Existing Flyway files are immutable migration history; use forward migrations only.
+
+### 17.5 Additional source files reviewed
+
+- Backend domain/API: `Driver.java`, `WorkerType.java`, `DriverAvailability.java`, `DriverRequest.java`, `DriverResponse.java`, `AuditEntityType.java`, `EquipmentRepository.java`, `GlobalExceptionHandler.java`, `ShiftDefaultsResponse.java`, `LiveDriverResponse.java`.
+- Flutter/auth navigation: `auth_screens.dart` (already links to `WorkforceScreen`, so the new directory is integrated into the authenticated navigation; the separate legacy Drivers screen still exists).
+- Migrations: V3 and V5 source reviewed; V6/V7/V8 were identified by branch-independent code search but must be fetched on the target branch before a detailed DDL plan.
+
+### 17.6 Updated functional retirement gates
+
+Before Driver entity/table removal, additionally require:
+1. Worker type and job title are represented by Workforce role/job-title configuration without losing existing DRIVER/WORKER meaning.
+2. Availability and unavailable reason have a Workforce-owned operational model, including the exact scope (person-wide vs assignment/site/equipment-specific).
+3. Compensation resolution no longer reads legacy morning/evening/night rates for new shifts.
+4. Equipment/Workforce lock ordering is documented and concurrency-tested; legacy trigger names and error mappings no longer carry Driver semantics.
+5. The unified Workforce UI is the only people-management entry point; the old Drivers screen is retired without losing driver-specific operational controls.
+
+No code, schema, or data changes were made by this inventory.
