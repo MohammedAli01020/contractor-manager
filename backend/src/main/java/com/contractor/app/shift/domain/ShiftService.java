@@ -100,12 +100,12 @@ public class ShiftService {
 
     @Transactional(readOnly = true)
     public PageResponse<ShiftResponse> list(Long tenantId, LocalDate from, LocalDate to, Long siteId, Long driverId,
-                                            Long equipmentId, ShiftType type, ShiftStatus status,
+                                            Long workforceMemberId, Long equipmentId, ShiftType type, ShiftStatus status,
                                             int page, int size) {
         if (from != null && to != null && from.isAfter(to)) {
             throw ApiException.badRequest("تاريخ البداية يجب ألا يكون بعد تاريخ النهاية.");
         }
-        Page<Shift> result = shifts.findAll(filter(tenantId, from, to, siteId, driverId, equipmentId, type, status),
+        Page<Shift> result = shifts.findAll(filter(tenantId, from, to, siteId, driverId, workforceMemberId, equipmentId, type, status),
                 PageParams.of(page, size, Sort.by(Sort.Order.desc("shiftDate"), Sort.Order.desc("id"))));
         return new PageResponse<>(toResponses(tenantId, result.getContent()), result.getNumber(), result.getSize(),
                 result.getTotalElements(), result.getTotalPages());
@@ -729,7 +729,7 @@ public class ShiftService {
     }
 
     private static Specification<Shift> filter(Long tenantId, LocalDate from, LocalDate to, Long siteId,
-                                               Long driverId, Long equipmentId, ShiftType type, ShiftStatus status) {
+                                               Long driverId, Long workforceMemberId, Long equipmentId, ShiftType type, ShiftStatus status) {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
             predicates.add(cb.equal(root.get("tenantId"), tenantId));
@@ -744,6 +744,9 @@ public class ShiftService {
             }
             if (driverId != null) {
                 predicates.add(cb.equal(root.get("driverId"), driverId));
+            }
+            if (workforceMemberId != null) {
+                predicates.add(cb.equal(root.get("workforceMemberId"), workforceMemberId));
             }
             if (equipmentId != null) {
                 predicates.add(cb.equal(root.get("equipmentId"), equipmentId));
