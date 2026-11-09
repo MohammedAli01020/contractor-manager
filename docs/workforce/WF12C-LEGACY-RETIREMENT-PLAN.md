@@ -323,3 +323,71 @@ The existing uq_drivers_tenant_workforce_member constraint in V36 already preven
 - Design the Workforce Ledger and journal dimension changes separately for review. Require restore-tested backups, populated-database migration tests, tenant isolation, idempotency, concurrency, append-only and immutable-journal tests before cutover.
 
 **Next step:** complete the exhaustive path-by-path inventory and transaction mapping matrix. Then present the Workforce Ledger schema/API cutover plan for explicit review. Do not start a deletion migration until those deliverables and the exit criteria in section 8 are satisfied.
+
+## 13. Worker-ledger transaction inventory — source trace (2026-11-09)
+
+**Reviewed branch head before this documentation update:** `1d1a912a538e6c5c9d638dcdd365a48cdf964ced`. This is a transaction-flow trace of the inspected production writers, repository, schema migrations, and integration tests. It is not yet a tenant-data reconciliation or an exhaustive inventory of every report/client consumer.
+
+### 13.1 Existing transaction taxonomy and balance semantics
+
+All legacy ledger rows use a positive `amount`; `balance_effect` carries the signed effect on earned/payable balance. The existing code also calculates recoverable-advance exposure separately.
+
+| Legacy type | Creation path | Amount / balance semantics | Journal / source linkage | Workforce migration rule |
+|---|---|---|---|---|
+| `EARNING` | `ShiftService.finish()` when a completed shift has positive wage; also replacement earning in `ShiftCorrectionService`. | `amount > 0`, `balance_effect = +amount`. Zero-wage shifts intentionally create no row. | Wage journal; `shift_id`; unique original earning per shift, with a narrowly keyed exception for audited correction replacements. | Preserve every earning and its exact shift, journal, date, wage snapshot, and original/replacement chain. |
+| `PAYMENT` | `DriverLedgerService.pay()`, `POST /api/v1/drivers/{driverId}/ledger/payments`. | `amount > 0`, `balance_effect = -amount`; rejected if greater than currently available payable balance. | Journal debits worker payable and credits selected active cash/bank account. Request fingerprint includes worker, date, amount, description, and payment account. | Move to Workforce-member payment API; preserve payment account, actor, date, request key, journal and exact balance effect. |
+| `ADVANCE` | `DriverLedgerService.advance()` when API `advanceType=AGAINST_EARNED`; stored type is `ADVANCE`. | `amount > 0`, `balance_effect = -amount`; capped by available earned/payable balance. | Journal debits worker payable and credits selected cash/bank account. | Preserve the distinction that this is an advance against already-earned payable, not a recoverable asset advance. |
+| `RECOVERABLE_ADVANCE` | `DriverLedgerService.advance()` when API `advanceType=RECOVERABLE`. | `amount > 0`, `balance_effect = 0`; excluded from earned/payable balance and tracked by a separate aggregate. | Journal debits the recoverable worker-advances asset account (system account code 1300 in the current chart) and credits selected cash/bank account. | Migrate as a separate recoverable-advance balance, not as payable reduction or wage expense. |
+| `ADVANCE_RECOVERY` | `ShiftService.finish()` automatically recovers from positive wages when recoverable advance balance exists. | `amount > 0`, `balance_effect = -amount`; recovery is the lesser of recoverable balance and shift wage. | Journal debits worker payable and credits recoverable advances asset; linked to the earning shift. | Preserve each individual recovery, source shift, asset/payable journal lines, and remaining recoverable balance. Do not replace with a netted opening balance. |
+| `CORRECTION_REVERSAL` | `ShiftCorrectionService` reverses the old positive earning before replacement. | `amount > 0`, `balance_effect = -old earning`. | Exact reversal journal linked to the original wage journal; correction audit row records old/reversed ledger IDs. V35 database trigger validates the correction envelope. | Preserve the reversal as its own immutable Workforce ledger movement and retain the complete correction chain. |
+| `ADJUSTMENT` | Allowed by schema; observed in the ledger idempotency integration test as a manually seeded opening/test payable movement. No ordinary production writer for this type was identified in the inspected services. | Positive or negative effect is supported by the row model; amount must remain positive. | Test fixture posts a journal and links the adjustment row to it. | Do not assume it is unused or delete it. Search historical tenant data and all writers before defining a replacement adjustment workflow. |
+
+### 13.2 Financial invariants verified in source
+
+- V20 requires positive amount, non-zero balance effect, a tenant-scoped unique client request key, one ledger row per tenant/journal, and tenant-safe foreign keys to Driver, shift and journal.
+- V21 explicitly permits zero balance effect only for `RECOVERABLE_ADVANCE`; it adds that transaction type and `ADVANCE_RECOVERY`.
+- V22 adds a generated key and unique index for one original `EARNING` per shift, ties the ledger row to the exact tenant/shift/driver tuple, and prevents ledger UPDATE/DELETE at the database boundary.
+- V30 adds `CORRECTION_REVERSAL`; V31 permits the specifically keyed replacement earning while preserving the original earning uniqueness rule.
+- V35 validates correction reversal/replacement rows against an APPLYING correction, exact journal references, old earning, shift, driver, date, amount and balance effect.
+- V23 makes posted journal entries and journal lines immutable. V17 defines `journal_lines.driver_id` as a nullable tenant-scoped FK to `drivers`; this is an independent legacy dependency beyond the worker ledger table.
+- V25 reserves idempotency by `(tenant_id, operation_scope, request_key)` and request fingerprint in the same transaction as the financial write.
+- Payment and advance service methods lock the Driver row before reading the balance and use READ_COMMITTED. Shift completion also locks the Driver before earning/recovery posting. A Workforce replacement must define one consistent lock owner/order to preserve this serialization.
+- The ledger statement orders rows by `transaction_date, id` and computes a running balance from `balance_effect`; the aggregate payable balance is the sum of `balance_effect`. Recoverable advances are calculated separately as recoverable advances less recoveries.
+- The shift correction workflow currently refuses correction if that shift already had an advance recovery, or if the worker had a later payment, earned-wage advance, or advance recovery. This prevents changing a wage after its payable has been consumed without a separate settlement process.
+- The inspected correction request preserves the same driver for the old and new shift identity; a Workforce migration must not silently introduce worker-transfer correction semantics.
+
+### 13.3 Current API and test evidence
+
+- Ledger statement: `GET /api/v1/drivers/{driverId}/ledger` (ADMIN, OPERATOR, VIEWER).
+- Advance: `POST /api/v1/drivers/{driverId}/ledger/advances` (ADMIN, OPERATOR).
+- Payment: `POST /api/v1/drivers/{driverId}/ledger/payments` (ADMIN, OPERATOR).
+- `DriverLedgerIdempotencyIntegrationTest` covers concurrent reuse of a payment key or recoverable-advance key across different drivers (one success, one conflict), identical payment retry, mismatched cash/bank account on retry, old rows without reservation records, and cross-operation key reuse.
+- `ShiftCorrectionIntegrationTest` covers correction reversal/replacement, zero-wage correction, forged correction rows, correction retry, recovery/payment/earned-advance blockers, rollback on ledger posting failure, and hourly/quantity compensation correction cases.
+- These tests establish important behavior in code, but do not establish that all live tenants' historical rows are valid or reconciled.
+
+### 13.4 Workforce ledger cutover requirements
+
+The replacement must preserve the ledger as a movement history, not just a cached balance. At minimum it must carry:
+- tenant and canonical Workforce member;
+- transaction type, effective transaction date, positive amount and signed balance effect;
+- immutable description and actor/created timestamp;
+- stable client idempotency key plus operation scope/fingerprint semantics;
+- source reference and source type for shift earning, payment, advance, recovery, adjustment, and correction reversal/replacement;
+- linked immutable journal entry and, where relevant, shift and correction references;
+- unique original earning per shift, with an explicitly modeled audited correction replacement chain;
+- append-only database enforcement and tenant-safe composite foreign keys;
+- separate recoverable-advance balance semantics and a documented policy for allocation/recovery;
+- a consistent Workforce-member lock strategy for concurrent earnings, payments, advances and recoveries.
+
+Do not copy only `SUM(balance_effect)` into an opening row as the migration. The historical movements, their journal links and correction provenance must be migrated or explicitly retained and queryable. If a staged cutover needs opening balances, derive them from a reconciled immutable history and document the exact cutover boundary.
+
+### 13.5 Outstanding questions before schema approval
+
+1. Does any production tenant contain `ADJUSTMENT` rows, and what are their real business meanings and authorization sources?
+2. Are there historical rows or external consumers that use the legacy `ADVANCE` / `RECOVERABLE_ADVANCE` names differently from the current API mapping?
+3. Are there any reports, exports or external integrations reading `driver_ledger_entries` or `journal_lines.driver_id` directly?
+4. How should Workforce-native journal dimensions coexist with immutable historical `driver_id` dimensions, especially when old Driver projections are eventually retired?
+5. Should the new Workforce Ledger preserve old transaction type strings for historical continuity, or introduce a versioned canonical taxonomy with an explicit mapping table?
+6. What is the controlled settlement workflow for correcting a shift after a later payment/advance/recovery has consumed its payable? Current behavior correctly blocks the correction; it must not be weakened during migration.
+
+**Decision:** the next design deliverable is a reviewed Workforce Ledger schema/API and journal-dimension proposal, plus a read-only data reconciliation query pack. No migration, dual-write, data backfill, API implementation, or deletion is authorized by this inventory.
