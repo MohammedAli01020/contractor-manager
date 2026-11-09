@@ -17,7 +17,7 @@ Make `workforce_members` the only operational identity for worker financial acti
 - Adds a transactional `AFTER INSERT` compatibility trigger so new rows written through the current legacy service are mirrored into the Workforce ledger.
 - Makes the Workforce ledger append-only at the database boundary.
 - Adds a Workforce entity and repository for member-keyed statement and balance queries.
-- Extends `DriverLedgerIdempotencyIntegrationTest` to verify that legacy earnings/adjustments and payments appear in the Workforce ledger and produce the same payable balance.
+- Extends `DriverLedgerIdempotencyIntegrationTest` to verify that a legacy `ADJUSTMENT`, `PAYMENT`, and `RECOVERABLE_ADVANCE` are mirrored for the canonical Workforce member; payable balance remains unchanged by a recoverable advance, while its separate recoverable balance increases.
 
 ## Compatibility rules
 
@@ -47,8 +47,13 @@ Make `workforce_members` the only operational identity for worker financial acti
 - Only then create a separate migration to remove legacy constraints/triggers and drop `driver_ledger_entries`.
 - Do not combine the table drop with the initial backfill or application cutover.
 
+## Reconciliation deliverable
+
+- Added `docs/workforce/WORKFORCE-LEDGER-MIRROR-RECONCILIATION.md` with read-only checks for mapping completeness, row counts, exact field equality, per-member payable/recoverable balances, correction references, and trigger presence.
+- The reconciliation pack is diagnostic only. It does not authorize data repair, application cutover, or legacy deletion.
+
 ## Validation status
 
-The new migration and entity/repository have been committed to this branch. The integration test was extended to exercise mirrored earning and payment movements. CI has not yet reported a build or test result for the current branch head; do not treat the stage as validated until the backend test suite and MySQL 8 migration tests pass.
+The migration, entity/repository, and mirror integration test have been committed to this branch. The integration test currently exercises mirrored `ADJUSTMENT`, `PAYMENT`, and `RECOVERABLE_ADVANCE` movements; it does not yet prove actual shift `EARNING` or correction reversal/replacement flows. CI has not yet reported a build or test result for the current branch head; do not treat the stage as validated until the backend test suite and MySQL 8 migration tests pass.
 
 No production database has been changed. No branch has been merged and `main` has not been modified.
