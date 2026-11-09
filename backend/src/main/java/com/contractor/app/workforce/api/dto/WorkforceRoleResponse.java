@@ -8,6 +8,7 @@ public class WorkforceRoleResponse {
     private final String name;
     private final boolean systemDefined;
     private final boolean active;
+    private final boolean shiftEligible;
     private final Long version;
 
     private WorkforceRoleResponse(WorkforceRole role) {
@@ -16,6 +17,7 @@ public class WorkforceRoleResponse {
         this.name = role.getName();
         this.systemDefined = role.isSystemDefined();
         this.active = role.isActive();
+        this.shiftEligible = role.isShiftEligible();
         this.version = role.getVersion();
     }
 
@@ -27,5 +29,6 @@ public class WorkforceRoleResponse {
     public String getName() { return name; }
     public boolean isSystemDefined() { return systemDefined; }
     public boolean isActive() { return active; }
+    public boolean isShiftEligible() { return shiftEligible; }
     public Long getVersion() { return version; }
 }
