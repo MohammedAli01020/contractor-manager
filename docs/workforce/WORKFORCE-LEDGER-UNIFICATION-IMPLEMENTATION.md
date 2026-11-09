@@ -52,6 +52,8 @@ Make `workforce_members` the only operational identity for worker financial acti
 - Shift wage and recoverable-advance-recovery journals now carry both `driver_id` and `workforce_member_id`.
 - Correction reversal lines copy both dimensions from the original line; replacement wage journals use the shift's canonical Workforce member.
 - Worker payment and advance journals carry the linked Workforce member ID; cash/bank counterpart lines remain unassigned.
+- The recoverable-advance integration test now verifies the mirror row by `legacy_source_entry_id`, confirms the canonical member and journal linkage, and asserts that the advance journal line carries `workforce_member_id`.
+- Fixed the advance-posting path to retain the tenant-scoped locked Driver record before adding its Workforce dimension to the journal line.
 - `ShiftCorrectionIntegrationTest` now asserts the original, reversal, and replacement wage journals preserve both dimensions.
 - These changes do not switch ledger reads/writes to `workforce_ledger_entries`; the legacy table and V56 mirror remain in force.
 
@@ -62,6 +64,6 @@ Make `workforce_members` the only operational identity for worker financial acti
 
 ## Validation status
 
-The V56 mirror migration, Workforce entity/repository, reconciliation pack, V57 journal dimension, and partial Stage 2 journal tagging have been committed to this branch. The correction integration test has assertions for canonical dimensions on wage/correction journals, but no backend build, migration execution, or integration test has been run in this environment. CI has not reported a check run for the current branch head; do not treat the stage as validated until the backend test suite and MySQL 8 migration tests pass.
+The V56 mirror migration, Workforce entity/repository, reconciliation pack, V57 journal dimension, and partial Stage 2 journal tagging have been committed to this branch. The correction integration test has assertions for canonical dimensions on wage/correction journals, and the driver-ledger integration test now checks recoverable-advance mirror provenance and journal dimension. No backend build, migration execution, or integration test has been run in this environment. CI has not reported a check run for the current branch head; do not treat the stage as validated until the backend test suite and MySQL 8 migration tests pass.
 
 No production database has been changed. No branch has been merged and `main` has not been modified.
