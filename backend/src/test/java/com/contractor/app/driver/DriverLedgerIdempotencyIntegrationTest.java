@@ -70,7 +70,7 @@ class DriverLedgerIdempotencyIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    void workforceLedgerMirrorTracksLegacyEarningsAndPaymentsByCanonicalMember() throws Exception {
+    void workforceLedgerMirrorTracksAdjustmentsPaymentsAndRecoverableAdvancesByCanonicalMember() throws Exception {
         Long driverId = createDriver("workforce-ledger-mirror");
         earn(driverId, "workforce-ledger-mirror-earning");
 
@@ -98,6 +98,27 @@ class DriverLedgerIdempotencyIntegrationTest extends AbstractIntegrationTest {
                 .containsExactly("ADJUSTMENT", "PAYMENT");
         assertThat(workforceLedger.sumBalance(tenantId, memberId))
                 .isEqualByComparingTo("400.00");
+
+        Map<String, Object> advanceRequest = new HashMap<>();
+        advanceRequest.put("clientRequestKey", "workforce-ledger-mirror-recoverable-advance");
+        advanceRequest.put("advanceDate", LocalDate.of(2026, 10, 31));
+        advanceRequest.put("amount", new BigDecimal("75.00"));
+        advanceRequest.put("paymentAccountId", cashId);
+        advanceRequest.put("description", "Recoverable advance");
+        advanceRequest.put("advanceType", "RECOVERABLE");
+        assertThat(postJson("/api/v1/drivers/" + driverId + "/ledger/advances",
+                advanceRequest, token).andReturn().getResponse().getStatus()).isEqualTo(201);
+
+        java.util.List<WorkforceLedgerEntry> afterRecoverableAdvance =
+                workforceLedger.findByTenantIdAndWorkforceMemberIdOrderByTransactionDateAscIdAsc(
+                        tenantId, memberId);
+        assertThat(afterRecoverableAdvance).hasSize(3);
+        assertThat(afterRecoverableAdvance).extracting(WorkforceLedgerEntry::getTransactionType)
+                .containsExactly("ADJUSTMENT", "PAYMENT", "RECOVERABLE_ADVANCE");
+        assertThat(workforceLedger.sumBalance(tenantId, memberId))
+                .isEqualByComparingTo("400.00");
+        assertThat(workforceLedger.sumRecoverableAdvanceBalance(tenantId, memberId))
+                .isEqualByComparingTo("75.00");
     }
 
     @Test
