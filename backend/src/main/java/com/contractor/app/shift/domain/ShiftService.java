@@ -21,6 +21,7 @@ import com.contractor.app.driver.domain.Driver;
 import com.contractor.app.driver.domain.DriverAvailability;
 import com.contractor.app.driver.infra.DriverRepository;
 import com.contractor.app.workforce.domain.ShiftCompensationResolver;
+import com.contractor.app.workforce.domain.WorkforceMember;
 import com.contractor.app.workforce.infra.WorkforceMemberRepository;
 import com.contractor.app.equipment.domain.Equipment;
 import com.contractor.app.equipment.domain.EquipmentStatus;
@@ -138,6 +139,9 @@ public class ShiftService {
         }
         Driver driver = driverId == null ? null : drivers.findByIdAndTenantId(driverId, tenantId)
                 .orElseThrow(() -> ApiException.notFound("السائق أو العامل غير موجود."));
+        WorkforceMember member = driver == null ? null : workforceMembers
+                .findByIdAndTenantId(driver.getWorkforceMemberId(), tenantId)
+                .orElseThrow(() -> ApiException.conflict("هوية العامل غير موجودة في القوى العاملة."));
         Equipment item = equipmentId == null ? null : equipment.findByIdAndTenantId(equipmentId, tenantId)
                 .orElseThrow(() -> ApiException.notFound("المعدة غير موجودة."));
         BigDecimal suggestedWage = null;
@@ -149,7 +153,7 @@ public class ShiftService {
             if (siteId != null) {
                 LocalDate date = shiftDate == null ? today() : shiftDate;
                 Shift preview = new Shift(tenantId, date, type, siteId, driverId, equipmentId);
-                compensationResolver.resolveAndApply(tenantId, driver, date, siteId, type, null, preview);
+                compensationResolver.resolveAndApply(tenantId, member, driver, date, siteId, type, null, preview);
                 compensationBasis = preview.getCompensationBasis();
                 compensationRate = preview.getCompensationRate();
                 compensationUnitCode = preview.getCompensationUnitCode();
@@ -182,7 +186,8 @@ public class ShiftService {
         // Driver remains a compatibility/operational projection during the migration.
         Driver lockedDriver = drivers.findByIdAndTenantIdForUpdate(request.getDriverId(), tenantId)
                 .orElseThrow(() -> ApiException.notFound("السائق أو العامل غير موجود."));
-        workforceMembers.findByIdAndTenantIdForUpdate(lockedDriver.getWorkforceMemberId(), tenantId)
+        WorkforceMember lockedMember = workforceMembers
+                .findByIdAndTenantIdForUpdate(lockedDriver.getWorkforceMemberId(), tenantId)
                 .orElseThrow(() -> ApiException.conflict(
                         "هوية العامل غير موجودة في القوى العاملة. أوقف العملية وراجع الربط."));
         equipment.findByIdAndTenantIdForUpdate(request.getEquipmentId(), tenantId)
@@ -203,7 +208,7 @@ public class ShiftService {
         shift.setStartedAt(LocalDateTime.now(ZoneOffset.UTC));
         shift.setNotes(Texts.blankToNull(request.getNotes()));
         // نسخ ثابتة وقت التسجيل: تغيير الأسعار لاحقًا لا يمس هذه الوردية
-        compensationResolver.resolveAndApply(tenantId, driver, date, request.getSiteId(),
+        compensationResolver.resolveAndApply(tenantId, lockedMember, driver, date, request.getSiteId(),
                 request.getShiftType(), request.getDriverWage(), shift);
         shift.setPrice(request.getPrice() != null
                 ? Money.scale(request.getPrice())
@@ -244,6 +249,9 @@ public class ShiftService {
         lockAndValidateActiveShiftUpdate(tenantId, shift, request);
         requireSite(tenantId, request.getSiteId(), shift.getSiteId());
         Driver driver = requireDriver(tenantId, request.getDriverId(), shift.getDriverId());
+        WorkforceMember member = workforceMembers.findByIdAndTenantId(
+                driver.getWorkforceMemberId(), tenantId)
+                .orElseThrow(() -> ApiException.conflict("هوية العامل غير موجودة في القوى العاملة."));
         Equipment item = requireEquipment(tenantId, request.getEquipmentId(), shift.getEquipmentId());
 
         BigDecimal previousWage = shift.getDriverWage();
@@ -256,7 +264,7 @@ public class ShiftService {
         boolean wageOverrideChanged = request.getDriverWage() != null
                 && request.getDriverWage().compareTo(shift.getDriverWage()) != 0;
         if (driverChanged || typeChanged || siteChanged || dateChanged || wageOverrideChanged) {
-            compensationResolver.resolveAndApply(tenantId, driver, request.getShiftDate(), request.getSiteId(),
+            compensationResolver.resolveAndApply(tenantId, member, driver, request.getShiftDate(), request.getSiteId(),
                     request.getShiftType(), wageOverrideChanged ? request.getDriverWage() : null, shift);
         }
         BigDecimal wage = shift.getDriverWage();
