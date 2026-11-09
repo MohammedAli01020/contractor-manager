@@ -13,9 +13,9 @@ import javax.persistence.Table;
 /**
  * Append-only Workforce-keyed financial movement.
  *
- * During the compatibility phase, rows are mirrored from the legacy Driver ledger.
- * legacyDriverId and legacySourceEntryId are provenance only and must never be used
- * for operational identity, authorization, or balance grouping.
+ * During the compatibility phase, rows may be mirrored from the legacy Driver ledger.
+ * A future Workforce-native row has null legacy provenance. These fields must never
+ * be used for operational identity, authorization, or balance grouping.
  */
 @Entity
 @Table(name = "workforce_ledger_entries")
@@ -61,10 +61,10 @@ public class WorkforceLedgerEntry {
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    @Column(name = "legacy_source_entry_id", nullable = false, updatable = false)
+    @Column(name = "legacy_source_entry_id", updatable = false)
     private Long legacySourceEntryId;
 
-    @Column(name = "legacy_driver_id", nullable = false, updatable = false)
+    @Column(name = "legacy_driver_id", updatable = false)
     private Long legacyDriverId;
 
     protected WorkforceLedgerEntry() {
