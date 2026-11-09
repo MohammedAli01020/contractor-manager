@@ -84,7 +84,7 @@ public class DriverLedgerService {
         // Keep lazy chart initialization before the driver row lock. Shift completion follows
         // the same tenant-then-driver lock order when defaults are missing.
         defaultAccounts.initializeForTenant(tenantId);
-        drivers.findByIdAndTenantIdForUpdate(driverId,tenantId)
+        Driver lockedDriver = drivers.findByIdAndTenantIdForUpdate(driverId,tenantId)
                 .orElseThrow(()->ApiException.notFound("العامل غير موجود."));
         Optional<DriverLedgerEntry> prior=ledger.findByTenantIdAndClientRequestKey(tenantId,key);
         if(prior.isPresent()) {
@@ -105,7 +105,8 @@ public class DriverLedgerService {
             throw ApiException.badRequest("الصرف يكون من حساب خزينة أو بنك مُعرّف لهذا الغرض فقط.");
         JournalEntry journal=journals.post(tenantId,user.getUserId(),new JournalPostingRequest(
                 "driver-payment:"+key,"DRIVER_PAYMENT",null,request.getPaymentDate(),description,null,Arrays.asList(
-                new JournalLineRequest(payable.getId(),"صرف مستحقات العامل",amount,BigDecimal.ZERO,driverId,null),
+                new JournalLineRequest(payable.getId(),"صرف مستحقات العامل",amount,BigDecimal.ZERO,
+                        driverId,lockedDriver.getWorkforceMemberId(),null),
                 new JournalLineRequest(cash.getId(),"صرف من الخزينة/البنك",BigDecimal.ZERO,amount,null,null))));
         DriverLedgerEntry entry=ledger.saveAndFlush(new DriverLedgerEntry(tenantId,driverId,"PAYMENT",
                 request.getPaymentDate(),amount,amount.negate(),description,key,null,journal.getId(),user.getUserId()));
@@ -158,7 +159,8 @@ public class DriverLedgerService {
         JournalEntry journal=journals.post(tenantId,user.getUserId(),new JournalPostingRequest(
                 "driver-advance:"+key,"AGAINST_EARNED".equals(type)?"DRIVER_ADVANCE_EARNED":"DRIVER_ADVANCE_RECOVERABLE",
                 null,request.getAdvanceDate(),description,null,Arrays.asList(
-                new JournalLineRequest(debitAccount.getId(),"سلفة للعامل",amount,BigDecimal.ZERO,driverId,null),
+                new JournalLineRequest(debitAccount.getId(),"سلفة للعامل",amount,BigDecimal.ZERO,
+                        driverId,lockedDriver.getWorkforceMemberId(),null),
                 new JournalLineRequest(cash.getId(),"صرف سلفة من الخزينة/البنك",BigDecimal.ZERO,amount,null,null))));
         BigDecimal effect="AGAINST_EARNED".equals(type)?amount.negate():ZERO;
         DriverLedgerEntry entry=ledger.saveAndFlush(new DriverLedgerEntry(tenantId,driverId,ledgerType,
