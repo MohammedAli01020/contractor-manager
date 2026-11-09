@@ -76,12 +76,14 @@ public class ShiftController {
     @GetMapping("/defaults")
     @Operation(summary = "الأجر التعاقدي المقترح عند إرسال الموقع، والسعر وتكلفة التشغيل للمعدة (لتعبئة النموذج)")
     public ShiftDefaultsResponse defaults(@RequestParam(required = false) Long driverId,
+                                          @RequestParam(required = false) Long workforceMemberId,
                                           @RequestParam(required = false) Long equipmentId,
                                           @RequestParam ShiftType shiftType,
                                           @RequestParam(required = false) Long siteId,
                                           @RequestParam(required = false)
                                           @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate shiftDate) {
-        return service.defaults(CurrentUser.tenantId(), driverId, equipmentId, shiftType, siteId, shiftDate);
+        return service.defaults(CurrentUser.tenantId(), driverId, workforceMemberId,
+                equipmentId, shiftType, siteId, shiftDate);
     }
 
     @GetMapping("/{id}")
