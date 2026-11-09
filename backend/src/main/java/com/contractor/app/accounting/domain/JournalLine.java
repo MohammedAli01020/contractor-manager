@@ -31,6 +31,9 @@ public class JournalLine extends BaseTenantEntity {
     @Column(name = "driver_id", updatable = false)
     private Long driverId;
 
+    @Column(name = "workforce_member_id", updatable = false)
+    private Long workforceMemberId;
+
     @Column(name = "equipment_id", updatable = false)
     private Long equipmentId;
 
@@ -49,6 +52,13 @@ public class JournalLine extends BaseTenantEntity {
         this.credit = credit;
         this.driverId = driverId;
         this.equipmentId = equipmentId;
+    }
+
+    public JournalLine(Long tenantId, Long journalEntryId, int lineNumber, Long accountId,
+                       String description, BigDecimal debit, BigDecimal credit,
+                       Long driverId, Long workforceMemberId, Long equipmentId) {
+        this(tenantId, journalEntryId, lineNumber, accountId, description, debit, credit, driverId, equipmentId);
+        this.workforceMemberId = workforceMemberId;
     }
 
     public Long getJournalEntryId() {
@@ -77,6 +87,10 @@ public class JournalLine extends BaseTenantEntity {
 
     public Long getDriverId() {
         return driverId;
+    }
+
+    public Long getWorkforceMemberId() {
+        return workforceMemberId;
     }
 
     public Long getEquipmentId() {
