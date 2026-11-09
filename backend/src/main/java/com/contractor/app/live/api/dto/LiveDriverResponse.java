@@ -5,6 +5,7 @@ import java.time.LocalDate;
 public class LiveDriverResponse {
 
     private final Long id;
+    private final Long workforceMemberId;
     private final String name;
     private final String workerType;
     private final String availability;
@@ -16,11 +17,12 @@ public class LiveDriverResponse {
     private final String equipmentCode;
     private final int runningShiftsCount;
 
-    public LiveDriverResponse(Long id, String name, String workerType, String availability,
+    public LiveDriverResponse(Long id, Long workforceMemberId, String name, String workerType, String availability,
                               String unavailableReason, String liveStatus, Long currentShiftId,
                               LocalDate runningShiftDate, String siteName, String equipmentCode,
                               int runningShiftsCount) {
         this.id = id;
+        this.workforceMemberId = workforceMemberId;
         this.name = name;
         this.workerType = workerType;
         this.availability = availability;
@@ -35,6 +37,10 @@ public class LiveDriverResponse {
 
     public Long getId() {
         return id;
+    }
+
+    public Long getWorkforceMemberId() {
+        return workforceMemberId;
     }
 
     public String getName() {
