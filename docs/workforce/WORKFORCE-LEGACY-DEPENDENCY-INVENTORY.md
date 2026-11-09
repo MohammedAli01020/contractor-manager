@@ -123,3 +123,15 @@ Validation at the time of this note:
 - Backend CI for the new live-candidate response and its integration test is
   running.
 - Flutter CI for the mobile identity bridge is running.
+
+
+### Implementation progress — configurable shift eligibility
+
+- Added forward migration V62 with `workforce_roles.shift_eligible` (default false).
+- Existing and newly provisioned `DRIVER`, `EQUIPMENT_OPERATOR`, and `WORKER` roles retain shift eligibility by default; other seeded/custom roles default to false.
+- Role create requests can explicitly set `shiftEligible`; role responses expose it.
+- Added an Admin-only, version-checked endpoint to change eligibility. Enabling an existing role also provisions the required legacy operational projection for its active assignments.
+- Shift candidate selection now reads the role flag instead of a hard-coded role-code allowlist. Custom eligible roles map to the current legacy `WORKER` operational classification until the shift aggregate is fully Workforce-native.
+- Added an integration test for enabling a custom role and seeing its assigned member appear in shift candidates.
+
+This is an incremental compatibility bridge, not retirement of `drivers` or `shifts.driver_id`. The remaining identity and financial dependencies described above still apply.
