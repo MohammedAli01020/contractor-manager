@@ -128,3 +128,13 @@ A lock is only a mutex when every competing path takes it before any conflicting
 - Then add pairwise concurrency coverage and run the complete MySQL financial integration suite.
 - Only after the protocol is proven should the canonical idempotency migration and Workforce-native writer cutover proceed.
 - Keep the V56 trigger and legacy ledger intact throughout this phase.
+
+## Mutex foundation implementation status (2026-11-09)
+
+- V63 creates `workforce_financial_locks` with one tenant-scoped unique row per canonical member and a composite foreign key to `workforce_members`.
+- V63 backfills one mutex row for every member already present at migration time.
+- `WorkforceIdentityService` now creates the mutex in the same transaction as a newly created canonical member, including members created from the legacy Driver onboarding path.
+- `WorkforceFinancialLockService` and its pessimistic-write repository query expose the lock primitive for the future coordinated command cutover.
+- Integration coverage asserts mutex creation for new canonical identities/onboarding and backfill for legacy identities migrated from Driver records.
+- This is foundation only: no financial writer currently acquires the mutex, no writer or reader has switched, and the V56 mirror remains active. Do not treat the mutex as active protection until all financial entry points adopt it together.
+- Backend CI for the current implementation is pending; report success only after the run completes.
