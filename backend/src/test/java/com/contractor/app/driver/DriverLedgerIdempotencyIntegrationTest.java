@@ -186,11 +186,21 @@ class DriverLedgerIdempotencyIntegrationTest extends AbstractIntegrationTest {
         assertThat(createdAdvance.has("driverId")).isFalse();
 
         assertThat(ledger.findByTenantIdAndClientRequestKey(tenantId, "workforce-command-payment"))
-                .isPresent();
+                .isEmpty();
         assertThat(workforceLedger.findByTenantIdAndClientRequestKey(tenantId, "workforce-command-payment"))
-                .isPresent();
+                .hasValueSatisfying(entry -> {
+                    assertThat(entry.getWorkforceMemberId()).isEqualTo(memberId);
+                    assertThat(entry.getLegacySourceEntryId()).isNull();
+                    assertThat(entry.getLegacyDriverId()).isNull();
+                });
         assertThat(workforceLedger.findByTenantIdAndClientRequestKey(tenantId, "workforce-command-recoverable"))
-                .isPresent();
+                .hasValueSatisfying(entry -> {
+                    assertThat(entry.getWorkforceMemberId()).isEqualTo(memberId);
+                    assertThat(entry.getLegacySourceEntryId()).isNull();
+                    assertThat(entry.getLegacyDriverId()).isNull();
+                });
+        assertThat(ledger.findByTenantIdAndClientRequestKey(tenantId, "workforce-command-recoverable"))
+                .isEmpty();
         assertThat(workforceLedger.findByTenantIdAndWorkforceMemberIdOrderByTransactionDateAscIdAsc(
                 tenantId, memberId)).hasSize(3);
         assertThat(workforceLedger.sumBalance(tenantId, memberId)).isEqualByComparingTo("400.00");
